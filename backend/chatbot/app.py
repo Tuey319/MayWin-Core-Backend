@@ -38,6 +38,10 @@ logger = logging.getLogger("NurseBot")
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN) if LINE_CHANNEL_ACCESS_TOKEN else None
 handler = WebhookHandler(LINE_CHANNEL_SECRET) if LINE_CHANNEL_SECRET else None
 
+# Simple in-memory pending conversation state per nurse
+# { nurse_id: {"kind": "...", "data": {...}} }
+PENDING_STATE = {}
+
 app = Flask(__name__)
 CORS(app)
 
@@ -292,6 +296,9 @@ SHIFT_MAP = {
     "n": "N",
 }
 
+YES_TOKENS = {"yes", "y", "ok", "okay", "ใช่", "ค่ะ", "ครับ", "ได้"}
+NO_TOKENS = {"no", "n", "ไม่", "ไม่ค่ะ", "ไม่ครับ", "ไม่ใช่"}
+
 
 def normalize_day_list(raw_days):
     if not raw_days:
@@ -309,6 +316,118 @@ def normalize_day_list(raw_days):
             result.append(d)
     return result
 
+
+def set_pending(nurse_id, kind, data):
+    """Store the next expected step for this nurse."""
+    PENDING_STATE[nurse_id] = {"kind": kind, "data": data}
+
+
+def clear_pending(nurse_id):
+    PENDING_STATE.pop(nurse_id, None)
+
+
+def parse_dayoff_date(raw):
+    """
+    Convert various date formats from Rasa into ISO + human-readable string.
+    - Supports: '2025-11-17', '2025-11-17T00:00:00+07:00'
+    - Fallback: day number in current/next month.
+    """
+    if not raw and raw != 0:
+        return None, None
+
+    s = str(raw).strip()
+
+    # ISO-like 'YYYY-MM-DD...'
+    m_iso = re.match(r"(\d{4}-\d{2}-\d{2})", s)
+    if m_iso:
+        d = datetime.strptime(m_iso.group(1), "%Y-%m-%d").date()
+        return d.isoformat(), d.strftime("%A, %d %B %Y")
+
+    # Fallback: just a day number
+    m = re.search(r"(\d{1,2})", s)
+    if not m:
+        return None, None
+
+    day = int(m.group(1))
+    now = datetime.now()
+    try:
+        if day < now.day:
+            month = now.month + 1 if now.month < 12 else 1
+            year = now.year if month != 1 else now.year + 1
+        else:
+            month = now.month
+            year = now.year
+        date_obj = datetime(year, month, day).date()
+        return date_obj.isoformat(), date_obj.strftime("%A, %d %B %Y")
+    except Exception:
+        return None, None
+
+
+def handle_pending_message(nurse_id, user_message, line_name):
+    """
+    If this nurse has a pending confirmation, consume the message here.
+    Returns a reply string, or None if there is no pending state.
+    """
+    state = PENDING_STATE.get(nurse_id)
+    if not state:
+        return None
+
+    kind = state["kind"]
+    data = state.get("data", {})
+    low = user_message.strip().lower()
+
+    # Confirm DAY-OFF request
+    if kind == "confirm_day_off":
+        if low in YES_TOKENS:
+            clear_pending(nurse_id)
+            insert_preference(
+                nurse_id,
+                "preferred_days_off",
+                {"date": data.get("date_iso"), "rank": data.get("rank", 2)},
+            )
+            pretty = data.get("pretty_date") or data.get("date_iso") or "that day"
+            return (
+                f"Your request for {pretty} has been submitted. "
+                "You will receive an update after supervisor review.💙"
+            )
+
+        if low in NO_TOKENS:
+            clear_pending(nurse_id)
+            pretty = data.get("pretty_date") or data.get("date_iso") or "that day"
+            return f"Okay {line_name}, I will not submit the day-off request for {pretty}."
+
+        pretty = data.get("pretty_date") or data.get("date_iso") or "this request"
+        return f"Please reply Yes or No to confirm your day-off request for {pretty}."
+
+    # Confirm SHIFT PREFERENCE update
+    if kind == "confirm_shift_pref":
+        shift_code = (data.get("shift") or "M").upper()
+        pretty_shift = {"M": "morning", "A": "afternoon", "N": "night"}.get(
+            shift_code, "that"
+        )
+
+        if low in YES_TOKENS:
+            clear_pending(nurse_id)
+            insert_preference(
+                nurse_id,
+                "preferred_shifts",
+                {
+                    "shift": shift_code,
+                    "days": data.get("days") or [],
+                    "priority": data.get("priority", "medium"),
+                },
+            )
+            return f"{pretty_shift.capitalize()} preference Saved ✅"
+
+        if low in NO_TOKENS:
+            clear_pending(nurse_id)
+            return f"Okay {line_name}, I did not change your shift preferences."
+
+        return f"Please reply Yes or No to confirm your {pretty_shift} shift preference."
+
+    # Unknown kind
+    clear_pending(nurse_id)
+    return None
 
 # ------------------------------------
 # LINE Webhook + Rasa Integration (dev-safe)
@@ -329,7 +448,20 @@ def callback_test():
         logger.error(f"Dev test nurse create failed: {e}")
         return jsonify({"ok": False, "error": "nurse_create"}), 500
 
-    # Try Rasa; on failure, fall back to simple heuristics to keep demo functional
+    # First handle any pending confirmation (Yes/No)
+    pending_reply = handle_pending_message(nurse_id, text, "Dev User")
+    if pending_reply:
+        return jsonify(
+            {
+                "ok": True,
+                "pending_handled": True,
+                "reply": pending_reply,
+                "intent": "pending_confirmation",
+                "entities": {},
+            }
+        )
+
+    # Try Rasa; on failure, fall back to simple heuristics
     rasa_data = None
     try:
         rasa_resp = requests.post(RASA_URL, json={"text": text}, timeout=5)
@@ -340,14 +472,12 @@ def callback_test():
         low = text.lower()
         entities = {}
         if any(k in low for k in ["ลางาน", "หยุด", "day off", "leave"]):
-            # derive date and priority from text
             m = re.search(r"(\d{1,2})", text)
             entities["date"] = m.group(1) if m else None
             if any(k in low for k in ["urgent", "critical", "สำคัญ", "ด่วน"]):
                 entities["rank"] = 3
             intent = "add_day_off"
         else:
-            # shift pref heuristic
             if any(k in low for k in ["เช้า", "morning"]):
                 entities["shift"] = "morning"
             elif any(k in low for k in ["บ่าย", "afternoon"]):
@@ -442,6 +572,13 @@ if handler and line_bot_api:
             line_name = "Unknown"
         nurse_id = get_or_create_nurse(user_id, line_name)
 
+        # 1) If we have a pending Yes/No confirmation, handle it here
+        pending_reply = handle_pending_message(nurse_id, user_message, line_name)
+        if pending_reply:
+            safe_reply(event, pending_reply)
+            return
+
+        # 2) Otherwise, call Rasa as usual
         try:
             rasa_resp = requests.post(
                 RASA_URL, json={"text": user_message}, timeout=5
@@ -512,43 +649,51 @@ def process_intent(intent, nurse_id, entities, line_name):
         )
 
     elif intent == "add_shift_preference":
+        # User messages like: "I prefer morning shifts next month."
         shift = SHIFT_MAP.get(str(entities.get("shift", "")).lower(), "M")
         days = normalize_day_list(entities.get("days", []))
         priority = entities.get("priority", "medium")
-        insert_preference(
+
+        # Do not save yet – ask for confirmation like the mockup
+        set_pending(
             nurse_id,
-            "preferred_shifts",
+            "confirm_shift_pref",
             {"shift": shift, "days": days, "priority": priority},
         )
+
+        pretty_shift = {"M": "morning", "A": "afternoon", "N": "night"}.get(
+            shift, "that"
+        )
+
         return (
-            f"Preference saved, {line_name}: {priority} priority "
-            f"{shift} shift on {', '.join(days)}."
+            f"Preference updated:\n✴ {pretty_shift.capitalize()} shifts preferred\n\n"
+            "Please reply Yes or No to confirm."
         )
 
     elif intent == "add_day_off":
         raw_day = entities.get("date")
         rank = int(entities.get("rank", 2))
-        date_iso = None
-        if raw_day:
-            try:
-                day = int(re.sub(r"\D", "", str(raw_day)))
-                now = datetime.now()
-                if day < now.day:
-                    next_month = now.month + 1 if now.month < 12 else 1
-                    year = now.year if next_month != 1 else now.year + 1
-                    date_obj = datetime(year, next_month, day)
-                else:
-                    date_obj = datetime(now.year, now.month, day)
-                date_iso = date_obj.date().isoformat()
-            except ValueError:
-                date_iso = None
 
-        insert_preference(
-            nurse_id, "preferred_days_off", {"date": date_iso, "rank": rank}
+        if not raw_day:
+            # First turn: ask which date
+            return "Of course. Which date would you like to take off?"
+
+        date_iso, pretty_date = parse_dayoff_date(raw_day)
+        if not date_iso:
+            return (
+                "Sorry, I couldn't understand the date. "
+                "Please reply with a date like '17 November' or 'this Sunday'."
+            )
+
+        set_pending(
+            nurse_id,
+            "confirm_day_off",
+            {"date_iso": date_iso, "pretty_date": pretty_date, "rank": rank},
         )
+
         return (
-            f"Got it, {line_name}! Day off on {date_iso or 'unrecognized date'} "
-            f"saved (priority {rank})."
+            f"I detected: {pretty_date}\n"
+            "Do you want to submit this day-off request?\n\nYes / No"
         )
 
     # default: record unrecognized
@@ -700,9 +845,6 @@ def dev_solve():
             "SELECT nurse_id, preference_type, data FROM preferences"
         ).fetchall()
 
-    # Normalizer might return:
-    #  A) a full solve payload (with nurses/days/shifts/demand), OR
-    #  B) a wrapped object { "meta": ..., "payload": {...} }
     normalized = build_solver_payload_from_db_rows(
         nurses_rows=nurses_rows,
         prefs_rows=prefs_rows,
@@ -713,14 +855,12 @@ def dev_solve():
         night_demand=night_demand,
     )
 
-    # Case A: already a SolveRequest-like dict
     if isinstance(normalized, dict) and {"nurses", "days", "shifts", "demand"}.issubset(
         normalized.keys()
     ):
         meta = None
         solve_body = normalized
     else:
-        # Case B: wrapper dict
         if not isinstance(normalized, dict):
             return jsonify(
                 {"ok": False, "error": "normalizer_unexpected_type"}
@@ -729,7 +869,6 @@ def dev_solve():
         meta = normalized.get("meta")
         solve_body = normalized.get("payload") or {}
 
-    # Final sanity check
     if not isinstance(solve_body, dict) or not {
         "nurses",
         "days",
@@ -740,7 +879,6 @@ def dev_solve():
             {"ok": False, "error": "normalizer_shape_invalid", "payload": normalized}
         ), 500
 
-    # Call the FastAPI solver
     try:
         resp = requests.post(SOLVER_URL, json=solve_body, timeout=60)
         resp.raise_for_status()
@@ -768,7 +906,6 @@ def dev_solve():
             "solve_response": solver_json,
         }
     )
-
 
 
 # ------------------------------------
@@ -836,7 +973,6 @@ def dev_resetdb():
 def dev_seed():
     try:
         count = int(request.args.get("count", PLACEHOLDER_NURSES))
-        # Only seed if empty to avoid duplicates; drop first if you want fresh
         with db_connection() as conn:
             total = conn.execute("SELECT COUNT(*) FROM nurses").fetchone()[0]
         seeded = 0
@@ -853,5 +989,7 @@ def dev_seed():
 # Run App
 # ------------------------------------
 if __name__ == "__main__":
-    logger.info(f"Starting NurseBot Flask app on port 8070 | DB: {DB_PATH} | SOLVER_URL: {SOLVER_URL}")
+    logger.info(
+        f"Starting NurseBot Flask app on port 8070 | DB: {DB_PATH} | SOLVER_URL: {SOLVER_URL}"
+    )
     app.run(host="0.0.0.0", port=8070, debug=True)
