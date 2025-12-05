@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # compiled output
 /dist
 /node_modules
@@ -54,3 +55,30 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+=======
+target/
+.env
+.logs
+.log
+.exe
+.obj
+build/
+Demo/*.exe
+Demo/*.obj
+*.log
+gurobi.log
+maywin.log
+.vscode/
+.github/
+rasa310/
+venv/
+/node_modules
+# Rasa / HuggingFace caches (do not commit)
+backend/chatbot/rasa/.cache/
+backend/chatbot/rasa/.keras/
+backend/chatbot/rasa/.config/
+backend/chatbot/rasa/.rasa/
+backend/chatbot/rasa/__pycache__/
+.rasavenv/
+.venv/
+>>>>>>> adda3ffc5562b9c2a4c6e79170204997d8444328
