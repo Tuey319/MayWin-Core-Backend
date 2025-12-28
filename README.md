@@ -1,333 +1,269 @@
-# NewStart Core Backend
+# MayWin Nurse Scheduling Platform – Core Backend
 
-The **NewStart Core Backend** is the central engine of the NewStart Scheduling System.  
-It manages schedule generation, model building, NLU processing, solver execution, KPI evaluation, and data persistence.  
-The Core Backend exposes the **official API contract** for the system and is deployed independently from the BFF (Backend For Frontend).
+NestJS + PostgreSQL backend for nurse scheduling. It manages organizations, units, workers, availability, preferences and runs an OR-Tools based optimization solver (Python) to generate nurse schedules.
 
 ---
 
-## 1. System Responsibilities
+## Tech stack
 
-The Core Backend powers all core scheduling intelligence:
+- **Runtime**: Node.js (NestJS 11, TypeScript)
+- **Database**: PostgreSQL (schema `maywin_db`)
+- **ORM**: TypeORM
+- **Auth**: JWT (Bearer tokens)
+- **Solver**: Python 3 + FastAPI + OR-Tools (`src/core/solver/solver_cli.py`)
 
-### HTTP API (NestJS)
-- Provides REST endpoints for:
-  - Schedules
-  - Solver runs
-  - Staff management
-  - KPIs
-  - Internal admin/ops actions
+All HTTP routes are mounted under the global prefix:
 
-### Chatbot NLU (Dialogflow)
-- Receives webhook messages from the LINE OA chatbot (via reverse proxy).
-- Classifies user intents and entities.
-- Delegates actions to:
-  - Manager workers (normalization / modelling / evaluation)
-  - API endpoints in the NestJS service
-
-### Manager Workers (Python)
-- Data normalization
-- Model construction (building solver input models)
-- Evaluation & KPI generation
-
-### Solver Engine (Python)
-- **CP-SAT solver (OR-Tools)** – Plan A
-- **Gurobi solver** – Plan B / alternative engine
-
-### Database Layer (PostgreSQL)
-- Central storage for:
-  - Organizations, units, staff
-  - Schedules and assignments
-  - Solver runs and metadata
-  - KPIs and audit logs
-
-All of the above are orchestrated using **Docker Compose** in development and production.
+- `http://<host>:<port>/api/v1/core/*`
 
 ---
 
-## 2. Architecture Overview
+## Features
 
-High-level flow for the Core Backend:
-
-- BFF / Web Application → calls the **NestJS API** for all core backend features.
-- LINE OA chatbot → sends webhook events through a **reverse proxy** → **Rasa NLU** → calls back into Manager or NestJS.
-- Manager workers (Python) → handle data normalization, model building, and KPI calculation.
-- Solver Engine (Python) → runs:
-  - OR-Tools CP-SAT solver
-  - Gurobi solver
-- PostgreSQL (AWS RDS in production, Docker in dev) → stores all persistent data.
-- Reverse proxy (NGINX / Traefik) → routes:
-  - `/api/*` → NestJS API
-  - `/line-webhook` → Rasa server
-  - Keeps internal workers and database private.
-
-All external traffic enters through the reverse proxy; internal services are not directly exposed.
+- Authentication (`/auth/login`, `/auth/me`) with unit- and role-aware JWT payloads.
+- Organizations, sites, units and workers (core domain entities).
+- Worker availability and preferences for a date range.
+- Unit configuration: shift templates, coverage rules, constraint profiles.
+- Schedule lifecycle:
+  - create schedule containers per unit + horizon
+  - request async solver jobs
+  - preview solver output
+  - apply solver output into persisted schedules
+  - manually edit individual schedule assignments.
+- OR-Tools based solver with strict/relaxed/MILP fallback plans and KPIs.
 
 ---
 
-## 3. Technology Stack
+## Getting started
 
-### API Layer
-- **NestJS** (Node.js + TypeScript)
-- REST-style endpoints
-- DTOs, guards, interceptors, and filters for validation and security
+### 1. Prerequisites
 
-### NLU Layer
-- **Rasa** (Python-based NLU)
-- Intent classification and entity extraction
-- LINE OA integration via webhook and actions
+- Node.js **18+** and npm
+- PostgreSQL **13+**
+- Python **3.10+** (for the solver) with `pip`
 
-### Worker Layer
-- **Python 3**
-- Manager service for:
-  - Normalization
-  - Model building
-  - KPI evaluation
+### 2. Install dependencies
 
-### Solver Layer
-- **OR-Tools CP-SAT** (Google OR-Tools)
-- **Gurobi Optimizer**
+```bash
+npm install
+```
+
+Install Python dependencies for the solver (recommended to use a virtualenv in `src/core/solver`):
+
+```bash
+cd src/core/solver
+python -m venv .venv
+# On Windows PowerShell
+. .venv/Scripts/Activate.ps1
+pip install -r requirements.txt
+```
+
+### 3. Configure environment
+
+Create a `.env` file in the project root based on the values below:
+
+```bash
+PORT=3000
+
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=maywin12345
+DB_NAME=maywin
+DB_SCHEMA=maywin_db
+
+# JWT
+JWT_SECRET=change-me
+
+# Python solver integration
+SOLVER_PYTHON=python3        # or "py" on Windows
+SOLVER_CLI_PATH=src/core/solver/solver_cli.py
+```
+
+The backend reads DB settings from `src/database/typeorm.config.ts` and JWT settings from `AuthModule`.
+
+### 4. Provision the database
+
+Create an empty PostgreSQL database (matching `DB_NAME`) and run the schema SQL:
+
+```bash
+psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f src/database/schema/maywin_schema.sql
+```
+
+Alternatively you can use TypeORM migrations (once configured):
+
+```bash
+# Uses src/database/data-source.ts
+yarn typeorm migration:run
+# or
+npm run migration:run
+```
+
+> Note: the application expects the tables, enums and schema created by `src/database/schema/maywin_schema.sql`.
+
+### 5. Run the backend
+
+From the project root:
+
+```bash
+# Watch mode (development)
+npm run dev
+
+# One-off start (no watch)
+npm run start
+```
+
+The service listens on `http://localhost:${PORT}/api/v1/core` (default: `http://localhost:3000/api/v1/core`).
+
+To verify health:
+
+```bash
+curl http://localhost:3000/api/v1/core/health
+```
+
+You should see a JSON response with status `ok`.
+
+---
+
+## Python solver integration
+
+The NestJS backend does **not** talk to the solver over HTTP; it spawns a Python CLI process using `SolverAdapter`:
+
+- CLI entrypoint: `src/core/solver/solver_cli.py`
+- Adapter: `src/core/solver/solver.adapter.ts`
+
+The adapter:
+
+1. Normalizes scheduling data via `NormalizerService`.
+2. Writes a temporary JSON file in the Python `SolveRequest` format.
+3. Spawns `SOLVER_PYTHON SOLVER_CLI_PATH --cli --input <in.json> --output <out.json>`.
+4. Reads `SolveResponse` JSON and maps it to assignments, KPIs, etc.
+
+To run the solver manually in CLI mode for debugging:
+
+```bash
+cd src/core/solver
+python solver_cli.py --cli --input example-request.json --output out.json
+```
+
+(You need to craft `example-request.json` in the `SolveRequest` shape used by `solver_cli.py`.)
+
+If you want to expose the solver as an HTTP API (optional):
+
+```bash
+cd src/core/solver
+uvicorn src.core.solver.solver_cli:app --reload --port 8001
+```
+
+---
+
+## High-level architecture
+
+### Modules
+
+- `AuthModule` – login and JWT (`/auth/login`, `/auth/me`).
+- `DatabaseModule` – TypeORM configuration and entity registration.
+- `HealthModule` – health check endpoint (`/health`).
+- `WorkersModule` – listing workers per unit.
+- `AvailabilityModule` – worker availability per unit & date range.
+- `WorkerPreferencesModule` – per-worker, per-unit preferences.
+- `UnitConfigModule` (+ submodules) – shift templates, coverage rules, constraint profiles.
+- `SchedulesModule` – schedule containers and exports.
+- `JobsModule` – orchestration of async solver runs and artifacts.
+- `NormalizerModule` – builds `NormalizedInput.v1` payload for the solver.
+- `SolverModule` – `SolverAdapter` integration with the Python solver.
 
 ### Database
-- **PostgreSQL**
-  - Production: AWS RDS
-  - Development: Local Docker container
 
-### Infrastructure
-- **Docker** and **Docker Compose**
-- **Reverse proxy** (NGINX/Traefik) for routing and TLS termination
+- Schema file: `src/database/schema/maywin_schema.sql` (creates schema `maywin_db`).
+- Entities are grouped under `src/database/entities/*` and registered in `DatabaseModule`.
+- Orchestration tables track schedule jobs, solver runs and artifacts.
 
 ---
 
-## 4. Repository Structure
+## API overview
 
-The Core Backend uses a conventional multi-service backend layout with clear boundaries:
+All paths below are relative to the global prefix `/api/v1/core` and require a valid Bearer token unless noted.
 
-    newstart-core-backend/
-    ├── api/                           # NestJS HTTP API service
-    │   ├── src/
-    │   │   ├── modules/               # Feature modules (schedules, staff, solver-runs, etc.)
-    │   │   ├── common/                # Interceptors, guards, filters, pipes, DTOs
-    │   │   ├── config/                # ConfigService + environment loaders
-    │   │   ├── main.ts                # NestJS bootstrap
-    │   │   └── app.module.ts
-    │   ├── test/                      # API unit & integration tests
-    │   ├── package.json
-    │   └── tsconfig.json
-    │
-    ├── rasa/                          # Rasa NLU project
-    │   ├── data/                      # Training data (intents, stories)
-    │   ├── domain.yml                 # Intent/entity schema
-    │   ├── config.yml                 # NLU pipeline configuration
-    │   ├── actions/                   # Custom Python actions (optional)
-    │   └── models/                    # Exported trained models
-    │
-    ├── manager/                       # Manager service (Python)
-    │   ├── src/
-    │   │   ├── normalization/         # Input cleaning and normalization
-    │   │   ├── model_builder/         # Build solver-ready models
-    │   │   ├── evaluation/            # KPI & quality metrics
-    │   │   ├── utils/                 # Shared utilities
-    │   │   └── app.py                 # Worker entrypoint
-    │   ├── requirements.txt
-    │   └── Dockerfile
-    │
-    ├── solver/                        # Solver Engine (Python)
-    │   ├── cpsat_worker/
-    │   │   ├── src/
-    │   │   │   ├── model/             # CP-SAT model definitions
-    │   │   │   ├── solver/            # OR-Tools solving logic
-    │   │   │   └── utils/             # Solver utilities
-    │   │   ├── requirements.txt
-    │   │   └── Dockerfile
-    │   └── gurobi_worker/
-    │       ├── src/
-    │       │   ├── model/             # Gurobi model definitions
-    │       │   ├── solver/            # Gurobi optimization logic
-    │       │   └── utils/
-    │       ├── requirements.txt
-    │       └── Dockerfile
-    │
-    ├── db/
-    │   ├── migrations/                # SQL or migration-tool scripts
-    │   ├── seeds/                     # Dev seed data
-    │   └── schema/                    # Initial schema definitions
-    │
-    ├── openapi/                       # Source-of-truth API contract
-    │   ├── newstart-core.yaml
-    │   └── README.md
-    │
-    ├── docker/                        # Infra configs (optional)
-    │   ├── nginx/                     # Reverse proxy configs
-    │   ├── scripts/                   # Helper scripts
-    │   └── monitoring/                # Monitoring / logging configs
-    │
-    ├── docker-compose.yml             # Full backend stack definition
-    ├── .env.example                   # Example environment configuration
-    ├── Makefile                       # Optional local automation commands
-    └── README.md
+### Auth
+
+- `POST /auth/login`
+  - Body: `{ "email": string, "password": string }`
+  - Response: `{ accessToken, user: { id, organizationId, roles, unitIds } }`
+- `GET /auth/me`
+  - Returns the JWT payload attached to `req.user`.
+
+### Health
+
+- `GET /health` – public health check (no auth by default).
+
+### Units & workers
+
+- `GET /units/:unitId/workers` – list workers in a unit (searchable by `?search=`).
+
+### Unit configuration
+
+- `GET /units/:unitId/config` – one-shot configuration payload for scheduling UI.
+- `GET /units/:unitId/shift-templates` – list active shift templates.
+- `POST /units/:unitId/shift-templates` – create a shift template.
+- `PATCH /units/:unitId/shift-templates/:id` – update a shift template.
+- `DELETE /units/:unitId/shift-templates/:id` – soft-delete a shift template.
+
+- `GET /units/:unitId/constraint-profiles` – list constraint profiles.
+- `POST /units/:unitId/constraint-profiles` – create a profile.
+- `PATCH /units/:unitId/constraint-profiles/:id` – update a profile.
+- `POST /units/:unitId/constraint-profiles/:id/activate?deactivateOthers=true|false` – activate profile.
+
+- `GET /units/:unitId/coverage-rules` – list coverage rules.
+- `POST /units/:unitId/coverage-rules` – create a rule.
+- `PATCH /units/:unitId/coverage-rules/:id` – update a rule.
+- `DELETE /units/:unitId/coverage-rules/:id` – remove a rule.
+- `PUT /units/:unitId/coverage-rules` – bulk replace rules.
+
+### Availability & worker preferences
+
+- `GET /units/:unitId/availability?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD`
+- `PUT /units/:unitId/availability` – bulk upsert entries.
+
+- `GET /workers/:workerId/preferences` – fetch stored preferences.
+- `PUT /workers/:workerId/preferences` – upsert preferences for a worker & unit.
+
+### Scheduling & jobs
+
+- `POST /units/:unitId/schedules` – create a schedule container for a date horizon.
+- `GET /units/:unitId/schedules/current?dateFrom&dateTo` – current schedule + assignments.
+- `GET /units/:unitId/schedules/history?limit=` – list past schedules.
+- `GET /schedules/:scheduleId` – schedule detail.
+- `GET /schedules/:scheduleId/export?format=pdf|csv` – export schedule (implementation-specific).
+
+- `PATCH /schedule-assignments/:assignmentId` – manually override a single assignment.
+
+- `POST /schedules/:scheduleId/jobs` – enqueue a solver job (supports `Idempotency-Key` header).
+- `GET /jobs/:jobId` – poll job status & phase.
+- `GET /jobs/:jobId/artifacts` – list job artifacts (normalized input, solver output, KPIs, etc.).
+- `GET /jobs/:jobId/preview` – preview solver output (read-only).
+- `POST /jobs/:jobId/apply` – persist solver output into schedule (`overwriteManualChanges` flag).
+- `POST /jobs/:jobId/cancel` – cancel an in-progress job.
 
 ---
 
-## 5. Environment Configuration
+## Running with Docker (optional)
 
-1. Copy the example environment file:
+A `docker-compose.yml` file is included to run this backend together with additional services (e.g. chatbot and Rasa). It assumes a directory layout with `backend/chatbot` and `backend/temp` for the chatbot and solver containers.
 
-       cp .env.example .env
+If your local directory structure matches that compose file, you can start the stack with:
 
-2. Configure values inside `.env`, such as:
-   - PostgreSQL connection string / credentials
-   - Rasa server URL
-   - Solver configuration (e.g., which engine to use by default)
-   - Internal service URLs (manager, solver workers)
-   - Ports for API, workers, and NLU
-   - Any development-only secrets or tokens
+```bash
+docker compose up --build
+```
 
-Do **not** commit real secrets or production credentials to the repository.
+Otherwise, treat `docker-compose.yml` as a reference and adjust paths/services as needed.
 
 ---
 
-## 6. Running the Stack (Local Development)
+## Development notes
 
-1. Build and start all services:
-
-       docker compose up --build
-
-2. Expected running services:
-   - NestJS API → `http://localhost:<API_PORT>`
-   - Rasa server → `http://localhost:<RASA_PORT>`
-   - Manager workers (Python)
-   - CP-SAT worker
-   - Gurobi worker
-   - Local PostgreSQL
-
-3. To stop the stack:
-
-       docker compose down
-
-You can then use tools like Postman, Bruno, or curl to hit the local API and verify integration.
-
----
-
-## 7. Deployment Model (Production)
-
-The Core Backend is designed to run primarily on AWS:
-
-### EC2 Instance
-- Hosts the Docker Compose stack:
-  - NestJS API
-  - Rasa NLU
-  - Manager workers
-  - Solver workers (CP-SAT and Gurobi)
-- Logs and metrics can be shipped to CloudWatch or other monitoring tools.
-
-### AWS RDS (PostgreSQL)
-- Serves as the main datastore.
-- Only accessible from the EC2 instance (or a private network).
-- Protected by security groups and network policies.
-
-### Reverse Proxy (NGINX / AWS ALB)
-- Routes external traffic:
-  - `/api/*` → NestJS API
-  - `/line-webhook` → Rasa endpoint
-- Terminates HTTPS and manages certificates.
-- Ensures that:
-  - Manager workers
-  - Solver workers
-  - Database
-  remain internal and are not directly exposed.
-
----
-
-## 8. API Contract (OpenAPI)
-
-The Core Backend is the **source of truth** for the API used by the BFF and other clients.
-
-- OpenAPI specification file:
-
-      openapi/newstart-core.yaml
-
-- Update this file whenever:
-  - A new endpoint is added.
-  - Request or response models change.
-  - Existing routes are deprecated or significantly modified.
-
-The BFF consumes this contract to generate types and client bindings, keeping frontend and backend aligned.
-
----
-
-## 9. Testing
-
-### NestJS API Tests
-
-Run unit and integration tests for the API:
-
-    cd api
-    npm run test
-
-### Python Worker Tests
-
-Run tests for the Manager and Solver workers:
-
-    cd manager
-    pytest
-
-    cd ../solver/cpsat_worker
-    pytest
-
-    cd ../gurobi_worker
-    pytest
-
-### End-to-End (E2E) Testing
-
-With the full stack running via `docker compose`, use tools such as:
-
-- Postman / Bruno / Hoppscotch
-- curl or HTTPie
-
-to exercise flows like:
-
-- Creating or updating schedules
-- Triggering solver runs
-- Checking solver results and KPIs
-- Validating Rasa → Manager → API workflows
-
----
-
-## 10. Contributing Guidelines
-
-- Use feature branches and Pull Requests for all changes.
-- Keep commit messages clear and descriptive.
-- For any API-related change:
-  - Update `openapi/newstart-core.yaml`.
-  - Ensure DTOs, validators, and docs match.
-
-### Code Style
-
-- **NestJS / TypeScript:**
-  - Use ESLint and Prettier.
-- **Python (Manager / Solver):**
-  - Use Black and flake8.
-
-### Documentation
-
-- Keep this `README.md` up to date as the architecture and workflows evolve.
-- When adding a new service or major feature:
-  - Document its purpose.
-  - Document any new environment variables.
-  - Update diagrams and the OpenAPI spec if relevant.
-
----
-
-## 11. License
-
-Add your chosen license here, for example:
-
-- MIT
-- Apache-2.0
-- GPLv3
-- Internal / proprietary license
-
----
-
-This README documents the NewStart Core Backend system, including its responsibilities, services, repository structure, configuration, deployment model, and contribution guidelines.
+- All business endpoints are guarded by `JwtAuthGuard` and expect a valid JWT issued by `/auth/login`.
+- Global HTTP prefix is set in `src/main.ts` via `app.setGlobalPrefix('/api/v1/core')`.
+- TypeORM logging is enabled by default; adjust in `src/database/typeorm.config.ts` for production.
+- Do **not** enable `synchronize: true` on production databases; migrations and the schema SQL should be used for schema changes.
