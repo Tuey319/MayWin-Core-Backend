@@ -8,7 +8,6 @@ export class CreateJobDto {
   @IsDateString()
   endDate!: string;
 
-  // keep strategy/solverConfig/options flexible for solver-agnostic contract
   @IsOptional()
   @IsObject()
   strategy?: Record<string, any>;

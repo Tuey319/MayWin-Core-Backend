@@ -70,10 +70,6 @@ export class UnitConfigService {
     unitId: string;
     shiftTemplates: UnitConfigShiftTemplate[];
   }> {
-    // include:
-    // - unit-specific templates (unit_id = unitId)
-    // - org-wide templates (unit_id IS NULL)
-    // return only active templates
     const rows = await this.shiftTemplatesRepo.find({
       where: [
         { unit_id: unitId, is_active: true } as any,

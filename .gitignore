@@ -42,6 +42,9 @@ lerna-debug.log*
 .env.production.local
 .env.local
 
+# markdown notes
+.docker-tutorial.md
+
 # temp directory
 .temp
 .tmp

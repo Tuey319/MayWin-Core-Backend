@@ -14,7 +14,7 @@ import { UserRole } from '@/database/entities/users/user-role.entity';
 
 @Module({
   imports: [
-    ConfigModule, // must exist for JwtStrategy
+    ConfigModule,
 
     TypeOrmModule.forFeature([User, UnitMembership, UserRole]),
 

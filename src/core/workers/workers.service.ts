@@ -19,7 +19,6 @@ export class WorkersService {
 
     if (search) {
       where.full_name = ILike(`%${search}%`);
-      // if you also support worker_code, change to OR query with QueryBuilder
     }
 
     const workers = await this.workersRepo.find({ where, order: { full_name: 'ASC' } });

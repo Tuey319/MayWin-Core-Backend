@@ -65,7 +65,6 @@ export class SchedulesService {
       throw new BadRequestException('Invalid authenticated user id');
     }
 
-    // Schema requires created_by bigint NOT NULL + FK -> users(id) :contentReference[oaicite:1]{index=1}
     const userExists = await this.usersRepo.exist({
       where: { id: createdById as any },
     });
@@ -91,8 +90,6 @@ export class SchedulesService {
       status: ScheduleStatus.DRAFT,
       constraint_profile_id: dto.constraintProfileId ?? null,
       last_solver_run_id: null,
-
-      // IMPORTANT: must match your entity property naming (snake_case style)
       created_by: createdById,
 
       published_at: null,

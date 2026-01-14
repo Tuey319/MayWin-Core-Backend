@@ -100,31 +100,32 @@ export class JobsRunnerService {
       await this.mergeJobAttributes(jobId, { normalizerMeta: meta });
 
       // 3) SOLVING with fallback plans
-      const { output: solverOutput, chosenPlan, finalStatus } =
-        await this.solveWithFallback(jobId, payload);
+      const {
+        output: solverOutput,
+        chosenPlan,
+        finalStatus,
+      } = await this.solveWithFallback(jobId, payload);
 
       // persist chosen plan on job
-      await this.jobsRepo.update(
-        { id: jobId },
-        { chosen_plan: chosenPlan as any } as any,
+      await this.jobsRepo.update({ id: jobId }, {
+        chosen_plan: chosenPlan as any,
+      } as any);
+
+      await this.writeArtifactJsonOnce(
+        jobId,
+        ScheduleArtifactType.SOLVER_OUTPUT,
+        {
+          schema: 'SolverOutput.v1',
+          chosenPlan,
+          output: solverOutput,
+        },
       );
 
       await this.writeArtifactJsonOnce(
-      jobId,
-      ScheduleArtifactType.SOLVER_OUTPUT,
-      {
-        schema: 'SolverOutput.v1',
-        chosenPlan,
-        output: solverOutput,
-      },
-    );
-
-    await this.writeArtifactJsonOnce(
-      jobId,
-      ScheduleArtifactType.KPI_SUMMARY,
-      this.buildKpiSummary(payload, solverOutput, chosenPlan),
-    );
-      
+        jobId,
+        ScheduleArtifactType.KPI_SUMMARY,
+        this.buildKpiSummary(payload, solverOutput, chosenPlan),
+      );
 
       // 3.5) Preview
       await this.writePreviewFromSolverOutput(jobId, solverOutput, meta);
@@ -132,7 +133,11 @@ export class JobsRunnerService {
       // 4) EVALUATING
       await this.transition(jobId, finalStatus, ScheduleJobStatus.EVALUATING);
 
-      const evaluation = this.basicEvaluate(payload as any, solverOutput, chosenPlan);
+      const evaluation = this.basicEvaluate(
+        payload as any,
+        solverOutput,
+        chosenPlan,
+      );
       await this.writeArtifactJsonOnce(
         jobId,
         ScheduleArtifactType.EVALUATION_REPORT,
@@ -230,7 +235,6 @@ export class JobsRunnerService {
       };
     }
 
-    // ✅ all failed: store outputs for debugging BEFORE throwing
     const reason =
       this.extractFailureReason(outMilp) ||
       this.extractFailureReason(outRelaxed) ||
@@ -266,7 +270,6 @@ export class JobsRunnerService {
         timeLimitSeconds: opts.timeLimitSeconds,
       });
     } catch (e: any) {
-      // Store an "error-shaped" output so downstream checks don’t crash
       return {
         feasible: false,
         status: 'ERROR',
@@ -276,7 +279,7 @@ export class JobsRunnerService {
       };
     }
   }
-  
+
   // Build KPI summary from normalized input + solver output + chosen plan
   // Used as a ScheduleArtifact of type KPI_SUMMARY
   private buildKpiSummary(
@@ -285,12 +288,10 @@ export class JobsRunnerService {
     chosenPlan: SolverPlan,
   ) {
     const out: any = solverOutput ?? {};
-    const details: any = out.details ?? out.meta?.solverDetails ?? out.meta?.details ?? {};
+    const details: any =
+      out.details ?? out.meta?.solverDetails ?? out.meta?.details ?? {};
 
-    const assignments =
-      out.assignments ??
-      out.solution?.assignments ??
-      [];
+    const assignments = out.assignments ?? out.solution?.assignments ?? [];
 
     const assignmentCount = Array.isArray(assignments) ? assignments.length : 0;
 
@@ -310,13 +311,11 @@ export class JobsRunnerService {
 
         assignmentCount,
 
-        // from solver details (your output already has these)
         averageSatisfaction: details.average_satisfaction ?? null,
         wallTimeSec: details.wall_time_sec ?? null,
         branches: details.branches ?? null,
         conflicts: details.conflicts ?? null,
 
-        // small context from normalized input
         nurses: (normalized as any)?.nurses?.length ?? null,
         days:
           (normalized as any)?.horizon?.days?.length ??
@@ -343,7 +342,6 @@ export class JobsRunnerService {
     ).toUpperCase();
 
     if (!status) {
-      // If no status is provided, treat as “good” only if it has assignments
       const n = Array.isArray((out as any).assignments)
         ? (out as any).assignments.length
         : 0;
@@ -354,19 +352,23 @@ export class JobsRunnerService {
     if (status.includes('TIME')) return false;
     if (status.includes('UNKNOWN')) return false;
     if (status.includes('FAIL')) return false;
-    return true; // OPTIMAL / FEASIBLE etc.
+    return true;
   }
 
   private extractFailureReason(out: SolverRawOutput): string | null {
-  const status = (out as any).status ?? (out as any).meta?.status ?? null;
-  const detailsRaw = (out as any).details ?? (out as any).meta?.note ?? null;
+    const status = (out as any).status ?? (out as any).meta?.status ?? null;
+    const detailsRaw = (out as any).details ?? (out as any).meta?.note ?? null;
 
-  if (typeof detailsRaw === 'string') return detailsRaw;
-  if (detailsRaw != null) {
-    try { return JSON.stringify(detailsRaw); } catch { return String(detailsRaw); }
+    if (typeof detailsRaw === 'string') return detailsRaw;
+    if (detailsRaw != null) {
+      try {
+        return JSON.stringify(detailsRaw);
+      } catch {
+        return String(detailsRaw);
+      }
+    }
+    return status != null ? String(status) : null;
   }
-  return status != null ? String(status) : null;
-}
 
   /**
    * Preview contract:
@@ -472,7 +474,11 @@ export class JobsRunnerService {
     };
   }
 
-  private async transition(jobId: string, from: ScheduleJobStatus, to: ScheduleJobStatus) {
+  private async transition(
+    jobId: string,
+    from: ScheduleJobStatus,
+    to: ScheduleJobStatus,
+  ) {
     const res = await this.jobsRepo
       .createQueryBuilder()
       .update(ScheduleJob)
@@ -490,14 +496,11 @@ export class JobsRunnerService {
     const message = String(err?.message ?? err ?? 'Unknown error');
     const code = err?.code ? String(err.code) : 'JOB_FAILED';
 
-    await this.jobsRepo.update(
-      { id: jobId },
-      {
-        status: ScheduleJobStatus.FAILED,
-        error_code: code,
-        error_message: message.slice(0, 900),
-      } as any,
-    );
+    await this.jobsRepo.update({ id: jobId }, {
+      status: ScheduleJobStatus.FAILED,
+      error_code: code,
+      error_message: message.slice(0, 900),
+    } as any);
   }
 
   private async writeArtifactJsonOnce(

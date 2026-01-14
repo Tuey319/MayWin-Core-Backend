@@ -16,6 +16,13 @@ import { ConstraintProfilesModule } from './core/unit-config/constraint-profiles
 import { NormalizerModule } from './core/normalizer/normalizer.module';
 import { SolverModule } from './core/solver/solver.module';
 import { CoverageRulesModule } from './core/unit-config/coverage-rules/coverage-rules.module';
+import { WorkerMessagesModule } from './core/messages/worker-messages.module';
+import { BucketsModule } from './database/buckets/buckets.module';
+import { OrchestratorModule } from './core/orchestrator/orchestrator.module';
+import { OrganizationsModule } from '@/core/organizations/organizations.module';
+import { UnitsModule } from '@/core/units/units.module';
+import { SitesModule } from '@/core/sites/sites.module';
+import { RolesModule } from '@/core/roles/roles.module';
 
 @Module({
   imports: [
@@ -38,6 +45,13 @@ import { CoverageRulesModule } from './core/unit-config/coverage-rules/coverage-
     NormalizerModule,
     SolverModule,
     CoverageRulesModule,
+    WorkerMessagesModule,
+    BucketsModule,
+    OrchestratorModule,
+    OrganizationsModule,
+    UnitsModule,
+    SitesModule,
+    RolesModule,
   ],
 })
 export class AppModule {}
