@@ -11,7 +11,6 @@ export class CreateScheduleDto {
   @IsDateString()
   endDate!: string;
 
-  // bigint in DB, but comes as string in API
   @IsOptional()
   @Matches(/^\d+$/)
   constraintProfileId?: string;

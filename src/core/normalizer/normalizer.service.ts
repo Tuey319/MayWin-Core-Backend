@@ -15,8 +15,6 @@ export type NormalizedInputV1 = Record<string, any>;
 
 type DayType = 'WEEKDAY' | 'WEEKEND';
 
-// Solver preferences shape:
-// preferences[nurseCode][date][shiftCode] = penalty(int)
 type SolverPreferences = Record<string, Record<string, Record<string, number>>>;
 
 @Injectable()
@@ -158,7 +156,7 @@ export class NormalizerService {
       unitId: String(unit_id),
       workerRows,
       days: days.map((d) => String(d.date)),
-      shifts, // includes code + name
+      shifts,
       nurseCodeByWorkerId,
     });
 
@@ -181,8 +179,6 @@ export class NormalizerService {
       coverageRules,
       constraints,
       availability,
-
-      // ✅ this is what the solver adapter will forward into SolveRequest.preferences
       preferences,
 
       meta: {
@@ -196,7 +192,6 @@ export class NormalizerService {
           coverageRules: coverageRules.length,
           availabilityRows: availability.length,
           days: days.length,
-          // optional useful debug
           preferenceNurses: Object.keys(preferences ?? {}).length,
         },
       },
@@ -223,7 +218,7 @@ export class NormalizerService {
 
     if (workerRows.length === 0) return {};
 
-    // pull worker_preferences table rows (optional)
+    // pull worker_preferences table rows
     const prefRows = await this.workerPrefRepo.find({
       where: { worker_id: In(workerRows.map((w) => w.id) as any) } as any,
     });
@@ -236,7 +231,7 @@ export class NormalizerService {
       .map((s) => String(s.code))
       .filter((sc) => !nightShiftCodes.has(sc));
 
-    // default penalties (tune later)
+    // default penalties
     const PENALTY_DISLIKED = 5;
 
     const out: SolverPreferences = {};
@@ -266,9 +261,6 @@ export class NormalizerService {
       out[nurseCode] = {};
 
       // 2) Apply explicit per-day/per-shift penalties if provided (patternJson)
-      // Accept either:
-      // - patternJson = { "2025-01-01": { "N": 8, "D": 0 }, ... }
-      // - patternJson = { "penalties": { "2025-01-01": { "N": 8 } } }
       const explicit = this.normalizePatternPenalties(patternJson);
       if (explicit) {
         for (const d of Object.keys(explicit)) {
@@ -329,7 +321,6 @@ export class NormalizerService {
       ? patternJson.penalties
       : patternJson;
 
-    // must look like { date: { shift: number } }
     const out: Record<string, Record<string, number>> = {};
     for (const k of Object.keys(maybe)) {
       const v = (maybe as any)[k];
@@ -395,7 +386,7 @@ export class NormalizerService {
 
   private getDayType(dateIso: string): DayType {
     const d = new Date(`${dateIso}T00:00:00.000Z`);
-    const dow = d.getUTCDay(); // 0=Sun ... 6=Sat
+    const dow = d.getUTCDay();
     return dow === 0 || dow === 6 ? 'WEEKEND' : 'WEEKDAY';
   }
 

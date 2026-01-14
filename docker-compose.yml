@@ -1,45 +1,56 @@
 services:
-  chatbot:
-    build:
-      context: ./backend/chatbot
-      dockerfile: Dockerfile
+  db:
+    image: postgres:16-alpine
+    container_name: maywin_db
     env_file:
       - .env
     environment:
-      - DATABASE_PATH=${DATABASE_PATH}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     ports:
-      - "8070:8070"
-    depends_on:
-      - solver
-      - rasa
+      - "5433:5432"
     volumes:
-      - ./backend/chatbot:/app
-    restart: unless-stopped
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
-  solver:
+  app:
     build:
-      context: ./backend/temp
+      context: .
+      dockerfile: Dockerfile
+    container_name: maywin_app
     env_file:
       - .env
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
-      - "8000:8000"
-    volumes:
-      - ./backend/temp:/app
-    restart: unless-stopped
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
 
-  rasa:
-    image: rasa/rasa:3.6.20-full
-    working_dir: /app
-    volumes:
-      # Mount your Rasa project here
-      - ./backend/chatbot/rasa:/app
-    command: >
-      run
-      --model models/20251031-170424-sluggish-module.tar.gz
-      --enable-api
-      --cors "*"
-      --debug
-      --port 5005
-    ports:
-      - "5005:5005"
-    restart: unless-stopped
+      # Auth (must match your JwtStrategy check)
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+
+      # DB config (must match your strict requireEnv(...) names)
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_SCHEMA: ${DB_SCHEMA}
+
+    # Optional live reload:
+    # command: npm run dev
+    # volumes:
+    #   - .:/app
+    #   - /app/node_modules
+
+volumes:
+  pgdata:

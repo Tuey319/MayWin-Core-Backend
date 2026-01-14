@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+requests
+python-dotenv
+numpy<2.0
+ortools==9.11.4210

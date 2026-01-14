@@ -23,7 +23,12 @@ export class JobsService {
     private readonly runner: JobsRunnerService,
   ) {}
 
-  async createJob(scheduleId: string, dto: CreateJobDto, idempotencyKey: string | null) {
+  async createJob(
+    scheduleId: string,
+    dto: CreateJobDto,
+    idempotencyKey: string | null,
+    opts?: { enqueueLocalRunner?: boolean },
+  ) {
     const schedule = await this.schedulesRepo.findOne({ where: { id: scheduleId } });
     if (!schedule) throw new NotFoundException('Schedule not found');
 
@@ -76,8 +81,9 @@ export class JobsService {
     schedule.job_id = saved.id;
     await this.schedulesRepo.save(schedule);
 
-    // ✅ Phase 2A: actually run pipeline locally (Step Functions later)
-    this.runner.enqueue(saved.id);
+    const enqueueLocal = opts?.enqueueLocalRunner ?? false;
+    if (enqueueLocal) this.runner.enqueue(saved.id);
+
 
     return {
       job: {
@@ -201,7 +207,6 @@ export class JobsService {
     const job = await this.jobsRepo.findOne({ where: { id: jobId } });
     if (!job) throw new NotFoundException('Job not found');
 
-    // Phase 2A: mark failed-cancelled (since enum has no CANCELLED)
     job.status = ScheduleJobStatus.FAILED;
     job.error_code = 'CANCELLED';
     job.error_message = 'Cancelled by user';

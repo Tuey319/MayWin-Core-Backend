@@ -45,8 +45,6 @@ export class AvailabilityService {
   }
 
   async upsert(unitId: string, entries: Entry[]) {
-    // Phase 1: safe-but-simple upsert loop.
-    // Upgrade later: one SQL INSERT ... ON CONFLICT (wa_uniq) DO UPDATE.
 
     let updatedCount = 0;
 

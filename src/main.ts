@@ -1,4 +1,5 @@
 // src/main.ts
+import 'module-alias/register';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
@@ -6,9 +7,9 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // Base global prefix for all routes
-  app.setGlobalPrefix('/api/v1/core');
+  app.setGlobalPrefix('api/v1/core');
 
   // TODO: add validation pipe, CORS, logging, etc.
-  await app.listen(process.env.PORT || 3000);
+  await app.listen(process.env.PORT || 3000, '0.0.0.0');
 }
 bootstrap();
