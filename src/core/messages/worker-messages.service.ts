@@ -69,6 +69,73 @@ export class WorkerMessagesService {
   }
 
   /**
+   * Create chat message for anonymous/auto-generated worker.
+   * Auto-creates worker if needed with incremented ID.
+   * Frontend sends only { body, subject? }.
+   * Backend fills org/unit/sender/direction/status and auto-assigns worker.
+   */
+  async createChatAnonymous(dto: CreateWorkerChatMessageDto, user: any) {
+  if (!user) throw new ForbiddenException('Missing auth context');
+  
+  const userId = user?.userId ?? user?.id ?? user?.sub ?? null;
+  const orgIdFromAuth =
+    user?.organizationId ?? user?.orgId ?? user?.organization_id ?? null;
+
+  if (!userId) throw new ForbiddenException('Missing user id in auth context');
+  if (!orgIdFromAuth) {
+    throw new ForbiddenException('Missing organization id in auth context');
+  }
+
+  const authOrgId = String(orgIdFromAuth);
+
+  const savedWorker = await this.workerRepo.save(
+    this.workerRepo.create({
+      organization_id: authOrgId as any,
+      full_name: `Auto-generated Worker`,
+      is_active: true,
+      primary_unit_id: null,
+    }),
+  );
+
+  const workerId = String((savedWorker as any).id);
+
+  const saved = await this.repo.save(
+    this.repo.create({
+      worker_id: workerId,
+      organization_id: authOrgId,
+      unit_id: null,
+
+      sender_user_id: String(userId),
+      sender_worker_id: null,
+
+      direction: 'OUTBOUND',
+      status: 'SENT',
+
+      subject: dto.subject ?? null,
+      body: dto.body,
+
+      job_id: null,
+      schedule_id: null,
+      shift_date: null,
+      shift_code: null,
+
+      attributes: { createdBy: 'chat-anon' },
+    }),
+  );
+
+  return {
+    id: saved.id,
+    workerId: saved.worker_id,
+    organizationId: saved.organization_id,
+    direction: saved.direction,
+    status: saved.status,
+    subject: saved.subject,
+    body: saved.body,
+    createdAt: saved.created_at,
+  };
+}
+
+  /**
    * New "simple" create for frontend chat box.
    * Frontend sends only { body, subject? }.
    * Backend fills org/unit/sender/direction/status.
