@@ -21,6 +21,15 @@ export class WorkerMessagesController {
     return this.svc.create(workerId, dto, req.user);
   }
 
+  // POST /chat (anonymous/auto-generated worker) - PUBLIC
+  @Post('/chat')
+  createChatAnonymous(
+    @Body() dto: CreateWorkerChatMessageDto,
+    @Req() req: any,
+  ) {
+    return this.svc.createChatAnonymous(dto, req.user);
+  }
+
   // POST /workers/:workerId/messages/chat
   @Post('/workers/:workerId/messages/chat')
   createChatForWorker(
