@@ -10,7 +10,7 @@ export * from './users/unit-membership.entity';
 export * from './workers/worker.entity';
 export * from './workers/worker-unit.entity';
 export * from './workers/worker-availability.entity';
-export * from './workers/worker-preference.entity';
+export * from './workers/worker-preferences.entity';
 export * from './workers/worker-message.entity';
 
 export * from './scheduling/shift-template.entity';

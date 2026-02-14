@@ -11,7 +11,7 @@ import { ShiftTemplate } from '@/database/entities/scheduling/shift-template.ent
 import { Worker } from '@/database/entities/workers/worker.entity';
 import { WorkerUnitMembership } from '@/database/entities/workers/worker-unit.entity';
 import { WorkerAvailability } from '@/database/entities/workers/worker-availability.entity';
-import { WorkerPreference } from '@/database/entities/workers/worker-preference.entity';
+import { WorkerPreference } from '@/database/entities/workers/worker-preferences.entity';
 
 @Module({
   imports: [

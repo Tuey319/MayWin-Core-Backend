@@ -1,0 +1,194 @@
+###
+# MayWin Schedule Generation API Testing
+# Use with VS Code REST Client extension or similar tools
+###
+
+@baseUrl = http://localhost:3000/api/v1/core
+@email = admin@demo.com
+@password = password123
+
+### Variables (will be set after requests)
+# @token = <will-be-set-after-login>
+# @jobId = <will-be-set-after-run>
+# @scheduleId = 1
+
+###
+# ============================================================================
+# 1. LOGIN - Get JWT Token
+# ============================================================================
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+###
+# Extract token from login response
+@token = {{login.response.body.token}}
+
+###
+# ============================================================================
+# 2. GET CURRENT USER (verify token works)
+# ============================================================================
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{token}}
+
+###
+# ============================================================================
+# 3. GET UNIT DETAILS
+# ============================================================================
+GET {{baseUrl}}/units/1
+Authorization: Bearer {{token}}
+
+###
+# ============================================================================
+# 4. GET SCHEDULE
+# ============================================================================
+GET {{baseUrl}}/schedules/1
+Authorization: Bearer {{token}}
+
+###
+# ============================================================================
+# 5. TRIGGER SCHEDULE GENERATION (ORCHESTRATOR)
+# ============================================================================
+# @name runOrchestrator
+POST {{baseUrl}}/orchestrator/run
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "scheduleId": "1",
+  "idempotencyKey": "test-run-2026-02-14-001",
+  "dto": {
+    "startDate": "2026-02-17T00:00:00.000Z",
+    "endDate": "2026-02-23T23:59:59.999Z",
+    "strategy": {
+      "plan": "A",
+      "mode": "strict"
+    },
+    "solverConfig": {
+      "timeLimitSeconds": 30
+    },
+    "notes": "Test run via REST client"
+  }
+}
+
+###
+# Extract job ID from orchestrator response
+@jobId = {{runOrchestrator.response.body.job.id}}
+
+###
+# ============================================================================
+# 6. CHECK JOB STATUS
+# ============================================================================
+GET {{baseUrl}}/jobs/{{jobId}}
+Authorization: Bearer {{token}}
+
+###
+# ============================================================================
+# 7. LIST JOB ARTIFACTS
+# ============================================================================
+GET {{baseUrl}}/jobs/{{jobId}}/artifacts
+Authorization: Bearer {{token}}
+
+###
+# ============================================================================
+# 8. PREVIEW SCHEDULE RESULTS
+# ============================================================================
+GET {{baseUrl}}/jobs/{{jobId}}/preview
+Authorization: Bearer {{token}}
+
+###
+# ============================================================================
+# 9. APPLY SCHEDULE (Persist Assignments)
+# ============================================================================
+POST {{baseUrl}}/jobs/{{jobId}}/apply
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "overwriteManualChanges": false
+}
+
+###
+# ============================================================================
+# 10. GET UPDATED SCHEDULE (After Apply)
+# ============================================================================
+GET {{baseUrl}}/schedules/1
+Authorization: Bearer {{token}}
+
+###
+# ============================================================================
+# 11. EXPORT SCHEDULE
+# ============================================================================
+GET {{baseUrl}}/schedules/1/export
+Authorization: Bearer {{token}}
+
+###
+# ============================================================================
+# ALTERNATIVE: Run with just schedule ID (use length instead of endDate)
+# ============================================================================
+POST {{baseUrl}}/orchestrator/run
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "scheduleId": "1",
+  "dto": {
+    "startDate": "2026-02-17T00:00:00.000Z",
+    "length": 7
+  }
+}
+
+###
+# ============================================================================
+# ADDITIONAL: Get Unit Workers
+# ============================================================================
+GET {{baseUrl}}/units/1/workers
+Authorization: Bearer {{token}}
+
+###
+# ============================================================================
+# ADDITIONAL: Get Unit Shift Templates
+# ============================================================================
+GET {{baseUrl}}/units/1/shift-templates
+Authorization: Bearer {{token}}
+
+###
+# ============================================================================
+# ADDITIONAL: Get Unit Coverage Rules
+# ============================================================================
+GET {{baseUrl}}/units/1/coverage-rules
+Authorization: Bearer {{token}}
+
+###
+# ============================================================================
+# ADDITIONAL: Get Unit Constraint Profiles
+# ============================================================================
+GET {{baseUrl}}/units/1/constraint-profiles
+Authorization: Bearer {{token}}
+
+###
+# ============================================================================
+# ADDITIONAL: Get Unit Availability
+# ============================================================================
+GET {{baseUrl}}/units/1/availability?dateFrom=2026-02-17&dateTo=2026-02-23
+Authorization: Bearer {{token}}
+
+###
+# ============================================================================
+# ADDITIONAL: Get Schedule History
+# ============================================================================
+GET {{baseUrl}}/units/1/schedules/history
+Authorization: Bearer {{token}}
+
+###
+# ============================================================================
+# HEALTH CHECK (No auth required)
+# ============================================================================
+GET {{baseUrl}}/health
+
+###

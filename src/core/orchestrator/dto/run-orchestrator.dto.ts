@@ -1,13 +1,27 @@
 // src/core/orchestrator/dto/run-orchestrator.dto.ts
 import { Type } from 'class-transformer';
-import { IsISO8601, IsObject, IsOptional, IsString, Length, ValidateNested } from 'class-validator';
+import {
+  IsISO8601,
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsString,
+  Length,
+  ValidateNested,
+} from 'class-validator';
 
 export class RunOrchestratorBodyDto {
   @IsISO8601({ strict: true })
   startDate!: string;
 
+  @IsOptional()
   @IsISO8601({ strict: true })
-  endDate!: string;
+  endDate?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  length?: number;
 
   @IsOptional()
   @IsObject()
