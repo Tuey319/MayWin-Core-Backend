@@ -18,7 +18,7 @@ import { UnitMembership } from './entities/users/unit-membership.entity';
 import { Worker } from './entities/workers/worker.entity';
 import { WorkerUnitMembership } from './entities/workers/worker-unit.entity';
 import { WorkerAvailability } from './entities/workers/worker-availability.entity';
-import { WorkerPreference } from './entities/workers/worker-preference.entity';
+import { WorkerPreference } from './entities/workers/worker-preferences.entity';
 
 // Scheduling
 import { ShiftTemplate } from './entities/scheduling/shift-template.entity';

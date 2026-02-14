@@ -46,6 +46,43 @@ export class OrchestratorController {
     return v;
   }
 
+  private computeEndDateFromLength(startDateIso: string, length: number): string {
+    if (!Number.isFinite(length) || length <= 0) {
+      throw new Error('dto.length must be a positive number of days');
+    }
+
+    const start = new Date(startDateIso);
+    if (Number.isNaN(start.getTime())) {
+      throw new Error('Invalid dto.startDate (must be ISO string)');
+    }
+
+    // Inclusive window: length=1 => same day
+    const end = new Date(start.getTime());
+    end.setUTCDate(end.getUTCDate() + (Math.trunc(length) - 1));
+
+    // Match your existing pattern: end-of-day UTC
+    end.setUTCHours(23, 59, 59, 999);
+    return end.toISOString();
+  }
+
+  private normalizeDtoForJob(dto: any): any {
+    const out = { ...(dto ?? {}) };
+
+    if (!out.startDate) {
+      throw new Error('Missing required dto field: startDate');
+    }
+
+    // Accept either endDate or length
+    if (!out.endDate) {
+      if (out.length == null) {
+        throw new Error('Missing required dto field: endDate (or provide length)');
+      }
+      out.endDate = this.computeEndDateFromLength(String(out.startDate), Number(out.length));
+    }
+
+    return out;
+  }
+
   @Post('/run')
   async run(@Body() body: RunOrchestratorDto) {
     const mode = this.getMode();
@@ -53,9 +90,11 @@ export class OrchestratorController {
 
     this.logger.log(`ORCH mode=${mode}`);
 
+    const normalizedDto = this.normalizeDtoForJob(body.dto);
+
     const res = await this.jobs.createJob(
       body.scheduleId,
-      body.dto as any,
+      normalizedDto as any,
       body.idempotencyKey ?? null,
       { enqueueLocalRunner: !useStepFunctions },
     );
@@ -71,7 +110,7 @@ export class OrchestratorController {
 
     const input = {
       scheduleId: body.scheduleId,
-      dto: body.dto,
+      dto: normalizedDto,
       idempotencyKey: body.idempotencyKey ?? null,
       jobId: job?.id ?? null,
     };

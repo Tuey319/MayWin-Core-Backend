@@ -5,13 +5,14 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 
 import { User } from '@/database/entities/users/user.entity';
 import { UnitMembership } from '@/database/entities/users/unit-membership.entity';
 import { UserRole } from '@/database/entities/users/user-role.entity';
+import { Role } from '@/database/entities/users/role.entity';
 import { JwtPayload } from './types/jwt-payload';
 import { SignupDto } from './dto/signup.dto';
 
@@ -27,16 +28,43 @@ export class AuthService {
     @InjectRepository(UserRole)
     private readonly userRoleRepo: Repository<UserRole>,
 
+    @InjectRepository(Role)
+    private readonly roleRepo: Repository<Role>,
+
     private readonly jwtService: JwtService,
   ) {}
 
   private async buildContext(userId: string) {
+    // 1) Unit memberships (unit-scoped roles)
     const memberships = await this.unitMembershipRepo.find({
-      where: { user_id: userId },
+      where: { user_id: String(userId) },
     });
 
     const unitIds = memberships.map((m) => Number(m.unit_id));
-    const roles = [...new Set(memberships.map((m) => m.role_code))];
+    const unitRoleCodes = memberships
+      .map((m) => (m.role_code ?? '').trim())
+      .filter(Boolean);
+
+    // 2) Global roles (user_roles -> roles) WITHOUT JOIN
+    const userRoleRows = await this.userRoleRepo.find({
+      where: { user_id: String(userId) },
+    });
+
+    const roleIds = userRoleRows.map((ur) => String(ur.role_id)).filter(Boolean);
+
+    let globalRoleCodes: string[] = [];
+    if (roleIds.length) {
+      const roleRows = await this.roleRepo.find({
+        where: { id: In(roleIds) },
+      });
+
+      globalRoleCodes = roleRows
+        .map((r: any) => (r.code ?? '').trim())
+        .filter(Boolean);
+    }
+
+    // 3) Merge + dedupe
+    const roles = Array.from(new Set([...globalRoleCodes, ...unitRoleCodes])).sort();
 
     return { unitIds, roles };
   }
@@ -57,23 +85,18 @@ export class AuthService {
       where: { email, is_active: true },
     });
 
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
+    if (!user) throw new UnauthorizedException('Invalid credentials');
 
     const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
+    if (!ok) throw new UnauthorizedException('Invalid credentials');
 
     const { unitIds, roles } = await this.buildContext(user.id);
-
     const accessToken = this.sign(user, roles, unitIds);
 
     return {
       accessToken,
       user: {
-        id: user.id, // bigint-as-string
+        id: user.id,
         email: user.email,
         fullName: user.full_name,
         organizationId: Number(user.organization_id),
@@ -83,19 +106,11 @@ export class AuthService {
     };
   }
 
-  /**
-   * Signup rules (current simple version):
-   * - Creates user record
-   * - Requires organizationId (or else you can add "bootstrap org" later)
-   * - If unitId provided -> create unit_memberships row with roleCode (default "NURSE")
-   */
   async signup(dto: SignupDto) {
     const email = dto.email.trim().toLowerCase();
 
     const exists = await this.userRepo.findOne({ where: { email } });
-    if (exists) {
-      throw new BadRequestException('Email already exists');
-    }
+    if (exists) throw new BadRequestException('Email already exists');
 
     if (!dto.organizationId) {
       throw new BadRequestException('organizationId is required for signup (for now)');
@@ -118,7 +133,6 @@ export class AuthService {
     if (dto.unitId) {
       const roleCode = (dto.roleCode ?? 'NURSE').trim();
 
-      // Unique constraint (unit_id,user_id) exists; so do a find first
       const existingMembership = await this.unitMembershipRepo.findOne({
         where: { unit_id: String(dto.unitId), user_id: saved.id },
       });
@@ -149,11 +163,6 @@ export class AuthService {
     };
   }
 
-  /**
-   * JWT-only logout:
-   * - If you're not using refresh tokens or a token blacklist, server can't invalidate access tokens.
-   * - Keep this endpoint for consistency and future expansion (refresh tokens / session table).
-   */
   async logout(_jwtUser: any, _dto: { deviceId?: string }) {
     return { ok: true };
   }

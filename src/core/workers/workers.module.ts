@@ -5,7 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { Worker } from '@/database/entities/workers/worker.entity';
 import { WorkerUnitMembership } from '@/database/entities/workers/worker-unit.entity';
-import { WorkerPreference } from '@/database/entities/workers/worker-preference.entity';
+import { WorkerPreference } from '@/database/entities/workers/worker-preferences.entity';
 
 import { WorkersController } from './workers.controller';
 import { WorkersService } from './workers.service';

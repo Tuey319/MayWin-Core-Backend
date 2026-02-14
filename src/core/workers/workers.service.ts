@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
 
 import { Worker } from '@/database/entities/workers/worker.entity';
-import { WorkerPreference } from '@/database/entities/workers/worker-preference.entity';
+import { WorkerPreference } from '@/database/entities/workers/worker-preferences.entity';
 import { PutWorkerPreferencesDto } from './dto/put-preferences.dto';
 
 @Injectable()

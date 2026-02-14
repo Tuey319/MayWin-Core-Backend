@@ -1,0 +1,367 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MayWin Schedule Generation Data Structure Reference",
+  "description": "Complete data structure needed to run schedule generation",
+  "definitions": {
+    "organization": {
+      "type": "object",
+      "required": ["name", "code", "timezone"],
+      "properties": {
+        "id": { "type": "string", "description": "Auto-generated bigint" },
+        "name": { "type": "string", "example": "Demo Hospital" },
+        "code": { "type": "string", "example": "DEMO_HOSPITAL" },
+        "timezone": { "type": "string", "example": "Asia/Bangkok" },
+        "attributes": { "type": "object", "default": {} }
+      }
+    },
+    "site": {
+      "type": "object",
+      "required": ["organization_id", "name", "code"],
+      "properties": {
+        "id": { "type": "string" },
+        "organization_id": { "type": "string" },
+        "name": { "type": "string", "example": "Main Campus" },
+        "code": { "type": "string", "example": "MAIN_CAMPUS" },
+        "address": { "type": "string", "example": "123 Hospital Road" },
+        "timezone": { "type": "string", "example": "Asia/Bangkok" },
+        "is_active": { "type": "boolean", "default": true }
+      }
+    },
+    "unit": {
+      "type": "object",
+      "required": ["organization_id", "name", "code"],
+      "properties": {
+        "id": { "type": "string" },
+        "organization_id": { "type": "string" },
+        "site_id": { "type": "string", "nullable": true },
+        "name": { "type": "string", "example": "ICU 1" },
+        "code": { "type": "string", "example": "ICU_01" },
+        "description": { "type": "string" },
+        "is_active": { "type": "boolean", "default": true },
+        "attributes": { "type": "object", "default": {} }
+      }
+    },
+    "user": {
+      "type": "object",
+      "required": ["organization_id", "email", "password_hash", "full_name"],
+      "properties": {
+        "id": { "type": "string" },
+        "organization_id": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "password_hash": { "type": "string", "description": "Bcrypt hash" },
+        "full_name": { "type": "string" },
+        "is_active": { "type": "boolean", "default": true }
+      }
+    },
+    "worker": {
+      "type": "object",
+      "required": ["organization_id", "full_name"],
+      "properties": {
+        "id": { "type": "string" },
+        "organization_id": { "type": "string" },
+        "primary_unit_id": { "type": "string", "nullable": true },
+        "full_name": { "type": "string", "example": "Nurse N001" },
+        "worker_code": { "type": "string", "example": "N001" },
+        "employment_type": {
+          "type": "string",
+          "enum": ["FULL_TIME", "PART_TIME", "CONTRACT", "TEMP"]
+        },
+        "weekly_hours": { "type": "integer", "example": 40 },
+        "is_active": { "type": "boolean", "default": true },
+        "attributes": {
+          "type": "object",
+          "properties": {
+            "skill_level": { "type": "string", "example": "SENIOR" },
+            "certifications": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "worker_unit_membership": {
+      "type": "object",
+      "required": ["worker_id", "unit_id"],
+      "properties": {
+        "worker_id": { "type": "string" },
+        "unit_id": { "type": "string" },
+        "role_code": { "type": "string", "example": "NURSE", "nullable": true }
+      }
+    },
+    "shift_template": {
+      "type": "object",
+      "required": ["organization_id", "code", "name", "start_time", "end_time"],
+      "properties": {
+        "id": { "type": "string" },
+        "organization_id": { "type": "string" },
+        "unit_id": { "type": "string", "nullable": true },
+        "code": { "type": "string", "example": "DAY" },
+        "name": { "type": "string", "example": "Day Shift" },
+        "start_time": { "type": "string", "format": "time", "example": "07:00:00" },
+        "end_time": { "type": "string", "format": "time", "example": "15:00:00" },
+        "is_active": { "type": "boolean", "default": true },
+        "attributes": {
+          "type": "object",
+          "properties": {
+            "is_rest": { "type": "boolean" },
+            "duration_hours": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "coverage_rule": {
+      "type": "object",
+      "required": ["unit_id", "shift_code", "day_type"],
+      "properties": {
+        "id": { "type": "string" },
+        "unit_id": { "type": "string" },
+        "shift_code": { "type": "string", "example": "DAY" },
+        "day_type": {
+          "type": "string",
+          "enum": ["WEEKDAY", "WEEKEND"],
+          "example": "WEEKDAY"
+        },
+        "min_workers": { "type": "integer", "example": 3, "nullable": true },
+        "max_workers": { "type": "integer", "example": 4, "nullable": true },
+        "required_tag": { "type": "string", "nullable": true },
+        "attributes": { "type": "object", "default": {} }
+      }
+    },
+    "constraint_profile": {
+      "type": "object",
+      "required": ["unit_id", "name"],
+      "properties": {
+        "id": { "type": "string" },
+        "unit_id": { "type": "string" },
+        "name": { "type": "string", "example": "Default ICU Constraints" },
+        "max_consecutive_work_days": {
+          "type": "integer",
+          "example": 5,
+          "nullable": true
+        },
+        "max_consecutive_night_shifts": {
+          "type": "integer",
+          "example": 3,
+          "nullable": true
+        },
+        "min_rest_hours_between_shifts": {
+          "type": "integer",
+          "example": 12,
+          "nullable": true
+        },
+        "fairness_weight_json": {
+          "type": "object",
+          "nullable": true,
+          "properties": {
+            "shift_distribution": { "type": "number" },
+            "workload_balance": { "type": "number" }
+          }
+        },
+        "penalty_weight_json": {
+          "type": "object",
+          "nullable": true,
+          "properties": {
+            "consecutive_days_penalty": { "type": "number" },
+            "night_shift_penalty": { "type": "number" }
+          }
+        },
+        "is_active": { "type": "boolean", "default": true }
+      }
+    },
+    "schedule": {
+      "type": "object",
+      "required": [
+        "organization_id",
+        "unit_id",
+        "name",
+        "start_date",
+        "end_date",
+        "created_by"
+      ],
+      "properties": {
+        "id": { "type": "string" },
+        "organization_id": { "type": "string" },
+        "unit_id": { "type": "string" },
+        "job_id": { "type": "string", "format": "uuid", "nullable": true },
+        "name": { "type": "string", "example": "ICU Schedule Week 2026-02-17" },
+        "start_date": { "type": "string", "format": "date", "example": "2026-02-17" },
+        "end_date": { "type": "string", "format": "date", "example": "2026-02-23" },
+        "status": {
+          "type": "string",
+          "enum": ["DRAFT", "PUBLISHED", "ARCHIVED"],
+          "default": "DRAFT"
+        },
+        "constraint_profile_id": { "type": "string", "nullable": true },
+        "created_by": { "type": "string" },
+        "attributes": { "type": "object", "default": {} }
+      }
+    },
+    "worker_availability": {
+      "type": "object",
+      "required": ["worker_id", "unit_id", "date", "is_available"],
+      "properties": {
+        "worker_id": { "type": "string" },
+        "unit_id": { "type": "string" },
+        "date": { "type": "string", "format": "date", "example": "2026-02-17" },
+        "end_date": { "type": "string", "format": "date", "nullable": true },
+        "is_available": { "type": "boolean", "example": true },
+        "attributes": { "type": "object", "default": {} }
+      }
+    }
+  },
+  "example": {
+    "description": "Minimum complete dataset for schedule generation",
+    "organization": {
+      "id": "1",
+      "name": "Demo Hospital",
+      "code": "DEMO_HOSPITAL",
+      "timezone": "Asia/Bangkok"
+    },
+    "site": {
+      "id": "1",
+      "organization_id": "1",
+      "name": "Main Campus",
+      "code": "MAIN_CAMPUS"
+    },
+    "unit": {
+      "id": "1",
+      "organization_id": "1",
+      "site_id": "1",
+      "name": "ICU 1",
+      "code": "ICU_01"
+    },
+    "user": {
+      "id": "1",
+      "organization_id": "1",
+      "email": "admin@demo.com",
+      "full_name": "Admin User"
+    },
+    "workers": [
+      {
+        "id": "1",
+        "organization_id": "1",
+        "primary_unit_id": "1",
+        "full_name": "Nurse N001",
+        "worker_code": "N001",
+        "employment_type": "FULL_TIME",
+        "weekly_hours": 40
+      },
+      {
+        "id": "2",
+        "full_name": "Nurse N002",
+        "worker_code": "N002"
+      }
+    ],
+    "worker_unit_memberships": [
+      { "worker_id": "1", "unit_id": "1", "role_code": "NURSE" },
+      { "worker_id": "2", "unit_id": "1", "role_code": "NURSE" }
+    ],
+    "shift_templates": [
+      {
+        "id": "1",
+        "organization_id": "1",
+        "unit_id": "1",
+        "code": "DAY",
+        "name": "Day Shift",
+        "start_time": "07:00:00",
+        "end_time": "15:00:00"
+      },
+      {
+        "id": "2",
+        "code": "EVENING",
+        "name": "Evening Shift",
+        "start_time": "15:00:00",
+        "end_time": "23:00:00"
+      },
+      {
+        "id": "3",
+        "code": "NIGHT",
+        "name": "Night Shift",
+        "start_time": "23:00:00",
+        "end_time": "07:00:00"
+      },
+      {
+        "id": "4",
+        "code": "OFF",
+        "name": "Off Day",
+        "start_time": "00:00:00",
+        "end_time": "00:00:00"
+      }
+    ],
+    "coverage_rules": [
+      {
+        "id": "1",
+        "unit_id": "1",
+        "shift_code": "DAY",
+        "day_type": "WEEKDAY",
+        "min_workers": 3,
+        "max_workers": 4
+      },
+      {
+        "id": "2",
+        "shift_code": "EVENING",
+        "day_type": "WEEKDAY",
+        "min_workers": 2,
+        "max_workers": 3
+      },
+      {
+        "id": "3",
+        "shift_code": "NIGHT",
+        "day_type": "WEEKDAY",
+        "min_workers": 2,
+        "max_workers": 3
+      }
+    ],
+    "constraint_profile": {
+      "id": "1",
+      "unit_id": "1",
+      "name": "Default ICU Constraints",
+      "max_consecutive_work_days": 5,
+      "max_consecutive_night_shifts": 3,
+      "min_rest_hours_between_shifts": 12,
+      "is_active": true
+    },
+    "schedule": {
+      "id": "1",
+      "organization_id": "1",
+      "unit_id": "1",
+      "name": "ICU Schedule Week 2026-02-17",
+      "start_date": "2026-02-17",
+      "end_date": "2026-02-23",
+      "status": "DRAFT",
+      "constraint_profile_id": "1",
+      "created_by": "1"
+    },
+    "worker_availability": [
+      {
+        "worker_id": "1",
+        "unit_id": "1",
+        "date": "2026-02-17",
+        "end_date": "2026-02-23",
+        "is_available": true
+      }
+    ]
+  },
+  "notes": {
+    "required_entities": [
+      "1. Organization - Container for all data",
+      "2. Site - Physical location (optional but recommended)",
+      "3. Unit - Department/ward where scheduling happens",
+      "4. User - At least one admin/creator user",
+      "5. Workers - At least 2-3 workers (nurses/staff)",
+      "6. Worker-Unit Memberships - Link workers to units",
+      "7. Shift Templates - At least 3-4 shift types (DAY, EVENING, NIGHT, OFF)",
+      "8. Coverage Rules - Minimum/maximum workers per shift per day type",
+      "9. Constraint Profile - Scheduling rules and constraints",
+      "10. Schedule - Container for the schedule period"
+    ],
+    "optional_but_recommended": [
+      "Worker Availability - Define when workers are available",
+      "Worker Preferences - Worker shift preferences for better satisfaction scores"
+    ],
+    "minimum_workers": "At least as many workers as max coverage requirement. For example, if DAY shift needs max 4 workers, you need at least 4-5 workers total to avoid infeasibility.",
+    "date_formats": {
+      "date": "YYYY-MM-DD (e.g., 2026-02-17)",
+      "time": "HH:MM:SS (e.g., 07:00:00)",
+      "datetime": "ISO 8601 (e.g., 2026-02-17T00:00:00.000Z)"
+    }
+  }
+}

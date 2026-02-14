@@ -11,12 +11,13 @@ import { JwtStrategy } from './strategies/jwt-strategy';
 import { User } from '@/database/entities/users/user.entity';
 import { UnitMembership } from '@/database/entities/users/unit-membership.entity';
 import { UserRole } from '@/database/entities/users/user-role.entity';
+import { Role } from '@/database/entities/core/role.entity';
 
 @Module({
   imports: [
     ConfigModule,
 
-    TypeOrmModule.forFeature([User, UnitMembership, UserRole]),
+    TypeOrmModule.forFeature([User, UnitMembership, UserRole, Role]),
 
     JwtModule.registerAsync({
       imports: [ConfigModule],

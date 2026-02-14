@@ -52,12 +52,34 @@ function pickJobId(input: AnyObj): string | null {
     null) as string | null;
 }
 
+
+function computeEndDateFromLength(startDateIso: string, length: number): string {
+  if (!Number.isFinite(length) || length <= 0) {
+    throw new Error('dto.length must be a positive number of days');
+  }
+
+  const start = new Date(startDateIso);
+  if (Number.isNaN(start.getTime())) {
+    throw new Error('Invalid dto.startDate (must be ISO string)');
+  }
+
+  // inclusive window: length=1 => same day
+  const end = new Date(start.getTime());
+  end.setUTCDate(end.getUTCDate() + (Math.trunc(length) - 1));
+
+  // set to end of day UTC to match your current style
+  end.setUTCHours(23, 59, 59, 999);
+
+  return end.toISOString();
+}
+
 function extractCreateJobInput(event: any): {
   scheduleId: string;
   idempotencyKey: string | null;
   dto: {
     startDate: string;
-    endDate: string;
+    endDate?: string;
+    length?: number;
     strategy?: AnyObj;
     solverConfig?: AnyObj;
     options?: AnyObj;
@@ -65,20 +87,32 @@ function extractCreateJobInput(event: any): {
   };
 } {
   const maybe = event?.input ?? event;
+
   if (!maybe || typeof maybe !== 'object')
     throw new Error('Invalid event: expected object input');
 
   const scheduleId = maybe.scheduleId ?? maybe.schedule_id;
-  const dto =
-    maybe.dto ??
-    ({
-      startDate: maybe.startDate ?? maybe.start_date,
-      endDate: maybe.endDate ?? maybe.end_date,
-      strategy: maybe.strategy,
-      solverConfig: maybe.solverConfig,
-      options: maybe.options,
-      notes: maybe.notes,
-    } as any);
+
+  const rawDto = (maybe.dto && typeof maybe.dto === 'object') ? maybe.dto : {};
+
+  const dto = {
+    startDate: rawDto.startDate ?? maybe.startDate ?? maybe.start_date,
+    endDate: rawDto.endDate ?? maybe.endDate ?? maybe.end_date,
+    length: rawDto.length ?? maybe.length,
+    strategy: rawDto.strategy ?? maybe.strategy,
+    solverConfig: rawDto.solverConfig ?? maybe.solverConfig,
+    options: rawDto.options ?? maybe.options,
+    notes: rawDto.notes ?? maybe.notes,
+  } as {
+    startDate: string;
+    endDate?: string;
+    length?: number;
+    strategy?: AnyObj;
+    solverConfig?: AnyObj;
+    options?: AnyObj;
+    notes?: string;
+  };
+
 
   const idempotencyKey = (maybe.idempotencyKey ??
     maybe.idempotency_key ??
@@ -86,11 +120,25 @@ function extractCreateJobInput(event: any): {
 
   if (!scheduleId || typeof scheduleId !== 'string')
     throw new Error('Missing required field: scheduleId');
-  if (!dto?.startDate || !dto?.endDate)
-    throw new Error('Missing required dto fields: startDate/endDate');
+  if (!dto?.startDate) throw new Error('Missing required dto field: startDate');
+
+  if (dto.endDate && dto.length != null) {
+    const computed = computeEndDateFromLength(String(dto.startDate), Number(dto.length));
+    if (new Date(computed).getTime() !== new Date(String(dto.endDate)).getTime()) {
+      throw new Error('dto.endDate conflicts with dto.length');
+    }
+  }
+
+  if (!dto.endDate) {
+    if (dto.length == null) {
+      throw new Error('Missing required dto field: endDate (or provide length)');
+    }
+    dto.endDate = computeEndDateFromLength(String(dto.startDate), Number(dto.length));
+  }
 
   return { scheduleId, idempotencyKey, dto };
 }
+
 
 async function getLatestJobIdForSchedule(
   jobsRepo: Repository<ScheduleJob>,
@@ -241,12 +289,20 @@ function normalizeAssignment(
 ): { nurseCode: string; date: string; shiftCode: string } | null {
   const nurseCode =
     a?.nurseCode ?? a?.workerCode ?? a?.nurse ?? a?.worker ?? null;
-  const date = a?.date ?? a?.day ?? null;
+
+  // SolverResult.v1 uses "day"
+  const date = a?.day ?? a?.date ?? a?.startDate ?? null;
+
   const shiftCode = a?.shiftCode ?? a?.shift ?? null;
+
   if (!nurseCode || !date || !shiftCode) return null;
+
+  // normalize to YYYY-MM-DD if it contains time
+  const d = String(date).includes("T") ? String(date).split("T")[0] : String(date);
+
   return {
     nurseCode: String(nurseCode),
-    date: String(date),
+    date: d,
     shiftCode: String(shiftCode),
   };
 }
@@ -300,12 +356,26 @@ export const handler = async (event: AnyObj, _context: Context) => {
           String(process.env.ENQUEUE_LOCAL_RUNNER ?? 'false').toLowerCase() ===
           'true';
 
+        const dtoForCreateJob = {
+          start_date: String(dto.startDate),
+          end_date: String(dto.endDate),
+
+          startDate: String(dto.startDate),
+          endDate: String(dto.endDate),
+
+          strategy: dto.strategy ?? null,
+          solverConfig: dto.solverConfig ?? null,
+          options: dto.options ?? null,
+          notes: dto.notes ?? null,
+        };
+
         const res = await jobsService.createJob(
           scheduleId,
-          dto as any,
+          dtoForCreateJob as any,
           idempotencyKey ?? null,
           { enqueueLocalRunner },
         );
+
 
         const job = res?.job ?? res;
 
@@ -451,7 +521,11 @@ export const handler = async (event: AnyObj, _context: Context) => {
             plan: 'A_STRICT',
             jobId: String(jobId),
             timeLimitSeconds:
-              Number(input?.solverConfig?.timeLimitSeconds ?? 30) || 30,
+              Number(
+                input?.dto?.solverConfig?.timeLimitSeconds ??
+                input?.solverConfig?.timeLimitSeconds ??
+                30
+              ) || 30,
           } as any);
         } catch (e: any) {
           result = {
@@ -647,51 +721,75 @@ export const handler = async (event: AnyObj, _context: Context) => {
           };
         }
 
-        const rowsToUpsert = cleaned.map((x) => ({
+        const rowsToUpsertRaw = cleaned.map((x) => ({
           schedule_id: scheduleId,
           worker_id: codeToWorkerId.get(x.nurseCode)!,
           date: x.date,
           shift_code: x.shiftCode,
         }));
 
+        const dedupe = new Map<string, (typeof rowsToUpsertRaw)[number]>();
+        for (const r of rowsToUpsertRaw) {
+          const key = `${r.schedule_id}__${r.worker_id}__${r.date}`;
+          dedupe.set(key, r); // last one wins
+        }
+        const rowsToUpsert = Array.from(dedupe.values());
+
+
         await jobsRepo.manager.transaction(async (trx) => {
+          // 0) IMPORTANT: clear old assignments for this schedule
+          // otherwise you keep seeing the old month in UI/DB.
           await trx.query(
             `
-            insert into maywin_db.schedule_assignments
-              (schedule_id, worker_id, date, shift_code, source, attributes)
-            select
-              x.schedule_id::bigint,
-              x.worker_id::bigint,
-              x.date::date,
-              x.shift_code::text,
-              'SOLVER',
-              '{}'::jsonb
-            from jsonb_to_recordset($1::jsonb)
-              as x(schedule_id text, worker_id text, date text, shift_code text)
-            on conflict on constraint sa_uniq
-            do update set
-              shift_code = excluded.shift_code,
-              source = 'SOLVER',
-              updated_at = now()
-            `,
+    delete from maywin_db.schedule_assignments
+    where schedule_id = $1::bigint
+    `,
+            [String(scheduleId)],
+          );
+
+          // 1) insert fresh assignments (no need for on conflict after delete)
+          await trx.query(
+            `
+    insert into maywin_db.schedule_assignments
+      (schedule_id, worker_id, date, shift_code, source, attributes)
+    select
+      x.schedule_id::bigint,
+      x.worker_id::bigint,
+      x.date::date,
+      x.shift_code::text,
+      'SOLVER',
+      '{}'::jsonb
+    from jsonb_to_recordset($1::jsonb)
+      as x(schedule_id text, worker_id text, date text, shift_code text)
+    `,
             [JSON.stringify(rowsToUpsert)],
           );
 
+          // 2) (optional) also clear solver_run_assignments for the latest run, then reinsert
+          // keeps solver_run_assignments consistent if you re-run the same job
           try {
             const solverRunRows: Array<{ id: string }> = await trx.query(
               `
-              select id::text as id
-              from maywin_db.solver_runs
-              where job_id = $1::uuid
-              order by id desc
-              limit 1
-              `,
+      select id::text as id
+      from maywin_db.solver_runs
+      where job_id = $1::uuid
+      order by id desc
+      limit 1
+      `,
               [String(jobId)],
             );
 
             const solver_run_id = solverRunRows?.[0]?.id;
 
             if (solver_run_id) {
+              await trx.query(
+                `
+        delete from maywin_db.solver_run_assignments
+        where solver_run_id = $1::bigint
+        `,
+                [String(solver_run_id)],
+              );
+
               const rowsForRun = rowsToUpsert.map((r) => ({
                 solver_run_id,
                 worker_id: r.worker_id,
@@ -701,38 +799,36 @@ export const handler = async (event: AnyObj, _context: Context) => {
 
               await trx.query(
                 `
-                insert into maywin_db.solver_run_assignments
-                  (solver_run_id, worker_id, date, shift_code, attributes)
-                select
-                  x.solver_run_id::bigint,
-                  x.worker_id::bigint,
-                  x.date::date,
-                  x.shift_code::text,
-                  '{}'::jsonb
-                from jsonb_to_recordset($1::jsonb)
-                  as x(solver_run_id text, worker_id text, date text, shift_code text)
-                on conflict on constraint sra_uniq
-                do update set
-                  shift_code = excluded.shift_code,
-                  attributes = excluded.attributes
-                `,
+        insert into maywin_db.solver_run_assignments
+          (solver_run_id, worker_id, date, shift_code, attributes)
+        select
+          x.solver_run_id::bigint,
+          x.worker_id::bigint,
+          x.date::date,
+          x.shift_code::text,
+          '{}'::jsonb
+        from jsonb_to_recordset($1::jsonb)
+          as x(solver_run_id text, worker_id text, date text, shift_code text)
+        `,
                 [JSON.stringify(rowsForRun)],
               );
             }
-          } catch {}
+          } catch { }
 
+          // 3) mark job completed
           await trx.query(
             `
-            update maywin_db.schedule_jobs
-            set
-              status = 'COMPLETED',
-              final_schedule_id = $2::bigint,
-              updated_at = now()
-            where id = $1::uuid
-            `,
+    update maywin_db.schedule_jobs
+    set
+      status = 'COMPLETED',
+      final_schedule_id = $2::bigint,
+      updated_at = now()
+    where id = $1::uuid
+    `,
             [String(jobId), String(scheduleId)],
           );
         });
+
 
         return {
           status: 'COMPLETED',
@@ -768,9 +864,9 @@ export const handler = async (event: AnyObj, _context: Context) => {
 
         const scheduleId = String(
           input?.scheduleId ??
-            job.final_schedule_id ??
-            (job.attributes as any)?.scheduleId ??
-            '',
+          job.final_schedule_id ??
+          (job.attributes as any)?.scheduleId ??
+          '',
         );
         if (!scheduleId)
           return {
@@ -1033,7 +1129,7 @@ export const handler = async (event: AnyObj, _context: Context) => {
               String(artifactRow.id),
             ],
           );
-        } catch {}
+        } catch { }
 
         return {
           status: 'COMPLETED',
