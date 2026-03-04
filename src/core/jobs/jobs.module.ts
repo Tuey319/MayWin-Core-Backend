@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { Schedule } from '@/database/entities/scheduling/schedule.entity';
 import { ScheduleAssignment } from '@/database/entities/scheduling/schedule-assignment.entity';
+import { ScheduleRun } from '@/database/entities/scheduling/schedule-run.entity';
 import { ScheduleJob } from '@/database/entities/orchestration/schedule-job.entity';
 import { ScheduleArtifact } from '@/database/entities/orchestration/schedule-artifact.entity';
 
@@ -19,6 +20,7 @@ import { SolverModule } from '@/core/solver/solver.module';
     TypeOrmModule.forFeature([
       Schedule,           
       ScheduleAssignment,
+      ScheduleRun,
       ScheduleJob,
       ScheduleArtifact,
     ]),

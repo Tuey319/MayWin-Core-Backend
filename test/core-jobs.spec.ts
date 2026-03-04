@@ -19,7 +19,7 @@ describe('JobsService', () => {
 
 describe('JobsRunnerService', () => {
   it('should be defined', () => {
-    const service = new JobsRunnerService({} as any, {} as any, {} as any, {} as any);
+    const service = new JobsRunnerService({} as any, {} as any, {} as any, {} as any, {} as any);
     expect(service).toBeDefined();
   });
 });

@@ -34,6 +34,12 @@ export class JobsController {
     return this.jobs.getJob(jobId);
   }
 
+  // Compatibility alias: GET /schedule-jobs/:jobId
+  @Get('/schedule-jobs/:jobId')
+  getScheduleJob(@Param('jobId') jobId: string) {
+    return this.jobs.getJob(jobId);
+  }
+
   // Purpose: List job artifacts.
   @Get('/jobs/:jobId/artifacts')
   listArtifacts(@Param('jobId') jobId: string) {

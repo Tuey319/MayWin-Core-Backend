@@ -39,6 +39,9 @@ export class Schedule {
   @Column({ type: 'bigint', nullable: true })
   last_solver_run_id: string | null;
 
+  @Column({ type: 'bigint', nullable: true })
+  current_run_id: string | null;
+
   @Column({ type: 'bigint' })
   created_by: string;
 

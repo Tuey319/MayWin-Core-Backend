@@ -8,7 +8,10 @@ import * as serverlessExpress from '@vendia/serverless-express';
 let cachedServer: any;
 
 async function bootstrapServer() {
-  const app = await NestFactory.create(AppModule, { logger: ['error', 'warn', 'log'] });
+  const app = await NestFactory.create(AppModule, {
+    logger: ['error', 'warn', 'log'],
+    rawBody: true,
+  });
 
   app.setGlobalPrefix('api/v1/core');
 

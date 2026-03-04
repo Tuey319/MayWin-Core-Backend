@@ -6,6 +6,7 @@ export enum AvailabilityType {
   UNAVAILABLE = 'UNAVAILABLE',
   PREFERRED = 'PREFERRED',
   AVOID = 'AVOID',
+  DAY_OFF = 'DAY_OFF',
 }
 
 @Entity({ schema: 'maywin_db', name: 'worker_availability' })

@@ -1,5 +1,5 @@
 // src/core/jobs/jobs-runner.service.ts
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
@@ -39,6 +39,9 @@ export class JobsRunnerService {
 
     private readonly normalizer: NormalizerService,
     private readonly solver: SolverAdapter,
+    
+    @Inject(forwardRef(() => require('./jobs.service').JobsService))
+    private readonly jobsService: any,
   ) {}
 
   enqueue(jobId: string) {
@@ -60,6 +63,16 @@ export class JobsRunnerService {
         this.running = false;
       }
     });
+  }
+
+  private parseBoolean(value: unknown): boolean | null {
+    if (typeof value === 'boolean') return value;
+    if (value == null) return null;
+
+    const normalized = String(value).trim().toLowerCase();
+    if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) return true;
+    if (['false', '0', 'no', 'n', 'off'].includes(normalized)) return false;
+    return null;
   }
 
   async run(jobId: string) {
@@ -144,7 +157,7 @@ export class JobsRunnerService {
         evaluation,
       );
 
-      // 5) PERSISTING (Phase 2A: do NOT auto-apply)
+      // 5) PERSISTING
       await this.transition(
         jobId,
         ScheduleJobStatus.EVALUATING,
@@ -157,6 +170,28 @@ export class JobsRunnerService {
         ScheduleJobStatus.PERSISTING,
         ScheduleJobStatus.COMPLETED,
       );
+
+      // Auto-persist (after COMPLETED): request options.dryRun has highest priority.
+      // dryRun=false => persist, dryRun=true => skip persist.
+      const dryRun = this.parseBoolean(job.attributes?.options?.dryRun);
+      const envAutoPersist = this.parseBoolean(process.env.AUTO_PERSIST_SCHEDULES);
+      const autoPersist = dryRun === false
+        ? true
+        : dryRun === true
+          ? false
+          : envAutoPersist === true;
+
+      if (autoPersist) {
+        this.logger.log(
+          `Auto-persisting job=${jobId} dryRun=${String(dryRun)} envAutoPersist=${String(envAutoPersist)}`,
+        );
+        await this.jobsService.apply(jobId, false);
+        this.logger.log(`Auto-persist successful job=${jobId}`);
+      } else {
+        this.logger.log(
+          `Skipping auto-persist job=${jobId} dryRun=${String(dryRun)} envAutoPersist=${String(envAutoPersist)}`,
+        );
+      }
     } catch (err: any) {
       this.logger.error(`Job failed job=${jobId} msg=${err?.message ?? err}`);
       await this.fail(jobId, err);

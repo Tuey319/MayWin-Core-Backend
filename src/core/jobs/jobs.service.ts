@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 
 import { Schedule } from '@/database/entities/scheduling/schedule.entity';
 import { ScheduleAssignment } from '@/database/entities/scheduling/schedule-assignment.entity';
+import { ScheduleRun } from '@/database/entities/scheduling/schedule-run.entity';
 import { ScheduleJob, ScheduleJobStatus } from '@/database/entities/orchestration/schedule-job.entity';
 import { ScheduleArtifact } from '@/database/entities/orchestration/schedule-artifact.entity';
 
@@ -12,6 +13,15 @@ import { CreateJobDto } from './dto/create-job.dto';
 import { JobsRunnerService } from './jobs-runner.service';
 
 type PreviewAssignment = { workerId: string; date: string; shiftCode: string };
+type NewAssignmentRow = {
+  schedule_id: string;
+  schedule_run_id: string;
+  worker_id: string;
+  date: string;
+  shift_code: string;
+  source: string;
+  attributes: Record<string, any>;
+};
 
 @Injectable()
 export class JobsService {
@@ -158,39 +168,84 @@ export class JobsService {
 
     const previewAssignments: PreviewAssignment[] = job.attributes?.preview?.assignments ?? [];
 
-    let updated = 0;
+    const solverByKey = new Map<string, PreviewAssignment>();
+    for (const pa of previewAssignments) {
+      const key = `${pa.workerId}__${pa.date}`;
+      solverByKey.set(key, pa);
+    }
+
+    const assignmentsByKey = new Map<string, NewAssignmentRow>();
+    for (const pa of solverByKey.values()) {
+      const key = `${pa.workerId}__${pa.date}`;
+      assignmentsByKey.set(key, {
+        schedule_id: schedule.id,
+        schedule_run_id: '',
+        worker_id: pa.workerId,
+        date: pa.date,
+        shift_code: pa.shiftCode,
+        source: 'SOLVER',
+        attributes: {},
+      });
+    }
+
     let skippedManual = 0;
 
-    for (const pa of previewAssignments) {
-      const existing = await this.assignmentsRepo.findOne({
-        where: { schedule_id: schedule.id, worker_id: pa.workerId, date: pa.date },
+    if (schedule.current_run_id) {
+      const manualAssignments = await this.assignmentsRepo.find({
+        where: { schedule_run_id: schedule.current_run_id, source: 'MANUAL' },
       });
 
-      if (existing) {
-        if (existing.source === 'MANUAL' && !overwriteManualChanges) {
-          skippedManual += 1;
+      for (const ma of manualAssignments) {
+        const key = `${ma.worker_id}__${ma.date}`;
+        const hasSolver = solverByKey.has(key);
+
+        if (hasSolver && overwriteManualChanges) {
           continue;
         }
-        existing.shift_code = pa.shiftCode;
-        existing.source = 'SOLVER';
-        await this.assignmentsRepo.save(existing);
-        updated += 1;
-      } else {
-        const created = this.assignmentsRepo.create({
+
+        if (hasSolver && !overwriteManualChanges) {
+          skippedManual += 1;
+        }
+
+        assignmentsByKey.set(key, {
           schedule_id: schedule.id,
-          worker_id: pa.workerId,
-          date: pa.date,
-          shift_code: pa.shiftCode,
-          source: 'SOLVER',
-          attributes: {},
+          schedule_run_id: '',
+          worker_id: ma.worker_id,
+          date: ma.date,
+          shift_code: ma.shift_code,
+          source: 'MANUAL',
+          attributes: ma.attributes ?? {},
         });
-        await this.assignmentsRepo.save(created);
-        updated += 1;
       }
     }
 
-    schedule.job_id = job.id;
-    await this.schedulesRepo.save(schedule);
+    await this.assignmentsRepo.manager.transaction(async (trx) => {
+      const scheduleRunsRepo = trx.getRepository(ScheduleRun);
+      const assignmentsRepo = trx.getRepository(ScheduleAssignment);
+      const schedulesRepo = trx.getRepository(Schedule);
+
+      const scheduleRun = scheduleRunsRepo.create({
+        schedule_id: schedule.id,
+        job_id: job.id,
+      });
+      const savedRun = await scheduleRunsRepo.save(scheduleRun);
+
+      const rows = Array.from(assignmentsByKey.values()).map((row) => ({
+        ...row,
+        schedule_run_id: savedRun.id,
+      }));
+
+      if (rows.length > 0) {
+        await assignmentsRepo.insert(rows);
+      }
+
+      schedule.job_id = job.id;
+      schedule.current_run_id = savedRun.id;
+      await schedulesRepo.save(schedule);
+
+    });
+
+    const updated = Array.from(assignmentsByKey.values()).filter((a) => a.source === 'SOLVER').length;
 
     return {
       schedule: {
