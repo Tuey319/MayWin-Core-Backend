@@ -1,5 +1,6 @@
 // src/core/scheduling/schedules.controller.ts
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -46,6 +47,23 @@ export class SchedulesController {
     @Query() q: GetCurrentScheduleQuery,
   ) {
     return this.schedules.getCurrentSchedule(unitId, q.dateFrom, q.dateTo);
+  }
+
+  /**
+   * Compatibility alias for BFF: GET /schedule?unitId=2
+   */
+  @Get('/schedule')
+  async getCurrentCompat(@Query('unitId') unitId?: string) {
+    if (!unitId) throw new BadRequestException('unitId is required');
+
+    const result = await this.schedules.getCurrentSchedule(unitId);
+
+    return {
+      success: true,
+      result: {
+        assignments: result.assignments,
+      },
+    };
   }
 
   /**

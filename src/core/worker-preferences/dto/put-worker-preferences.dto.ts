@@ -13,6 +13,16 @@ export class ShiftWeightDto {
 }
 
 export class WorkerPreferencesDto {
+    @IsOptional()
+    @IsObject()
+    days_off_pattern_json?: any;
+  @IsOptional()
+  @IsObject()
+  attributes?: Record<string, any>;
+
+  @IsOptional()
+  @IsObject()
+  preference_pattern_json?: any;
 
   @IsOptional()
   @IsArray()

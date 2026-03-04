@@ -41,6 +41,9 @@ export class Worker {
   @Column({ type: 'bigint', nullable: true })
   linked_user_id: string | null;
 
+  @Column({ type: 'text', nullable: true, unique: true })
+  line_id: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 

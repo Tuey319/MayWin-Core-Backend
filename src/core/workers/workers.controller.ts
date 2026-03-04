@@ -19,4 +19,24 @@ export class WorkersController {
   ) {
     return this.workers.listWorkers(unitId, search ?? null);
   }
+
+  /**
+   * Compatibility alias for BFF: GET /nurses/export?unitId=2
+   */
+  @Get('/nurses/export')
+  async exportNurses(@Query('unitId') unitId?: string) {
+    const targetUnitId = unitId ?? '2';
+    const result = await this.workers.listWorkers(targetUnitId, null);
+
+    return {
+      nurses: (result.workers ?? []).map((w) => ({
+        id: Number(w.id),
+        name: w.fullName,
+        level: null,
+        employment_type: w.employmentType,
+        unit: targetUnitId,
+        satisfaction: null,
+      })),
+    };
+  }
 }

@@ -1,9 +1,26 @@
-# compiled output
-/dist
+################################################################################
+# DEPENDENCIES & BUILD OUTPUT
+################################################################################
 /node_modules
+yarn.lock
+package-lock.json
+/dist
 /build
 
-# Logs
+################################################################################
+# ENVIRONMENT & SECRETS
+################################################################################
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+.env.test
+.env.staging
+
+################################################################################
+# LOGS
+################################################################################
 logs
 *.log
 npm-debug.log*
@@ -12,44 +29,60 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
-# OS
-.DS_Store
-
-# Tests
+################################################################################
+# TESTING
+################################################################################
 /coverage
 /.nyc_output
+.mocha*
+junit.xml
 
-# IDEs and editors
-/.idea
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
-
-# IDE - VSCode
+################################################################################
+# IDEs / EDITORS
+################################################################################
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
 
-# dotenv environment variable files
-.env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
+.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+*.sublime-project
 
-# markdown notes
-.docker-tutorial.md
+# JetBrains
+.IntelliJIdea*
+.WebStorm
+.PyCharm
+.vscode
+*.iml
+*.iws
+*.ipr
 
-# temp directory
+################################################################################
+# OS & TEMPORARY FILES
+################################################################################
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+*.swp
+*.swo
+*~
 .temp
 .tmp
+*.tmp
+.cache
+.parcel-cache
 
-# Runtime data
+################################################################################
+# RUNTIME DATA
+################################################################################
 pids
 *.pid
 *.seed
@@ -57,3 +90,74 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+################################################################################
+# PYTHON SOLVER ENVIRONMENT
+################################################################################
+src/core/solver/.venv/
+src/core/solver/venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+################################################################################
+# DATABASE
+################################################################################
+*.sqlite
+*.sqlite3
+*.db
+data/audit-logs.csv
+migrations/*.ts
+!migrations/*.template.ts
+
+################################################################################
+# DOCKER
+################################################################################
+.dockerignore
+docker-compose.override.yml
+
+################################################################################
+# AWS & CLOUD
+################################################################################
+.aws/
+*.pem
+*.key
+credentials
+~/.aws
+
+################################################################################
+# POSTMAN (SENSITIVE DATA)
+################################################################################
+postman/*.private.json
+postman/*local*.json
+# Keep shared environments, ignore personal ones:
+# postman/MayWin-*-Env.postman_environment.json
+
+################################################################################
+# MISC
+################################################################################
+.git-credentials
+.npmrc
+.yarnrc
+.docker-tutorial.md
+*.bak
+*.backup
+.DS_Store

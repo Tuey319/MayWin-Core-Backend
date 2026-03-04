@@ -737,32 +737,57 @@ export const handler = async (event: AnyObj, _context: Context) => {
 
 
         await jobsRepo.manager.transaction(async (trx) => {
-          // 0) IMPORTANT: clear old assignments for this schedule
-          // otherwise you keep seeing the old month in UI/DB.
-          await trx.query(
+          const scheduleRunRows: Array<{ id: string }> = await trx.query(
             `
-    delete from maywin_db.schedule_assignments
-    where schedule_id = $1::bigint
+    insert into maywin_db.schedule_runs (schedule_id, job_id)
+    values ($1::bigint, $2::uuid)
+    returning id::text as id
     `,
-            [String(scheduleId)],
+            [String(scheduleId), String(jobId)],
           );
 
-          // 1) insert fresh assignments (no need for on conflict after delete)
-          await trx.query(
-            `
+          const scheduleRunId = scheduleRunRows?.[0]?.id;
+
+          // Insert new solver assignments only (no manual merge)
+          const rowsToInsert = rowsToUpsert.map((row) => ({
+            schedule_id: scheduleId,
+            schedule_run_id: scheduleRunId,
+            worker_id: row.worker_id,
+            date: row.date,
+            shift_code: row.shift_code,
+            source: 'SOLVER',
+            attributes: {},
+          }));
+
+          if (rowsToInsert.length > 0) {
+            await trx.query(
+              `
     insert into maywin_db.schedule_assignments
-      (schedule_id, worker_id, date, shift_code, source, attributes)
+      (schedule_id, schedule_run_id, worker_id, date, shift_code, source, attributes)
     select
       x.schedule_id::bigint,
+      x.schedule_run_id::bigint,
       x.worker_id::bigint,
       x.date::date,
       x.shift_code::text,
-      'SOLVER',
-      '{}'::jsonb
+      x.source::text,
+      coalesce(x.attributes, '{}'::jsonb)
     from jsonb_to_recordset($1::jsonb)
-      as x(schedule_id text, worker_id text, date text, shift_code text)
+      as x(schedule_id text, schedule_run_id text, worker_id text, date text, shift_code text, source text, attributes jsonb)
     `,
-            [JSON.stringify(rowsToUpsert)],
+              [JSON.stringify(rowsToInsert)],
+            );
+          }
+
+          // Update schedule's job_id and current_run_id to point to this run
+          await trx.query(
+            `
+    update maywin_db.schedules
+    set job_id = $1::uuid,
+        current_run_id = $2::bigint
+    where id = $3::bigint
+    `,
+            [String(jobId), String(scheduleRunId), String(scheduleId)],
           );
 
           // 2) (optional) also clear solver_run_assignments for the latest run, then reinsert
@@ -879,17 +904,34 @@ export const handler = async (event: AnyObj, _context: Context) => {
         const started = Date.now();
 
         // 1) Pull persisted assignments
+        const scheduleRunRows: Array<{ current_run_id: string | null }> = await jobsRepo.manager.query(
+          `
+          select current_run_id::text as current_run_id
+          from maywin_db.schedules
+          where id = $1::bigint
+          `,
+          [String(scheduleId)],
+        );
+
+        const currentRunId = scheduleRunRows?.[0]?.current_run_id ?? null;
+
         const assignments: Array<{
           worker_id: string;
           date: string;
           shift_code: string;
         }> = await jobsRepo.manager.query(
+          currentRunId
+            ? `
+          select worker_id::text as worker_id, date::text as date, shift_code::text as shift_code
+          from maywin_db.schedule_assignments
+          where schedule_run_id = $1::bigint
           `
+            : `
           select worker_id::text as worker_id, date::text as date, shift_code::text as shift_code
           from maywin_db.schedule_assignments
           where schedule_id = $1::bigint
           `,
-          [String(scheduleId)],
+          [String(currentRunId ?? scheduleId)],
         );
 
         const totalAssigned = assignments.length;

@@ -6,6 +6,7 @@ import { In, Repository } from 'typeorm';
 import { Worker } from '@/database/entities/workers/worker.entity';
 import { WorkerUnitMembership } from '@/database/entities/workers/worker-unit.entity';
 import { WorkerPreference } from '@/database/entities/workers/worker-preferences.entity';
+import { WorkerAvailability, AvailabilityType } from '@/database/entities/workers/worker-availability.entity';
 import { WorkerPreferencesDto } from './dto/put-worker-preferences.dto';
 
 type JwtCtx = {
@@ -23,9 +24,11 @@ export class WorkerPreferencesService {
     @InjectRepository(WorkerUnitMembership)
     private readonly membershipRepo: Repository<WorkerUnitMembership>,
 
-    // ✅ New repo: reads/writes maywin_db.worker_preferences
     @InjectRepository(WorkerPreference)
     private readonly preferencesRepo: Repository<WorkerPreference>,
+
+    @InjectRepository(WorkerAvailability)
+    private readonly workerAvailabilityRepo: Repository<WorkerAvailability>,
   ) {}
 
   /**
@@ -94,10 +97,38 @@ export class WorkerPreferencesService {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
+    // 5) Fetch days off for all workers in this unit
+    const daysOffRows = await this.workerAvailabilityRepo.find({
+      where: {
+        worker_id: In(workerIds) as any,
+        unit_id: unitId as any,
+        type: AvailabilityType.DAY_OFF,
+      },
+    });
+    const daysOffByWorkerId = new Map<string, any[]>();
+    for (const row of daysOffRows) {
+      const wid = String(row.worker_id);
+      if (!daysOffByWorkerId.has(wid)) daysOffByWorkerId.set(wid, []);
+      daysOffByWorkerId.get(wid)!.push({
+        date: row.date,
+        shiftCode: row.shift_code,
+        reason: row.reason,
+        attributes: row.attributes,
+      });
+    }
+
     let submittedThisMonth = 0;
 
     const items = workers.map((w) => {
+
       const pref = prefByWorkerId.get(Number(w.id)) ?? null;
+      // Prefer days_off_pattern_json if present, else fallback to worker_availability
+      let daysOff = [];
+      if (pref && pref.days_off_pattern_json && Object.keys(pref.days_off_pattern_json).length > 0) {
+        daysOff = Object.entries(pref.days_off_pattern_json).map(([date, value]) => ({ date, ...value }));
+      } else {
+        daysOff = daysOffByWorkerId.get(String(w.id)) ?? [];
+      }
 
       if (pref && (pref as any).updated_at && new Date((pref as any).updated_at) >= monthStart) {
         submittedThisMonth += 1;
@@ -117,9 +148,8 @@ export class WorkerPreferencesService {
           updatedAt: w.updated_at,
         },
         unitId: String(unitId),
-
-        // ✅ Return the DB preferences row (or null if missing)
         preferences: pref,
+        daysOff,
       };
     });
 
@@ -155,28 +185,36 @@ export class WorkerPreferencesService {
       where: { worker_id: Number(workerId) as any },
     });
 
-    // ✅ Map DTO -> DB entity fields
-    // You may need to adjust property names depending on your DTO definition.
+    // Merge new requests with existing preferences
+    let mergedPreferencePattern = {};
+    let mergedDaysOffPattern = {};
+    if (existing) {
+      mergedPreferencePattern = { ...(existing.preference_pattern_json || {}), ...((preferences as any).preferencePatternJson || (preferences as any).preference_pattern_json || {}) };
+      mergedDaysOffPattern = { ...(existing.days_off_pattern_json || {}), ...((preferences as any).daysOffPatternJson || (preferences as any).days_off_pattern_json || {}) };
+    } else {
+      mergedPreferencePattern = (preferences as any).preferencePatternJson || (preferences as any).preference_pattern_json || {};
+      mergedDaysOffPattern = (preferences as any).daysOffPatternJson || (preferences as any).days_off_pattern_json || {};
+    }
     const patch: Partial<WorkerPreference> = {
       worker_id: Number(workerId) as any,
-
-      // Common camelCase -> snake_case mapping:
       prefers_day_shifts: (preferences as any).prefersDayShifts ?? (preferences as any).prefers_day_shifts ?? null,
       prefers_night_shifts: (preferences as any).prefersNightShifts ?? (preferences as any).prefers_night_shifts ?? null,
       max_consecutive_work_days:
         (preferences as any).maxConsecutiveWorkDays ?? (preferences as any).max_consecutive_work_days ?? null,
       max_consecutive_night_shifts:
         (preferences as any).maxConsecutiveNightShifts ?? (preferences as any).max_consecutive_night_shifts ?? null,
-
-      preference_pattern_json:
-        (preferences as any).preferencePatternJson ?? (preferences as any).preference_pattern_json ?? null,
-
+      preference_pattern_json: mergedPreferencePattern,
+      days_off_pattern_json: mergedDaysOffPattern,
       attributes: (preferences as any).attributes ?? null,
     } as any;
 
     const saved = await this.preferencesRepo.save(
       existing ? ({ ...existing, ...patch } as any) : (this.preferencesRepo.create(patch as any) as any),
     );
+
+    // Note: Scheduling engine job creation would require a valid scheduleId
+    // which is not available in the preferences update context.
+    // Job creation should be triggered from the schedule/orchestrator module instead.
 
     return {
       workerId: String(worker.id),

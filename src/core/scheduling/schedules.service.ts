@@ -90,6 +90,7 @@ export class SchedulesService {
       status: ScheduleStatus.DRAFT,
       constraint_profile_id: dto.constraintProfileId ?? null,
       last_solver_run_id: null,
+      current_run_id: null,
       created_by: createdById,
 
       published_at: null,
@@ -116,16 +117,38 @@ export class SchedulesService {
   }
 
   async getCurrentSchedule(unitId: string, dateFrom?: string, dateTo?: string) {
-    const schedule = await this.schedulesRepo.findOne({
-      where: { unit_id: unitId },
-      order: { created_at: 'DESC' },
-    });
+    const latestRunRows: Array<{ schedule_id: string; run_id: string }> = await this.schedulesRepo.manager.query(
+      `
+      select
+        sr.schedule_id::text as schedule_id,
+        sr.id::text as run_id
+      from maywin_db.schedule_runs sr
+      inner join maywin_db.schedules s on s.id = sr.schedule_id
+      where s.unit_id = $1::bigint
+      order by sr.id desc
+      limit 1
+      `,
+      [String(unitId)],
+    );
+
+    const latestRun = latestRunRows?.[0] ?? null;
+
+    const schedule = latestRun
+      ? await this.schedulesRepo.findOne({ where: { id: latestRun.schedule_id } })
+      : await this.schedulesRepo.findOne({
+        where: { unit_id: unitId },
+        order: { created_at: 'DESC' },
+      });
 
     if (!schedule) {
       throw new NotFoundException('No schedule found for unit');
     }
 
-    const where: any = { schedule_id: schedule.id };
+    const where: any = latestRun
+      ? { schedule_run_id: latestRun.run_id }
+      : schedule.current_run_id
+        ? { schedule_run_id: schedule.current_run_id }
+        : { schedule_id: schedule.id };
     if (dateFrom && dateTo) {
       where.date = Between(dateFrom, dateTo);
     }
@@ -200,7 +223,9 @@ export class SchedulesService {
     }
 
     const assignments = await this.assignmentsRepo.find({
-      where: { schedule_id: schedule.id },
+      where: schedule.current_run_id
+        ? { schedule_run_id: schedule.current_run_id }
+        : { schedule_id: schedule.id },
       order: { date: 'ASC' },
     });
 

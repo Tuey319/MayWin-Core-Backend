@@ -26,6 +26,7 @@ import { CoverageRule } from './entities/scheduling/coverage-rule.entity';
 import { ConstraintProfile } from './entities/scheduling/constraint-profile.entity';
 import { Schedule } from './entities/scheduling/schedule.entity';
 import { ScheduleAssignment } from './entities/scheduling/schedule-assignment.entity';
+import { ScheduleRun } from './entities/scheduling/schedule-run.entity';
 
 // Orchestration
 import { ScheduleJob } from './entities/orchestration/schedule-job.entity';
@@ -54,6 +55,7 @@ const ENTITIES = [
   ConstraintProfile,
   Schedule,
   ScheduleAssignment,
+  ScheduleRun,
 
   ScheduleJob,
   ScheduleArtifact,

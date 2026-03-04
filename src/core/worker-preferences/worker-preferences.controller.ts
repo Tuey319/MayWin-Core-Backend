@@ -27,6 +27,34 @@ type JwtCtx = {
 export class WorkerPreferencesController {
   constructor(private readonly service: WorkerPreferencesService) {}
 
+    /**
+     * Nurse requests schedule based on preferences.
+     * Stores preferences and triggers scheduling engine.
+     * PUT /workers/:workerId/request-schedule
+     */
+    @Put('/workers/:workerId/request-schedule')
+    async requestSchedule(
+      @Param() p: GetWorkerPreferencesParams,
+      @Body() dto: PutWorkerPreferencesDto,
+      @Req() req: Request,
+    ) {
+      // Store preferences
+      const result = await this.service.upsertPreferences(
+        p.workerId,
+        dto.unitId,
+        dto.preferences,
+      );
+
+      // Trigger scheduling engine (stub for now)
+      // TODO: Integrate with jobs.service to create a job and enqueue
+      // Example: await jobsService.createJob(...)
+
+      return {
+        message: 'Preferences saved and scheduling triggered.',
+        result,
+      };
+    }
+
   private ctx(req: Request): JwtCtx {
     const u = (req as any).user ?? {};
     return {

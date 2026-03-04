@@ -14,10 +14,10 @@ export class OrchestratorController {
   private readonly sfn = new SFNClient({
     region: process.env.AWS_REGION ?? 'ap-southeast-1',
     requestHandler: new NodeHttpHandler({
-      connectionTimeout: 2000,
-      socketTimeout: 6000,
+      connectionTimeout: 10000,
+      socketTimeout: 20000,
     }),
-    maxAttempts: 2,
+    maxAttempts: 3,
   });
 
   constructor(private readonly jobs: JobsService) {}
@@ -102,7 +102,13 @@ export class OrchestratorController {
     const job = res.job;
 
     if (!useStepFunctions) {
-      return { ok: true, mode: 'LOCAL_RUNNER', job };
+      return {
+        ok: true,
+        mode: 'LOCAL_RUNNER',
+        job,
+        jobId: job?.id ?? null,
+        executionArn: null,
+      };
     }
 
     const stateMachineArn = this.getStateMachineArn();
@@ -134,6 +140,8 @@ export class OrchestratorController {
         ok: true,
         mode: 'STEP_FUNCTIONS',
         job,
+        jobId: job?.id ?? null,
+        executionArn: out.executionArn ?? null,
         execution: {
           arn: out.executionArn ?? null,
           startDate: out.startDate ? new Date(out.startDate).toISOString() : null,
@@ -148,6 +156,8 @@ export class OrchestratorController {
         ok: false,
         mode: 'STEP_FUNCTIONS',
         job,
+        jobId: job?.id ?? null,
+        executionArn: null,
         error: {
           name: e?.name ?? 'StartExecutionError',
           message: e?.message ?? String(e),

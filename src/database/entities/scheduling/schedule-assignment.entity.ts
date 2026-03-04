@@ -2,13 +2,16 @@
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, Unique, UpdateDateColumn } from 'typeorm';
 
 @Entity({ schema: 'maywin_db', name: 'schedule_assignments' })
-@Unique('sa_uniq', ['schedule_id', 'worker_id', 'date'])
+@Unique('sa_run_uniq', ['schedule_run_id', 'worker_id', 'date'])
 export class ScheduleAssignment {
   @PrimaryGeneratedColumn('increment', { type: 'bigint' })
   id: string;
 
   @Column({ type: 'bigint' })
   schedule_id: string;
+
+  @Column({ type: 'bigint' })
+  schedule_run_id: string;
 
   @Column({ type: 'bigint' })
   worker_id: string;

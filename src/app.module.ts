@@ -23,6 +23,9 @@ import { OrganizationsModule } from '@/core/organizations/organizations.module';
 import { UnitsModule } from '@/core/units/units.module';
 import { SitesModule } from '@/core/sites/sites.module';
 import { RolesModule } from '@/core/roles/roles.module';
+import { WebhookModule } from '@/core/webhook/webhook.module';
+import { StaffModule } from '@/core/staff/staff.module';
+import { AuditLogsModule } from '@/core/audit-logs/audit-logs.module';
 
 @Module({
   imports: [
@@ -52,6 +55,9 @@ import { RolesModule } from '@/core/roles/roles.module';
     UnitsModule,
     SitesModule,
     RolesModule,
+    WebhookModule,
+    StaffModule,
+    AuditLogsModule,
   ],
 })
 export class AppModule {}
