@@ -1,0 +1,3895 @@
+{
+  "nurses": [
+    "N01",
+    "N02",
+    "N03",
+    "N04",
+    "N05",
+    "N06",
+    "N07",
+    "N08",
+    "N09",
+    "N10",
+    "N11",
+    "N12",
+    "N13",
+    "N14",
+    "N15",
+    "N16",
+    "N17",
+    "N18",
+    "N19",
+    "N20"
+  ],
+  "days": [
+    "2025-01-01",
+    "2025-01-02",
+    "2025-01-03",
+    "2025-01-04",
+    "2025-01-05",
+    "2025-01-06",
+    "2025-01-07",
+    "2025-01-08",
+    "2025-01-09",
+    "2025-01-10",
+    "2025-01-11",
+    "2025-01-12",
+    "2025-01-13",
+    "2025-01-14",
+    "2025-01-15",
+    "2025-01-16",
+    "2025-01-17",
+    "2025-01-18",
+    "2025-01-19",
+    "2025-01-20",
+    "2025-01-21"
+  ],
+  "shifts": [
+    "Morning",
+    "Evening",
+    "Night"
+  ],
+  "demand": {
+    "2025-01-01": {
+      "Morning": 3,
+      "Evening": 3,
+      "Night": 4
+    },
+    "2025-01-02": {
+      "Morning": 3,
+      "Evening": 3,
+      "Night": 5
+    },
+    "2025-01-03": {
+      "Morning": 3,
+      "Evening": 5,
+      "Night": 2
+    },
+    "2025-01-04": {
+      "Morning": 3,
+      "Evening": 4,
+      "Night": 2
+    },
+    "2025-01-05": {
+      "Morning": 4,
+      "Evening": 5,
+      "Night": 4
+    },
+    "2025-01-06": {
+      "Morning": 3,
+      "Evening": 3,
+      "Night": 3
+    },
+    "2025-01-07": {
+      "Morning": 5,
+      "Evening": 5,
+      "Night": 3
+    },
+    "2025-01-08": {
+      "Morning": 3,
+      "Evening": 2,
+      "Night": 3
+    },
+    "2025-01-09": {
+      "Morning": 5,
+      "Evening": 3,
+      "Night": 3
+    },
+    "2025-01-10": {
+      "Morning": 3,
+      "Evening": 5,
+      "Night": 3
+    },
+    "2025-01-11": {
+      "Morning": 2,
+      "Evening": 3,
+      "Night": 5
+    },
+    "2025-01-12": {
+      "Morning": 3,
+      "Evening": 4,
+      "Night": 2
+    },
+    "2025-01-13": {
+      "Morning": 5,
+      "Evening": 4,
+      "Night": 4
+    },
+    "2025-01-14": {
+      "Morning": 5,
+      "Evening": 5,
+      "Night": 4
+    },
+    "2025-01-15": {
+      "Morning": 3,
+      "Evening": 2,
+      "Night": 5
+    },
+    "2025-01-16": {
+      "Morning": 4,
+      "Evening": 3,
+      "Night": 4
+    },
+    "2025-01-17": {
+      "Morning": 4,
+      "Evening": 2,
+      "Night": 2
+    },
+    "2025-01-18": {
+      "Morning": 3,
+      "Evening": 3,
+      "Night": 4
+    },
+    "2025-01-19": {
+      "Morning": 3,
+      "Evening": 5,
+      "Night": 4
+    },
+    "2025-01-20": {
+      "Morning": 5,
+      "Evening": 2,
+      "Night": 4
+    },
+    "2025-01-21": {
+      "Morning": 5,
+      "Evening": 2,
+      "Night": 3
+    }
+  },
+  "availability": {
+    "N01": {
+      "2025-01-01": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-05": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-12": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-13": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-15": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-16": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-17": {
+        "Morning": 0,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-18": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-20": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-21": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      }
+    },
+    "N02": {
+      "2025-01-01": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-05": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-12": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-13": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-15": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-16": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-17": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-18": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-20": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-21": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      }
+    },
+    "N03": {
+      "2025-01-01": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-05": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-12": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-13": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-15": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-16": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-17": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-18": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-20": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-21": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      }
+    },
+    "N04": {
+      "2025-01-01": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-05": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-12": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-13": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-15": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-16": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-17": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-18": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-20": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-21": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      }
+    },
+    "N05": {
+      "2025-01-01": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-05": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-06": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-12": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-13": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-15": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-16": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-17": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-18": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-20": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-21": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      }
+    },
+    "N06": {
+      "2025-01-01": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-05": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-07": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-12": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-13": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-15": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-16": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-17": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-18": {
+        "Morning": 0,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-20": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-21": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      }
+    },
+    "N07": {
+      "2025-01-01": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-05": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-08": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-12": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-13": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-15": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-16": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-17": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-18": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 0
+      },
+      "2025-01-19": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-20": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-21": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      }
+    },
+    "N08": {
+      "2025-01-01": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-05": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-12": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-13": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-15": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-16": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-17": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-18": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-20": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-21": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      }
+    },
+    "N09": {
+      "2025-01-01": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-05": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-12": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-13": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-15": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-16": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-17": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-18": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-20": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-21": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      }
+    },
+    "N10": {
+      "2025-01-01": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-05": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-11": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-12": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-13": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-15": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-16": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-17": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-18": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-20": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-21": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      }
+    },
+    "N11": {
+      "2025-01-01": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-03": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-05": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-08": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-12": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-13": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-15": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-16": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-17": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-18": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-20": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-21": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      }
+    },
+    "N12": {
+      "2025-01-01": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-03": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-05": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-12": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-13": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-15": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-16": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-17": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-18": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-20": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-21": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      }
+    },
+    "N13": {
+      "2025-01-01": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-04": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-05": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-07": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-12": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-13": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-14": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-15": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 0
+      },
+      "2025-01-16": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-17": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-18": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-20": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-21": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      }
+    },
+    "N14": {
+      "2025-01-01": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-05": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-12": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-13": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-15": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-16": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-17": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-18": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-20": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-21": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      }
+    },
+    "N15": {
+      "2025-01-01": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-03": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-05": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-07": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-08": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-12": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-13": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-15": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-16": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-17": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-18": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-20": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-21": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      }
+    },
+    "N16": {
+      "2025-01-01": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-05": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-12": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-13": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-15": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-16": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-17": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-18": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-20": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-21": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      }
+    },
+    "N17": {
+      "2025-01-01": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-05": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-06": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-12": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-13": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-15": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-16": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-17": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-18": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-20": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-21": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      }
+    },
+    "N18": {
+      "2025-01-01": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 0
+      },
+      "2025-01-05": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-12": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-13": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-15": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-16": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-17": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-18": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-20": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-21": {
+        "Morning": 0,
+        "Evening": 0,
+        "Night": 1
+      }
+    },
+    "N19": {
+      "2025-01-01": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-05": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-12": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-13": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-15": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-16": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-17": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-18": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-20": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-21": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      }
+    },
+    "N20": {
+      "2025-01-01": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-04": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-05": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-12": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-13": {
+        "Morning": 0,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-14": {
+        "Morning": 1,
+        "Evening": 0,
+        "Night": 1
+      },
+      "2025-01-15": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-16": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 0
+      },
+      "2025-01-17": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-18": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-20": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-21": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 1
+      }
+    }
+  },
+  "preferences": {
+    "N01": {
+      "2025-01-01": {},
+      "2025-01-02": {
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-03": {},
+      "2025-01-04": {
+        "Morning": 1,
+        "Night": 2
+      },
+      "2025-01-05": {
+        "Evening": 4,
+        "Night": 5
+      },
+      "2025-01-06": {},
+      "2025-01-07": {
+        "Night": 3
+      },
+      "2025-01-08": {
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 2,
+        "Night": 1
+      },
+      "2025-01-10": {},
+      "2025-01-11": {
+        "Evening": 1
+      },
+      "2025-01-12": {
+        "Evening": 1,
+        "Night": 5
+      },
+      "2025-01-13": {},
+      "2025-01-14": {
+        "Night": 3
+      },
+      "2025-01-15": {
+        "Morning": 5,
+        "Evening": 4
+      },
+      "2025-01-16": {},
+      "2025-01-17": {
+        "Evening": 5,
+        "Night": 3
+      },
+      "2025-01-18": {
+        "Morning": 3,
+        "Night": 3
+      },
+      "2025-01-19": {
+        "Morning": 4
+      },
+      "2025-01-20": {
+        "Morning": 2,
+        "Night": 5
+      },
+      "2025-01-21": {
+        "Morning": 5,
+        "Evening": 1,
+        "Night": 5
+      }
+    },
+    "N02": {
+      "2025-01-01": {
+        "Evening": 2
+      },
+      "2025-01-02": {
+        "Morning": 5,
+        "Evening": 1
+      },
+      "2025-01-03": {
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 3,
+        "Evening": 5
+      },
+      "2025-01-05": {
+        "Morning": 3,
+        "Night": 4
+      },
+      "2025-01-06": {
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Evening": 3,
+        "Night": 2
+      },
+      "2025-01-08": {
+        "Morning": 2,
+        "Night": 2
+      },
+      "2025-01-09": {
+        "Evening": 4,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Morning": 2,
+        "Night": 2
+      },
+      "2025-01-11": {
+        "Evening": 5
+      },
+      "2025-01-12": {
+        "Night": 1
+      },
+      "2025-01-13": {
+        "Morning": 3,
+        "Evening": 5
+      },
+      "2025-01-14": {
+        "Night": 4
+      },
+      "2025-01-15": {
+        "Evening": 3,
+        "Night": 5
+      },
+      "2025-01-16": {
+        "Morning": 4,
+        "Evening": 3
+      },
+      "2025-01-17": {
+        "Morning": 3,
+        "Night": 2
+      },
+      "2025-01-18": {},
+      "2025-01-19": {
+        "Evening": 4,
+        "Night": 3
+      },
+      "2025-01-20": {
+        "Evening": 4
+      },
+      "2025-01-21": {
+        "Evening": 3
+      }
+    },
+    "N03": {
+      "2025-01-01": {
+        "Evening": 5
+      },
+      "2025-01-02": {},
+      "2025-01-03": {},
+      "2025-01-04": {},
+      "2025-01-05": {},
+      "2025-01-06": {
+        "Morning": 3,
+        "Evening": 4,
+        "Night": 2
+      },
+      "2025-01-07": {
+        "Evening": 2
+      },
+      "2025-01-08": {
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 2
+      },
+      "2025-01-10": {},
+      "2025-01-11": {
+        "Evening": 3
+      },
+      "2025-01-12": {
+        "Morning": 3
+      },
+      "2025-01-13": {
+        "Morning": 5,
+        "Night": 2
+      },
+      "2025-01-14": {
+        "Night": 2
+      },
+      "2025-01-15": {
+        "Morning": 5,
+        "Night": 3
+      },
+      "2025-01-16": {},
+      "2025-01-17": {},
+      "2025-01-18": {},
+      "2025-01-19": {
+        "Morning": 1
+      },
+      "2025-01-20": {
+        "Morning": 5,
+        "Night": 5
+      },
+      "2025-01-21": {
+        "Evening": 2,
+        "Night": 4
+      }
+    },
+    "N04": {
+      "2025-01-01": {
+        "Morning": 4,
+        "Night": 5
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 3
+      },
+      "2025-01-03": {},
+      "2025-01-04": {
+        "Morning": 5
+      },
+      "2025-01-05": {
+        "Night": 1
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 2
+      },
+      "2025-01-07": {},
+      "2025-01-08": {
+        "Morning": 1,
+        "Evening": 2,
+        "Night": 5
+      },
+      "2025-01-09": {
+        "Morning": 5,
+        "Evening": 5,
+        "Night": 3
+      },
+      "2025-01-10": {
+        "Evening": 4
+      },
+      "2025-01-11": {
+        "Night": 2
+      },
+      "2025-01-12": {
+        "Night": 5
+      },
+      "2025-01-13": {
+        "Night": 5
+      },
+      "2025-01-14": {
+        "Evening": 4
+      },
+      "2025-01-15": {
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-16": {
+        "Evening": 4
+      },
+      "2025-01-17": {
+        "Morning": 3,
+        "Evening": 5
+      },
+      "2025-01-18": {
+        "Evening": 5
+      },
+      "2025-01-19": {
+        "Night": 2
+      },
+      "2025-01-20": {},
+      "2025-01-21": {
+        "Morning": 3,
+        "Evening": 2
+      }
+    },
+    "N05": {
+      "2025-01-01": {
+        "Evening": 2,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Evening": 4
+      },
+      "2025-01-03": {
+        "Morning": 4
+      },
+      "2025-01-04": {
+        "Morning": 3,
+        "Evening": 1
+      },
+      "2025-01-05": {
+        "Morning": 2
+      },
+      "2025-01-06": {
+        "Morning": 3
+      },
+      "2025-01-07": {
+        "Evening": 5,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 2
+      },
+      "2025-01-09": {},
+      "2025-01-10": {
+        "Night": 4
+      },
+      "2025-01-11": {
+        "Night": 5
+      },
+      "2025-01-12": {
+        "Evening": 5
+      },
+      "2025-01-13": {
+        "Morning": 5,
+        "Evening": 4
+      },
+      "2025-01-14": {
+        "Evening": 3,
+        "Night": 3
+      },
+      "2025-01-15": {
+        "Morning": 5,
+        "Evening": 5
+      },
+      "2025-01-16": {
+        "Morning": 3,
+        "Night": 2
+      },
+      "2025-01-17": {
+        "Morning": 3,
+        "Night": 1
+      },
+      "2025-01-18": {},
+      "2025-01-19": {},
+      "2025-01-20": {
+        "Night": 3
+      },
+      "2025-01-21": {}
+    },
+    "N06": {
+      "2025-01-01": {},
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 2
+      },
+      "2025-01-03": {
+        "Morning": 4,
+        "Night": 1
+      },
+      "2025-01-04": {},
+      "2025-01-05": {
+        "Morning": 5,
+        "Evening": 2,
+        "Night": 2
+      },
+      "2025-01-06": {
+        "Evening": 3,
+        "Night": 4
+      },
+      "2025-01-07": {},
+      "2025-01-08": {
+        "Morning": 2,
+        "Evening": 3,
+        "Night": 4
+      },
+      "2025-01-09": {
+        "Morning": 2,
+        "Evening": 2
+      },
+      "2025-01-10": {
+        "Night": 5
+      },
+      "2025-01-11": {
+        "Morning": 2,
+        "Night": 2
+      },
+      "2025-01-12": {
+        "Morning": 5
+      },
+      "2025-01-13": {
+        "Night": 4
+      },
+      "2025-01-14": {
+        "Morning": 4
+      },
+      "2025-01-15": {
+        "Night": 4
+      },
+      "2025-01-16": {
+        "Morning": 4,
+        "Evening": 2,
+        "Night": 2
+      },
+      "2025-01-17": {
+        "Evening": 2
+      },
+      "2025-01-18": {
+        "Night": 1
+      },
+      "2025-01-19": {
+        "Morning": 2
+      },
+      "2025-01-20": {},
+      "2025-01-21": {
+        "Morning": 4
+      }
+    },
+    "N07": {
+      "2025-01-01": {},
+      "2025-01-02": {
+        "Morning": 5
+      },
+      "2025-01-03": {
+        "Morning": 5
+      },
+      "2025-01-04": {
+        "Morning": 3,
+        "Evening": 2
+      },
+      "2025-01-05": {},
+      "2025-01-06": {},
+      "2025-01-07": {
+        "Evening": 3,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Evening": 5
+      },
+      "2025-01-09": {
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-10": {},
+      "2025-01-11": {
+        "Evening": 5
+      },
+      "2025-01-12": {
+        "Evening": 1
+      },
+      "2025-01-13": {
+        "Night": 3
+      },
+      "2025-01-14": {
+        "Morning": 2,
+        "Night": 4
+      },
+      "2025-01-15": {
+        "Evening": 1
+      },
+      "2025-01-16": {},
+      "2025-01-17": {
+        "Night": 1
+      },
+      "2025-01-18": {
+        "Evening": 1
+      },
+      "2025-01-19": {
+        "Evening": 4
+      },
+      "2025-01-20": {
+        "Morning": 4,
+        "Night": 3
+      },
+      "2025-01-21": {
+        "Evening": 2
+      }
+    },
+    "N08": {
+      "2025-01-01": {
+        "Morning": 2,
+        "Evening": 4,
+        "Night": 2
+      },
+      "2025-01-02": {
+        "Morning": 2,
+        "Night": 3
+      },
+      "2025-01-03": {
+        "Morning": 4,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Evening": 4,
+        "Night": 3
+      },
+      "2025-01-05": {
+        "Night": 5
+      },
+      "2025-01-06": {
+        "Morning": 2,
+        "Night": 5
+      },
+      "2025-01-07": {
+        "Evening": 4
+      },
+      "2025-01-08": {
+        "Morning": 3,
+        "Evening": 4,
+        "Night": 5
+      },
+      "2025-01-09": {
+        "Night": 4
+      },
+      "2025-01-10": {
+        "Evening": 5
+      },
+      "2025-01-11": {
+        "Night": 4
+      },
+      "2025-01-12": {
+        "Evening": 1
+      },
+      "2025-01-13": {
+        "Morning": 4,
+        "Evening": 4
+      },
+      "2025-01-14": {
+        "Morning": 4,
+        "Evening": 5,
+        "Night": 3
+      },
+      "2025-01-15": {
+        "Morning": 4,
+        "Evening": 5,
+        "Night": 4
+      },
+      "2025-01-16": {
+        "Morning": 4,
+        "Evening": 3,
+        "Night": 4
+      },
+      "2025-01-17": {
+        "Evening": 2
+      },
+      "2025-01-18": {},
+      "2025-01-19": {
+        "Morning": 4,
+        "Night": 5
+      },
+      "2025-01-20": {
+        "Morning": 3
+      },
+      "2025-01-21": {}
+    },
+    "N09": {
+      "2025-01-01": {
+        "Evening": 1
+      },
+      "2025-01-02": {
+        "Morning": 4,
+        "Night": 3
+      },
+      "2025-01-03": {
+        "Night": 5
+      },
+      "2025-01-04": {
+        "Night": 3
+      },
+      "2025-01-05": {
+        "Morning": 4
+      },
+      "2025-01-06": {
+        "Evening": 2,
+        "Night": 1
+      },
+      "2025-01-07": {},
+      "2025-01-08": {
+        "Evening": 3,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Night": 4
+      },
+      "2025-01-11": {
+        "Morning": 4,
+        "Night": 2
+      },
+      "2025-01-12": {
+        "Morning": 4
+      },
+      "2025-01-13": {
+        "Evening": 2,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 2
+      },
+      "2025-01-15": {},
+      "2025-01-16": {},
+      "2025-01-17": {},
+      "2025-01-18": {
+        "Evening": 5
+      },
+      "2025-01-19": {
+        "Evening": 5,
+        "Night": 2
+      },
+      "2025-01-20": {
+        "Morning": 5,
+        "Evening": 2,
+        "Night": 3
+      },
+      "2025-01-21": {
+        "Morning": 5,
+        "Night": 4
+      }
+    },
+    "N10": {
+      "2025-01-01": {},
+      "2025-01-02": {
+        "Morning": 3,
+        "Evening": 2,
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Night": 1
+      },
+      "2025-01-04": {},
+      "2025-01-05": {
+        "Evening": 1
+      },
+      "2025-01-06": {
+        "Morning": 3,
+        "Evening": 5
+      },
+      "2025-01-07": {
+        "Morning": 3,
+        "Evening": 4
+      },
+      "2025-01-08": {
+        "Morning": 4,
+        "Night": 3
+      },
+      "2025-01-09": {
+        "Morning": 2,
+        "Evening": 4
+      },
+      "2025-01-10": {},
+      "2025-01-11": {
+        "Morning": 2,
+        "Night": 2
+      },
+      "2025-01-12": {
+        "Evening": 5,
+        "Night": 5
+      },
+      "2025-01-13": {
+        "Morning": 2,
+        "Evening": 2
+      },
+      "2025-01-14": {},
+      "2025-01-15": {
+        "Morning": 1
+      },
+      "2025-01-16": {
+        "Morning": 2,
+        "Evening": 3
+      },
+      "2025-01-17": {
+        "Morning": 4,
+        "Evening": 2
+      },
+      "2025-01-18": {
+        "Evening": 2
+      },
+      "2025-01-19": {},
+      "2025-01-20": {
+        "Night": 5
+      },
+      "2025-01-21": {
+        "Night": 1
+      }
+    },
+    "N11": {
+      "2025-01-01": {
+        "Morning": 4
+      },
+      "2025-01-02": {},
+      "2025-01-03": {
+        "Night": 4
+      },
+      "2025-01-04": {
+        "Evening": 1,
+        "Night": 4
+      },
+      "2025-01-05": {
+        "Night": 4
+      },
+      "2025-01-06": {
+        "Evening": 1,
+        "Night": 5
+      },
+      "2025-01-07": {
+        "Night": 4
+      },
+      "2025-01-08": {
+        "Morning": 2
+      },
+      "2025-01-09": {
+        "Morning": 3,
+        "Night": 5
+      },
+      "2025-01-10": {
+        "Evening": 4
+      },
+      "2025-01-11": {
+        "Evening": 4
+      },
+      "2025-01-12": {
+        "Night": 2
+      },
+      "2025-01-13": {
+        "Morning": 1,
+        "Night": 3
+      },
+      "2025-01-14": {},
+      "2025-01-15": {},
+      "2025-01-16": {
+        "Night": 1
+      },
+      "2025-01-17": {},
+      "2025-01-18": {},
+      "2025-01-19": {
+        "Morning": 1
+      },
+      "2025-01-20": {
+        "Morning": 4,
+        "Night": 5
+      },
+      "2025-01-21": {
+        "Morning": 5,
+        "Evening": 2
+      }
+    },
+    "N12": {
+      "2025-01-01": {
+        "Morning": 2
+      },
+      "2025-01-02": {
+        "Morning": 1,
+        "Evening": 1
+      },
+      "2025-01-03": {
+        "Morning": 5,
+        "Evening": 3
+      },
+      "2025-01-04": {},
+      "2025-01-05": {
+        "Morning": 3,
+        "Evening": 5
+      },
+      "2025-01-06": {
+        "Morning": 2
+      },
+      "2025-01-07": {
+        "Morning": 2
+      },
+      "2025-01-08": {
+        "Evening": 5
+      },
+      "2025-01-09": {},
+      "2025-01-10": {
+        "Morning": 2
+      },
+      "2025-01-11": {
+        "Morning": 1
+      },
+      "2025-01-12": {
+        "Evening": 5
+      },
+      "2025-01-13": {
+        "Morning": 5,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Morning": 1
+      },
+      "2025-01-15": {
+        "Morning": 1
+      },
+      "2025-01-16": {
+        "Morning": 4,
+        "Evening": 5,
+        "Night": 3
+      },
+      "2025-01-17": {
+        "Morning": 4,
+        "Evening": 4
+      },
+      "2025-01-18": {
+        "Morning": 5
+      },
+      "2025-01-19": {
+        "Morning": 1
+      },
+      "2025-01-20": {
+        "Night": 5
+      },
+      "2025-01-21": {
+        "Evening": 5
+      }
+    },
+    "N13": {
+      "2025-01-01": {
+        "Night": 3
+      },
+      "2025-01-02": {
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Morning": 3,
+        "Evening": 5,
+        "Night": 3
+      },
+      "2025-01-04": {},
+      "2025-01-05": {
+        "Morning": 2,
+        "Evening": 2
+      },
+      "2025-01-06": {},
+      "2025-01-07": {},
+      "2025-01-08": {
+        "Morning": 3,
+        "Night": 1
+      },
+      "2025-01-09": {},
+      "2025-01-10": {
+        "Night": 3
+      },
+      "2025-01-11": {},
+      "2025-01-12": {},
+      "2025-01-13": {
+        "Evening": 3,
+        "Night": 2
+      },
+      "2025-01-14": {
+        "Morning": 1
+      },
+      "2025-01-15": {
+        "Evening": 1
+      },
+      "2025-01-16": {
+        "Night": 1
+      },
+      "2025-01-17": {
+        "Morning": 5,
+        "Evening": 1
+      },
+      "2025-01-18": {
+        "Morning": 3,
+        "Evening": 5,
+        "Night": 5
+      },
+      "2025-01-19": {
+        "Morning": 1,
+        "Evening": 3,
+        "Night": 2
+      },
+      "2025-01-20": {
+        "Night": 3
+      },
+      "2025-01-21": {
+        "Night": 4
+      }
+    },
+    "N14": {
+      "2025-01-01": {},
+      "2025-01-02": {
+        "Morning": 2,
+        "Evening": 5
+      },
+      "2025-01-03": {
+        "Evening": 4,
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Morning": 4,
+        "Night": 1
+      },
+      "2025-01-05": {
+        "Morning": 3,
+        "Night": 5
+      },
+      "2025-01-06": {
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Morning": 3,
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 3,
+        "Evening": 2
+      },
+      "2025-01-09": {},
+      "2025-01-10": {
+        "Morning": 4,
+        "Evening": 3,
+        "Night": 3
+      },
+      "2025-01-11": {
+        "Morning": 4,
+        "Night": 4
+      },
+      "2025-01-12": {
+        "Morning": 5,
+        "Night": 2
+      },
+      "2025-01-13": {},
+      "2025-01-14": {
+        "Night": 2
+      },
+      "2025-01-15": {
+        "Morning": 5,
+        "Night": 5
+      },
+      "2025-01-16": {
+        "Morning": 2,
+        "Evening": 3,
+        "Night": 1
+      },
+      "2025-01-17": {},
+      "2025-01-18": {
+        "Morning": 3
+      },
+      "2025-01-19": {
+        "Evening": 2
+      },
+      "2025-01-20": {
+        "Night": 5
+      },
+      "2025-01-21": {
+        "Evening": 1,
+        "Night": 2
+      }
+    },
+    "N15": {
+      "2025-01-01": {
+        "Morning": 4,
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Night": 1
+      },
+      "2025-01-03": {
+        "Night": 1
+      },
+      "2025-01-04": {
+        "Night": 5
+      },
+      "2025-01-05": {
+        "Evening": 5
+      },
+      "2025-01-06": {
+        "Morning": 5,
+        "Night": 1
+      },
+      "2025-01-07": {
+        "Morning": 5
+      },
+      "2025-01-08": {
+        "Evening": 5,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 3,
+        "Evening": 5,
+        "Night": 5
+      },
+      "2025-01-10": {},
+      "2025-01-11": {
+        "Evening": 5
+      },
+      "2025-01-12": {
+        "Morning": 5,
+        "Evening": 1
+      },
+      "2025-01-13": {
+        "Morning": 3,
+        "Evening": 2,
+        "Night": 3
+      },
+      "2025-01-14": {},
+      "2025-01-15": {
+        "Night": 1
+      },
+      "2025-01-16": {
+        "Night": 5
+      },
+      "2025-01-17": {},
+      "2025-01-18": {
+        "Morning": 1,
+        "Evening": 2,
+        "Night": 3
+      },
+      "2025-01-19": {},
+      "2025-01-20": {
+        "Evening": 1,
+        "Night": 5
+      },
+      "2025-01-21": {
+        "Night": 2
+      }
+    },
+    "N16": {
+      "2025-01-01": {},
+      "2025-01-02": {
+        "Morning": 4,
+        "Evening": 1
+      },
+      "2025-01-03": {
+        "Night": 4
+      },
+      "2025-01-04": {
+        "Morning": 5,
+        "Evening": 2,
+        "Night": 4
+      },
+      "2025-01-05": {
+        "Night": 4
+      },
+      "2025-01-06": {
+        "Morning": 5
+      },
+      "2025-01-07": {
+        "Morning": 2,
+        "Evening": 4
+      },
+      "2025-01-08": {
+        "Morning": 2
+      },
+      "2025-01-09": {
+        "Evening": 3,
+        "Night": 4
+      },
+      "2025-01-10": {
+        "Morning": 4
+      },
+      "2025-01-11": {
+        "Morning": 5,
+        "Night": 5
+      },
+      "2025-01-12": {
+        "Evening": 3
+      },
+      "2025-01-13": {
+        "Morning": 4,
+        "Night": 1
+      },
+      "2025-01-14": {
+        "Night": 2
+      },
+      "2025-01-15": {
+        "Morning": 2,
+        "Evening": 1,
+        "Night": 1
+      },
+      "2025-01-16": {},
+      "2025-01-17": {
+        "Morning": 4,
+        "Evening": 3,
+        "Night": 3
+      },
+      "2025-01-18": {},
+      "2025-01-19": {
+        "Night": 4
+      },
+      "2025-01-20": {},
+      "2025-01-21": {}
+    },
+    "N17": {
+      "2025-01-01": {
+        "Morning": 4
+      },
+      "2025-01-02": {
+        "Morning": 2,
+        "Evening": 4,
+        "Night": 2
+      },
+      "2025-01-03": {
+        "Evening": 4,
+        "Night": 4
+      },
+      "2025-01-04": {
+        "Evening": 2
+      },
+      "2025-01-05": {
+        "Evening": 3,
+        "Night": 2
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 4
+      },
+      "2025-01-07": {
+        "Night": 4
+      },
+      "2025-01-08": {
+        "Morning": 5,
+        "Night": 4
+      },
+      "2025-01-09": {
+        "Night": 3
+      },
+      "2025-01-10": {
+        "Evening": 4
+      },
+      "2025-01-11": {
+        "Morning": 4
+      },
+      "2025-01-12": {},
+      "2025-01-13": {
+        "Evening": 1
+      },
+      "2025-01-14": {
+        "Morning": 5,
+        "Night": 5
+      },
+      "2025-01-15": {},
+      "2025-01-16": {
+        "Morning": 5,
+        "Evening": 1
+      },
+      "2025-01-17": {
+        "Evening": 1
+      },
+      "2025-01-18": {
+        "Morning": 3
+      },
+      "2025-01-19": {
+        "Evening": 5
+      },
+      "2025-01-20": {
+        "Morning": 5,
+        "Evening": 4
+      },
+      "2025-01-21": {
+        "Morning": 4
+      }
+    },
+    "N18": {
+      "2025-01-01": {
+        "Night": 1
+      },
+      "2025-01-02": {
+        "Morning": 4
+      },
+      "2025-01-03": {
+        "Evening": 5
+      },
+      "2025-01-04": {
+        "Night": 2
+      },
+      "2025-01-05": {
+        "Morning": 3,
+        "Night": 4
+      },
+      "2025-01-06": {
+        "Evening": 1
+      },
+      "2025-01-07": {},
+      "2025-01-08": {
+        "Night": 4
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Evening": 1,
+        "Night": 3
+      },
+      "2025-01-10": {
+        "Morning": 2,
+        "Night": 1
+      },
+      "2025-01-11": {
+        "Morning": 5,
+        "Evening": 3,
+        "Night": 2
+      },
+      "2025-01-12": {
+        "Morning": 4,
+        "Evening": 3
+      },
+      "2025-01-13": {
+        "Evening": 3,
+        "Night": 4
+      },
+      "2025-01-14": {},
+      "2025-01-15": {
+        "Evening": 1
+      },
+      "2025-01-16": {
+        "Morning": 3,
+        "Night": 3
+      },
+      "2025-01-17": {},
+      "2025-01-18": {
+        "Evening": 1
+      },
+      "2025-01-19": {
+        "Morning": 5,
+        "Evening": 1
+      },
+      "2025-01-20": {
+        "Night": 3
+      },
+      "2025-01-21": {
+        "Morning": 2,
+        "Evening": 3,
+        "Night": 1
+      }
+    },
+    "N19": {
+      "2025-01-01": {
+        "Evening": 4,
+        "Night": 5
+      },
+      "2025-01-02": {
+        "Morning": 5,
+        "Evening": 4,
+        "Night": 5
+      },
+      "2025-01-03": {},
+      "2025-01-04": {
+        "Night": 3
+      },
+      "2025-01-05": {
+        "Morning": 3,
+        "Evening": 1
+      },
+      "2025-01-06": {
+        "Morning": 1,
+        "Evening": 1
+      },
+      "2025-01-07": {
+        "Morning": 5,
+        "Night": 3
+      },
+      "2025-01-08": {
+        "Morning": 4,
+        "Evening": 3,
+        "Night": 2
+      },
+      "2025-01-09": {
+        "Morning": 1,
+        "Night": 1
+      },
+      "2025-01-10": {
+        "Night": 4
+      },
+      "2025-01-11": {
+        "Morning": 3,
+        "Night": 4
+      },
+      "2025-01-12": {},
+      "2025-01-13": {
+        "Evening": 3
+      },
+      "2025-01-14": {
+        "Morning": 3,
+        "Evening": 1
+      },
+      "2025-01-15": {},
+      "2025-01-16": {
+        "Night": 2
+      },
+      "2025-01-17": {},
+      "2025-01-18": {
+        "Evening": 2
+      },
+      "2025-01-19": {
+        "Evening": 5,
+        "Night": 5
+      },
+      "2025-01-20": {
+        "Morning": 3,
+        "Evening": 4
+      },
+      "2025-01-21": {
+        "Morning": 3
+      }
+    },
+    "N20": {
+      "2025-01-01": {
+        "Evening": 1
+      },
+      "2025-01-02": {
+        "Night": 5
+      },
+      "2025-01-03": {
+        "Morning": 1
+      },
+      "2025-01-04": {
+        "Morning": 4,
+        "Night": 4
+      },
+      "2025-01-05": {
+        "Morning": 3
+      },
+      "2025-01-06": {},
+      "2025-01-07": {
+        "Night": 1
+      },
+      "2025-01-08": {
+        "Morning": 3,
+        "Night": 1
+      },
+      "2025-01-09": {
+        "Morning": 3
+      },
+      "2025-01-10": {
+        "Evening": 1
+      },
+      "2025-01-11": {
+        "Morning": 1,
+        "Night": 4
+      },
+      "2025-01-12": {
+        "Morning": 2,
+        "Evening": 2
+      },
+      "2025-01-13": {
+        "Morning": 2,
+        "Night": 2
+      },
+      "2025-01-14": {
+        "Evening": 4
+      },
+      "2025-01-15": {
+        "Evening": 4
+      },
+      "2025-01-16": {
+        "Morning": 3,
+        "Night": 5
+      },
+      "2025-01-17": {
+        "Morning": 3,
+        "Night": 5
+      },
+      "2025-01-18": {
+        "Morning": 3
+      },
+      "2025-01-19": {
+        "Morning": 1,
+        "Evening": 5
+      },
+      "2025-01-20": {
+        "Night": 2
+      },
+      "2025-01-21": {
+        "Morning": 4,
+        "Night": 5
+      }
+    }
+  },
+  "nurse_skills": {
+    "N01": [
+      "Senior"
+    ],
+    "N02": [],
+    "N03": [
+      "Senior"
+    ],
+    "N04": [],
+    "N05": [],
+    "N06": [],
+    "N07": [
+      "Senior"
+    ],
+    "N08": [],
+    "N09": [
+      "Senior"
+    ],
+    "N10": [],
+    "N11": [],
+    "N12": [],
+    "N13": [
+      "Senior"
+    ],
+    "N14": [],
+    "N15": [],
+    "N16": [
+      "Senior"
+    ],
+    "N17": [],
+    "N18": [
+      "Senior"
+    ],
+    "N19": [
+      "Senior"
+    ],
+    "N20": []
+  },
+  "required_skills": {
+    "2025-01-01": {
+      "Morning": {},
+      "Evening": {
+        "Senior": 1
+      },
+      "Night": {}
+    },
+    "2025-01-02": {
+      "Morning": {
+        "Senior": 1
+      },
+      "Evening": {},
+      "Night": {}
+    },
+    "2025-01-03": {
+      "Morning": {},
+      "Evening": {},
+      "Night": {
+        "Senior": 1
+      }
+    },
+    "2025-01-04": {
+      "Morning": {
+        "Senior": 1
+      },
+      "Evening": {
+        "Senior": 1
+      },
+      "Night": {}
+    },
+    "2025-01-05": {
+      "Morning": {},
+      "Evening": {
+        "Senior": 1
+      },
+      "Night": {
+        "Senior": 1
+      }
+    },
+    "2025-01-06": {
+      "Morning": {},
+      "Evening": {
+        "Senior": 1
+      },
+      "Night": {
+        "Senior": 1
+      }
+    },
+    "2025-01-07": {
+      "Morning": {},
+      "Evening": {
+        "Senior": 1
+      },
+      "Night": {}
+    },
+    "2025-01-08": {
+      "Morning": {},
+      "Evening": {
+        "Senior": 1
+      },
+      "Night": {}
+    },
+    "2025-01-09": {
+      "Morning": {},
+      "Evening": {},
+      "Night": {
+        "Senior": 1
+      }
+    },
+    "2025-01-10": {
+      "Morning": {},
+      "Evening": {},
+      "Night": {}
+    },
+    "2025-01-11": {
+      "Morning": {
+        "Senior": 1
+      },
+      "Evening": {},
+      "Night": {
+        "Senior": 1
+      }
+    },
+    "2025-01-12": {
+      "Morning": {
+        "Senior": 1
+      },
+      "Evening": {
+        "Senior": 1
+      },
+      "Night": {}
+    },
+    "2025-01-13": {
+      "Morning": {},
+      "Evening": {},
+      "Night": {
+        "Senior": 1
+      }
+    },
+    "2025-01-14": {
+      "Morning": {},
+      "Evening": {},
+      "Night": {
+        "Senior": 1
+      }
+    },
+    "2025-01-15": {
+      "Morning": {},
+      "Evening": {},
+      "Night": {
+        "Senior": 1
+      }
+    },
+    "2025-01-16": {
+      "Morning": {},
+      "Evening": {},
+      "Night": {
+        "Senior": 1
+      }
+    },
+    "2025-01-17": {
+      "Morning": {
+        "Senior": 1
+      },
+      "Evening": {},
+      "Night": {}
+    },
+    "2025-01-18": {
+      "Morning": {
+        "Senior": 1
+      },
+      "Evening": {},
+      "Night": {
+        "Senior": 1
+      }
+    },
+    "2025-01-19": {
+      "Morning": {},
+      "Evening": {},
+      "Night": {
+        "Senior": 1
+      }
+    },
+    "2025-01-20": {
+      "Morning": {},
+      "Evening": {},
+      "Night": {}
+    },
+    "2025-01-21": {
+      "Morning": {
+        "Senior": 1
+      },
+      "Evening": {},
+      "Night": {
+        "Senior": 1
+      }
+    }
+  },
+  "min_total_shifts_per_nurse": {
+    "N01": 3,
+    "N02": 5,
+    "N03": 3,
+    "N04": 2,
+    "N05": 3,
+    "N06": 3,
+    "N07": 5,
+    "N08": 4,
+    "N09": 4,
+    "N10": 4,
+    "N11": 5,
+    "N12": 3,
+    "N13": 3,
+    "N14": 5,
+    "N15": 4,
+    "N16": 4,
+    "N17": 5,
+    "N18": 2,
+    "N19": 5,
+    "N20": 4
+  },
+  "max_total_shifts_per_nurse": {
+    "N01": 15,
+    "N02": 16,
+    "N03": 13,
+    "N04": 13,
+    "N05": 8,
+    "N06": 9,
+    "N07": 12,
+    "N08": 18,
+    "N09": 10,
+    "N10": 12,
+    "N11": 15,
+    "N12": 14,
+    "N13": 10,
+    "N14": 10,
+    "N15": 11,
+    "N16": 15,
+    "N17": 17,
+    "N18": 16,
+    "N19": 17,
+    "N20": 12
+  },
+  "time_limit_sec": 10,
+  "num_search_workers": 4
+}
