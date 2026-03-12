@@ -176,6 +176,36 @@ export class WorkerPreferencesService {
     };
   }
 
+  async deletePreferences(workerId: string) {
+    const worker = await this.workersRepo.findOne({ where: { id: workerId } });
+    if (!worker || !worker.is_active) throw new NotFoundException('Worker not found');
+
+    const existing = await this.preferencesRepo.findOne({
+      where: { worker_id: Number(workerId) as any },
+    });
+    if (!existing) throw new NotFoundException('No preferences found for this worker');
+
+    await this.preferencesRepo.delete({ worker_id: Number(workerId) as any });
+    return { workerId, deleted: true };
+  }
+
+  async deletePreferenceRequest(workerId: string, date: string) {
+    const worker = await this.workersRepo.findOne({ where: { id: workerId } });
+    if (!worker || !worker.is_active) throw new NotFoundException('Worker not found');
+
+    const existing = await this.preferencesRepo.findOne({
+      where: { worker_id: Number(workerId) as any },
+    });
+    if (!existing) throw new NotFoundException('No preferences found for this worker');
+
+    const pattern = { ...(existing.preference_pattern_json ?? {}) };
+    if (!(date in pattern)) throw new NotFoundException(`No request found for date ${date}`);
+
+    delete pattern[date];
+    await this.preferencesRepo.save({ ...existing, preference_pattern_json: pattern } as any);
+    return { workerId, deletedDate: date, remaining: Object.keys(pattern).length };
+  }
+
   async upsertPreferences(workerId: string, _unitId: string, preferences: WorkerPreferencesDto) {
     const worker = await this.workersRepo.findOne({ where: { id: workerId } });
     if (!worker || !worker.is_active) throw new NotFoundException('Worker not found');
