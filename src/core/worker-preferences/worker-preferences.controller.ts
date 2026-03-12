@@ -2,6 +2,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Put,
@@ -97,16 +98,42 @@ export class WorkerPreferencesController {
 
   /**
    * Purpose:
+   * Delete all preferences for a worker.
+   *
+   * DELETE /workers/:workerId/preferences
+   */
+  @Delete('/workers/:workerId/preferences')
+  deletePreferences(@Param() p: GetWorkerPreferencesParams) {
+    return this.service.deletePreferences(p.workerId);
+  }
+
+  /**
+   * Purpose:
+   * Remove a single date entry from a worker's preference_pattern_json (reject a request).
+   *
+   * DELETE /workers/:workerId/preferences/requests/:date
+   */
+  @Delete('/workers/:workerId/preferences/requests/:date')
+  deletePreferenceRequest(
+    @Param() p: GetWorkerPreferencesParams,
+    @Param('date') date: string,
+  ) {
+    return this.service.deletePreferenceRequest(p.workerId, date);
+  }
+
+  /**
+   * Purpose:
    * Dashboard / admin view.
    * List all workers in a unit with their preferences (if any).
    *
    * GET /units/:unitId/workers/preferences
    */
   @Get('/units/:unitId/workers/preferences')
-  listForUnit(
+  async listForUnit(
     @Req() req: Request,
     @Param('unitId') unitId: string,
   ) {
-    return this.service.listForUnit(this.ctx(req), unitId);
+    const result = await this.service.listForUnit(this.ctx(req), unitId);
+    return { workerPreferences: result };
   }
 }

@@ -57,7 +57,12 @@ export class StaffService {
     };
   }
 
+  private validateId(id: string) {
+    if (!/^\d+$/.test(id)) throw new NotFoundException('Staff not found');
+  }
+
   async getById(id: string, organizationId: number) {
+    this.validateId(id);
     const worker = await this.workersRepo.findOne({
       where: {
         id: id as any,
@@ -134,6 +139,7 @@ export class StaffService {
     actor: { actorId: string; actorName: string },
     organizationId: number,
   ) {
+    this.validateId(id);
     const worker = await this.workersRepo.findOne({
       where: {
         id: id as any,
@@ -175,6 +181,7 @@ export class StaffService {
   }
 
   async remove(id: string, actor: { actorId: string; actorName: string }, organizationId: number) {
+    this.validateId(id);
     const worker = await this.workersRepo.findOne({
       where: {
         id: id as any,
@@ -184,8 +191,8 @@ export class StaffService {
 
     if (!worker) throw new NotFoundException('Staff not found');
 
-    worker.is_active = false;
-    const removed = this.mapWorkerToStaff(await this.workersRepo.save(worker));
+    const removed = this.mapWorkerToStaff(worker);
+    await this.workersRepo.remove(worker);
 
     await this.auditLogs.append({
       actorId: actor.actorId,

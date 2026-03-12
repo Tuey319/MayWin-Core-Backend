@@ -8,7 +8,7 @@ if defined _OLD_CODEPAGE (
     "%SystemRoot%\System32\chcp.com" 65001 > nul
 )
 
-set VIRTUAL_ENV=C:\Users\tueyc\CMKL Year 2\URD\MayWin-NSP-Project\src\core\solver\.venv
+set VIRTUAL_ENV=C:\Users\tueyc\CMKL\Year 2\URD-202 MayWin\MayWin-Core-Backend\src\core\solver\.venv
 
 if not defined PROMPT set PROMPT=$P$G
 
