@@ -100,6 +100,16 @@ SOLVER_PYTHON=python3        # or "py" on Windows
 SOLVER_CLI_PATH=src/core/solver/solver_cli.py
 ```
 
+**Optional: LINE chatbot (WebhookModule):**
+
+```bash
+LINE_CHANNEL_ACCESS_TOKEN=your-line-channel-access-token
+LINE_CHANNEL_SECRET=your-line-channel-secret
+
+# Directory for local audit log CSV (defaults to /tmp)
+AUDIT_LOG_DIR=/tmp
+```
+
 **Optional: AWS / orchestration / artifacts:**
 
 ```bash
@@ -227,6 +237,9 @@ uvicorn src.core.solver.solver_cli:app --reload --port 8001
 - **`WorkerMessagesModule`** – worker/unit/job messages ("nurse inbox", manager views).
 - **`BucketsModule`** – S3 artifact storage service (`S3ArtifactsService`).
 - **`OrchestratorModule`** – orchestration entrypoint that can run locally or via AWS Step Functions.
+- **`StaffModule`** – CRUD management of staff (workers) scoped to the authenticated organization, with audit log integration.
+- **`AuditLogsModule`** – append-only audit log backed by local CSV (`/tmp/audit-logs.csv`) or S3 (when `MAYWIN_ARTIFACTS_BUCKET` is set). Supports JSON list and CSV export.
+- **`WebhookModule`** – LINE Messaging API webhook for nurse chatbot interactions. Processes inbound messages, tracks conversation state (`chatbot_conversations`), and replies via the LINE Messaging API.
 
 ### Database
 
@@ -299,13 +312,32 @@ All paths below are relative to `/api/v1/core` and require a valid Bearer token 
 - `DELETE /units/:unitId/coverage-rules/:id` – remove a rule.
 - `PUT /units/:unitId/coverage-rules` – bulk replace rules.
 
+### Staff
+
+- `GET /staff` – list all staff in the authenticated organization.
+- `GET /staff/:id` – get a single staff member.
+- `POST /staff` – create a new staff member (also creates a `Worker` record).
+- `PATCH /staff/:id` – update staff attributes.
+- `DELETE /staff/:id` – deactivate a staff member.
+
+### Audit logs
+
+- `GET /audit-logs` – list audit log entries (newest first).
+- `GET /audit-logs?export=csv` – download full audit log as a CSV file.
+- `POST /audit-logs` – append a new audit log entry (actor derived from JWT).
+
 ### Availability & worker preferences
 
 - `GET /units/:unitId/availability?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD` – fetch availability entries.
 - `PUT /units/:unitId/availability` – bulk upsert entries.
 
-- `GET /workers/:workerId/preferences` – fetch stored preferences.
+- `GET /units/:unitId/workers/preferences` – list all workers in a unit with their preference status for the current month.
+- `GET /workers/:workerId/preferences` – fetch stored preferences for a worker.
 - `PUT /workers/:workerId/preferences` – upsert preferences for a worker and unit.
+- `PUT /workers/:workerId/request-schedule` – nurse submits shift preferences and triggers the scheduling engine.
+- `DELETE /workers/:workerId/preferences` – delete all preferences for a worker.
+- `DELETE /workers/:workerId/preferences/requests/:date` – remove a single date entry from a worker's preference pattern (reject a request).
+- `DELETE /workers/:workerId/preferences/days-off/:date` – reject a day-off request for a specific date.
 
 ### Scheduling & jobs
 
@@ -332,6 +364,12 @@ All message endpoints are guarded by `JwtAuthGuard`.
 - `GET /workers/:workerId/messages` – list messages for a worker
 - `GET /units/:unitId/messages` – “manager inbox” view of messages in a unit
 - `GET /jobs/:jobId/messages` – messages linked to a specific solver job
+
+### Webhook (LINE chatbot)
+
+Receives LINE Messaging API webhook events. Not authenticated via JWT — verified by LINE's signature.
+
+- `POST /webhook` – handle inbound LINE messages from nurses; replies via the LINE Messaging API.
 
 ### Orchestrator
 
