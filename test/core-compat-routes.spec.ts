@@ -16,6 +16,7 @@ import { Worker } from '../src/database/entities/workers/worker.entity';
 import { WorkerPreference } from '../src/database/entities/workers/worker-preferences.entity';
 import { ScheduleJob } from '../src/database/entities/orchestration/schedule-job.entity';
 import { ScheduleArtifact } from '../src/database/entities/orchestration/schedule-artifact.entity';
+import { S3ArtifactsService } from '../src/database/buckets/s3-artifacts.service';
 import { BadRequestException } from '@nestjs/common';
 
 describe('Compatibility Routes', () => {
@@ -234,9 +235,34 @@ describe('Compatibility Routes', () => {
           find: jest.fn(),
         },
         prefsRepo: {
+          find: jest.fn(),
           findOne: jest.fn(),
         },
+        jobsRepo: {},
+        artifactsRepo: {
+          createQueryBuilder: jest.fn(),
+        },
+        s3Artifacts: {
+          getJson: jest.fn(),
+        },
       };
+
+      const qb: any = {
+        innerJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([
+          {
+            metadata: { metrics: { averageSatisfaction: 0.73 } },
+            storage_provider: 'db',
+            bucket: null,
+            object_key: null,
+          },
+        ]),
+      };
+      mockRepos.artifactsRepo.createQueryBuilder.mockReturnValue(qb);
 
       const module: TestingModule = await Test.createTestingModule({
         controllers: [WorkersController],
@@ -249,6 +275,18 @@ describe('Compatibility Routes', () => {
           {
             provide: getRepositoryToken(WorkerPreference),
             useValue: mockRepos.prefsRepo,
+          },
+          {
+            provide: getRepositoryToken(ScheduleJob),
+            useValue: mockRepos.jobsRepo,
+          },
+          {
+            provide: getRepositoryToken(ScheduleArtifact),
+            useValue: mockRepos.artifactsRepo,
+          },
+          {
+            provide: S3ArtifactsService,
+            useValue: mockRepos.s3Artifacts,
           },
         ],
       }).compile();
@@ -269,26 +307,37 @@ describe('Compatibility Routes', () => {
       ];
 
       mockRepos.workersRepo.find.mockResolvedValue(mockWorkers);
+      mockRepos.prefsRepo.find.mockResolvedValue([
+        {
+          worker_id: '42',
+          attributes: { averageSatisfaction: 0.82 },
+        },
+      ]);
 
       const result = await controller.exportNurses('2');
 
       expect(result).toHaveProperty('nurses');
+      expect(result).toHaveProperty('overallAverageSatisfaction', 0.73);
       expect(result.nurses).toHaveLength(1);
       expect(result.nurses[0]).toHaveProperty('id');
       expect(result.nurses[0]).toHaveProperty('name');
       expect(result.nurses[0]).toHaveProperty('employment_type');
       expect(result.nurses[0]).toHaveProperty('unit');
+      expect(result.nurses[0]).not.toHaveProperty('averageSatisfaction');
+      expect(result.nurses[0]).not.toHaveProperty('satisfaction');
       expect(result.nurses[0].unit).toBe('2');
     });
 
     it('should default to unitId=2 if not provided', async () => {
       const mockWorkers: any[] = [];
       mockRepos.workersRepo.find.mockResolvedValue(mockWorkers);
+      mockRepos.prefsRepo.find.mockResolvedValue([]);
 
       const result = await controller.exportNurses(undefined);
 
       expect(result.nurses).toBeDefined();
       expect(Array.isArray(result.nurses)).toBe(true);
+      expect(result).toHaveProperty('overallAverageSatisfaction', 0.73);
     });
   });
 });

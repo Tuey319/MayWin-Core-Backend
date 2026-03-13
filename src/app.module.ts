@@ -1,6 +1,7 @@
 // src/app.module.ts
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { CacheModule } from '@nestjs/cache-manager';
 
 import { AuthModule } from './core/auth/auth.module';
 import { HealthModule } from './core/health/health.module';
@@ -32,6 +33,10 @@ import { AuditLogsModule } from '@/core/audit-logs/audit-logs.module';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+    }),
+    CacheModule.register({
+      isGlobal: true,
+      ttl: 5 * 60 * 1000, // 5 minutes default TTL (ms)
     }),
 
     DatabaseModule,

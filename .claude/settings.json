@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find 'c:\\\\Users\\\\tueyc\\\\CMKL\\\\Year 2\\\\URD-202 MayWin\\\\MayWin-Core-Backend\\\\src' -name *cache* -o -name *cache*)",
+      "Bash(npm install:*)"
+    ]
+  }
+}

@@ -21,7 +21,6 @@ export class WorkerPreference {
   @Column({ type: 'int', nullable: true })
   max_consecutive_night_shifts: number | null;
 
-
   @Column({ type: 'jsonb', nullable: true })
   preference_pattern_json: Record<string, any> | null;
 

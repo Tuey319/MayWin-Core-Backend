@@ -1,5 +1,7 @@
 // src/core/worker-preferences/worker-preferences.service.ts
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 
@@ -29,6 +31,7 @@ export class WorkerPreferencesService {
 
     @InjectRepository(WorkerAvailability)
     private readonly workerAvailabilityRepo: Repository<WorkerAvailability>,
+    @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
   /**
@@ -58,6 +61,10 @@ export class WorkerPreferencesService {
    */
   async listForUnit(ctx: JwtCtx, unitId: string) {
     this.assertCanAccessUnit(ctx, unitId);
+
+    const cacheKey = `worker-prefs:list:${unitId}`;
+    const cached = await this.cache.get<any>(cacheKey);
+    if (cached) return cached;
 
     // 1) Get memberships for this unit
     const memberships = await this.membershipRepo.find({
@@ -153,12 +160,15 @@ export class WorkerPreferencesService {
       };
     });
 
-    return {
+    const result = {
       unitId: String(unitId),
       totalWorkers: items.length,
       preferencesSubmittedThisMonth: submittedThisMonth,
       items,
     };
+
+    await this.cache.set(cacheKey, result, 2 * 60 * 1000);
+    return result;
   }
 
   async getPreferences(workerId: string) {
@@ -186,6 +196,8 @@ export class WorkerPreferencesService {
     if (!existing) throw new NotFoundException('No preferences found for this worker');
 
     await this.preferencesRepo.delete({ worker_id: Number(workerId) as any });
+
+    if (worker.primary_unit_id) await this.cache.del(`worker-prefs:list:${worker.primary_unit_id}`);
     return { workerId, deleted: true };
   }
 
@@ -203,7 +215,57 @@ export class WorkerPreferencesService {
 
     delete pattern[date];
     await this.preferencesRepo.save({ ...existing, preference_pattern_json: pattern } as any);
+
+    if (worker.primary_unit_id) await this.cache.del(`worker-prefs:list:${worker.primary_unit_id}`);
     return { workerId, deletedDate: date, remaining: Object.keys(pattern).length };
+  }
+
+  async deleteDayOffRequest(workerId: string, date: string) {
+    const worker = await this.workersRepo.findOne({ where: { id: workerId } });
+    if (!worker || !worker.is_active) throw new NotFoundException('Worker not found');
+
+    const existing = await this.preferencesRepo.findOne({
+      where: { worker_id: Number(workerId) as any },
+    });
+
+    let removedFromPattern = false;
+    let remainingPatternDaysOffCount = 0;
+
+    if (existing) {
+      const daysOffPattern = { ...(existing.days_off_pattern_json ?? {}) };
+      if (date in daysOffPattern) {
+        delete daysOffPattern[date];
+        removedFromPattern = true;
+      }
+      remainingPatternDaysOffCount = Object.keys(daysOffPattern).length;
+
+      if (removedFromPattern) {
+        await this.preferencesRepo.save({
+          ...existing,
+          days_off_pattern_json: daysOffPattern,
+        } as any);
+      }
+    }
+
+    const deletedAvailability = await this.workerAvailabilityRepo.delete({
+      worker_id: Number(workerId) as any,
+      date,
+      type: AvailabilityType.DAY_OFF,
+    } as any);
+
+    const removedAvailabilityRows = deletedAvailability.affected ?? 0;
+    if (!removedFromPattern && removedAvailabilityRows === 0) {
+      throw new NotFoundException(`No day-off request found for date ${date}`);
+    }
+
+    if (worker.primary_unit_id) await this.cache.del(`worker-prefs:list:${worker.primary_unit_id}`);
+    return {
+      workerId,
+      deletedDate: date,
+      removedFromDaysOffPattern: removedFromPattern,
+      removedAvailabilityRows,
+      remainingPatternDaysOffCount,
+    };
   }
 
   async upsertPreferences(workerId: string, _unitId: string, preferences: WorkerPreferencesDto) {
@@ -246,6 +308,7 @@ export class WorkerPreferencesService {
     // which is not available in the preferences update context.
     // Job creation should be triggered from the schedule/orchestrator module instead.
 
+    if (worker.primary_unit_id) await this.cache.del(`worker-prefs:list:${worker.primary_unit_id}`);
     return {
       workerId: String(worker.id),
       preferences: saved,

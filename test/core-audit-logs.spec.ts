@@ -1,6 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuditLogsController } from '../src/core/audit-logs/audit-logs.controller';
 import { AuditLogsService } from '../src/core/audit-logs/audit-logs.service';
+import { S3ArtifactsService } from '../src/database/buckets/s3-artifacts.service';
+
+// Stub S3 — tests run locally without AWS credentials.
+// MAYWIN_ARTIFACTS_BUCKET is intentionally unset so AuditLogsService
+// falls back to the local /tmp file path.
+const s3Stub = {} as S3ArtifactsService;
 
 describe('AuditLogsController & AuditLogsService', () => {
   let controller: AuditLogsController;
@@ -9,7 +15,10 @@ describe('AuditLogsController & AuditLogsService', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuditLogsController],
-      providers: [AuditLogsService],
+      providers: [
+        AuditLogsService,
+        { provide: S3ArtifactsService, useValue: s3Stub },
+      ],
     }).compile();
 
     controller = module.get<AuditLogsController>(AuditLogsController);
