@@ -1,6 +1,11 @@
 // src/database/buckets/s3-artifacts.service.ts
 import { Injectable } from '@nestjs/common';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  NoSuchKey,
+} from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
 
 @Injectable()
@@ -36,6 +41,39 @@ export class S3ArtifactsService {
 
     const text = await streamToString(res.Body as Readable);
     return JSON.parse(text);
+  }
+
+  async putText(keyParts: string[], text: string, contentType = 'text/plain; charset=utf-8') {
+    const key = this.keyOf(keyParts);
+    const body = Buffer.from(text, 'utf8');
+
+    await this.s3.send(new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    }));
+
+    return { bucket: this.bucket, key };
+  }
+
+  /**
+   * Returns the text content of an S3 object, or null if it does not exist.
+   */
+  async getText(keyParts: string[]): Promise<string | null> {
+    const key = this.keyOf(keyParts);
+    try {
+      const res = await this.s3.send(new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      }));
+      return streamToString(res.Body as Readable);
+    } catch (err: any) {
+      if (err instanceof NoSuchKey || err?.name === 'NoSuchKey' || err?.Code === 'NoSuchKey') {
+        return null;
+      }
+      throw err;
+    }
   }
 }
 

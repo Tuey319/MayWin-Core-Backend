@@ -1,10 +1,14 @@
 // src/core/scheduling/schedules.service.ts
 import {
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
   BadRequestException,
 } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, IsNull, Repository } from 'typeorm';
 
@@ -19,6 +23,8 @@ import { PatchAssignmentDto } from './dto/patch-assignment.dto';
 
 @Injectable()
 export class SchedulesService {
+  private readonly logger = new Logger(SchedulesService.name);
+
   constructor(
     @InjectRepository(Schedule)
     private readonly schedulesRepo: Repository<Schedule>,
@@ -34,6 +40,7 @@ export class SchedulesService {
 
     @InjectRepository(User)
     private readonly usersRepo: Repository<User>,
+    @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
   private async loadShiftTemplatesForUnit(unitId: string) {
@@ -100,6 +107,12 @@ export class SchedulesService {
 
     const saved = await this.schedulesRepo.save(schedule);
 
+    // Invalidate schedule caches for this unit
+    await Promise.all([
+      this.cache.del(`schedule:current:${unitId}::`),
+      this.cache.del(`schedule:history:${unitId}:10`),
+    ]);
+
     return {
       schedule: {
         id: saved.id,
@@ -117,6 +130,13 @@ export class SchedulesService {
   }
 
   async getCurrentSchedule(unitId: string, dateFrom?: string, dateTo?: string) {
+    const cacheKey = `schedule:current:${unitId}:${dateFrom ?? ''}:${dateTo ?? ''}`;
+    const cached = await this.cache.get<any>(cacheKey);
+    if (cached) {
+      this.logger.debug(`[cache:hit] ${cacheKey}`);
+      return cached;
+    }
+
     const latestRunRows: Array<{ schedule_id: string; run_id: string }> = await this.schedulesRepo.manager.query(
       `
       select
@@ -160,7 +180,7 @@ export class SchedulesService {
 
     const shiftTemplates = await this.loadShiftTemplatesForUnit(unitId);
 
-    return {
+    const result = {
       schedule: {
         id: schedule.id,
         organizationId: schedule.organization_id,
@@ -189,16 +209,23 @@ export class SchedulesService {
         updatedAt: a.updated_at.toISOString(),
       })),
     };
+
+    await this.cache.set(cacheKey, result, 2 * 60 * 1000); // 2-min TTL — schedule changes frequently
+    return result;
   }
 
   async getScheduleHistory(unitId: string, limit: number) {
+    const cacheKey = `schedule:history:${unitId}:${limit}`;
+    const cached = await this.cache.get<any>(cacheKey);
+    if (cached) return cached;
+
     const rows = await this.schedulesRepo.find({
       where: { unit_id: unitId },
       order: { created_at: 'DESC' },
       take: limit,
     });
 
-    return {
+    const result = {
       unitId,
       schedules: rows.map((s) => ({
         id: s.id,
@@ -211,6 +238,9 @@ export class SchedulesService {
         publishedAt: s.published_at?.toISOString() ?? null,
       })),
     };
+
+    await this.cache.set(cacheKey, result, 5 * 60 * 1000);
+    return result;
   }
 
   async getScheduleById(scheduleId: string) {

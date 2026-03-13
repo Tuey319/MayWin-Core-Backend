@@ -1,5 +1,7 @@
 // src/core/availability/availability.service.ts
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
 
@@ -20,15 +22,20 @@ export class AvailabilityService {
   constructor(
     @InjectRepository(WorkerAvailability)
     private readonly repo: Repository<WorkerAvailability>,
+    @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
   async get(unitId: string, dateFrom: string, dateTo: string) {
+    const cacheKey = `availability:${unitId}:${dateFrom}:${dateTo}`;
+    const cached = await this.cache.get<any>(cacheKey);
+    if (cached) return cached;
+
     const rows = await this.repo.find({
       where: { unit_id: unitId, date: Between(dateFrom, dateTo) },
       order: { date: 'ASC' },
     });
 
-    return {
+    const result = {
       unitId,
       availability: rows.map((r) => ({
         id: r.id,
@@ -42,9 +49,18 @@ export class AvailabilityService {
         attributes: r.attributes,
       })),
     };
+
+    await this.cache.set(cacheKey, result, 2 * 60 * 1000); // 2-min TTL — availability changes frequently
+    return result;
   }
 
   async upsert(unitId: string, entries: Entry[]) {
+    // Invalidate cache for the date range covered by this upsert
+    if (entries.length > 0) {
+      const dates = entries.map((e) => e.date).sort();
+      const cacheKey = `availability:${unitId}:${dates[0]}:${dates[dates.length - 1]}`;
+      await this.cache.del(cacheKey);
+    }
 
     let updatedCount = 0;
 

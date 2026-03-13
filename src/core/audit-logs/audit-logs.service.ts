@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { ensureCsvFile, parseCsv, toCsvLine } from '@/core/mock-csv/csv.util';
+import { S3ArtifactsService } from '@/database/buckets/s3-artifacts.service';
 
 type AuditLogEntry = {
   timestamp: string;
@@ -13,9 +14,12 @@ type AuditLogEntry = {
   detail: string;
 };
 
+const S3_KEY = ['logs', 'audit-logs.csv'];
+
 @Injectable()
 export class AuditLogsService {
-  private readonly filePath = path.join(process.env.AUDIT_LOG_DIR ?? '/tmp', 'audit-logs.csv');
+  private readonly logger = new Logger(AuditLogsService.name);
+  private readonly localPath = path.join(process.env.AUDIT_LOG_DIR ?? '/tmp', 'audit-logs.csv');
   private readonly header = [
     'timestamp',
     'actorId',
@@ -26,9 +30,32 @@ export class AuditLogsService {
     'detail',
   ];
 
-  private async ensureFile() {
-    await ensureCsvFile(this.filePath, this.header);
+  constructor(private readonly s3: S3ArtifactsService) {}
+
+  private get useS3(): boolean {
+    return !!(process.env.MAYWIN_ARTIFACTS_BUCKET?.trim());
   }
+
+  // ── S3 helpers ────────────────────────────────────────────────────────────
+
+  private async readFromS3(): Promise<string> {
+    const raw = await this.s3.getText(S3_KEY);
+    if (raw != null) return raw;
+    // Object doesn't exist yet — return just the header
+    return `${toCsvLine(this.header)}\n`;
+  }
+
+  private async writeToS3(csv: string): Promise<void> {
+    await this.s3.putText(S3_KEY, csv, 'text/csv; charset=utf-8');
+  }
+
+  // ── Local-file helpers (fallback) ─────────────────────────────────────────
+
+  private async ensureLocalFile() {
+    await ensureCsvFile(this.localPath, this.header);
+  }
+
+  // ── Shared logic ──────────────────────────────────────────────────────────
 
   private fromRow(row: string[]): AuditLogEntry {
     return {
@@ -43,13 +70,12 @@ export class AuditLogsService {
   }
 
   async listNewestFirst(): Promise<AuditLogEntry[]> {
-    await this.ensureFile();
-    const raw = await fs.readFile(this.filePath, 'utf8');
+    const raw = await this.readRawCsv();
     const rows = parseCsv(raw);
     const dataRows = rows.slice(1).map((row) => this.fromRow(row));
 
-    return dataRows.sort((a, b) =>
-      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    return dataRows.sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
     );
   }
 
@@ -61,8 +87,6 @@ export class AuditLogsService {
     targetId: string;
     detail: string;
   }): Promise<AuditLogEntry> {
-    await this.ensureFile();
-
     const payload: AuditLogEntry = {
       timestamp: new Date().toISOString(),
       actorId: entry.actorId,
@@ -83,12 +107,23 @@ export class AuditLogsService {
       payload.detail,
     ])}\n`;
 
-    await fs.appendFile(this.filePath, line, 'utf8');
+    if (this.useS3) {
+      const existing = await this.readFromS3();
+      await this.writeToS3(existing + line);
+      this.logger.debug(`Audit log appended to S3 (${S3_KEY.join('/')})`);
+    } else {
+      await this.ensureLocalFile();
+      await fs.appendFile(this.localPath, line, 'utf8');
+    }
+
     return payload;
   }
 
   async readRawCsv(): Promise<string> {
-    await this.ensureFile();
-    return fs.readFile(this.filePath, 'utf8');
+    if (this.useS3) {
+      return this.readFromS3();
+    }
+    await this.ensureLocalFile();
+    return fs.readFile(this.localPath, 'utf8');
   }
 }

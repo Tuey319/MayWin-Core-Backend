@@ -11,7 +11,13 @@ describe('WorkersController', () => {
 
 describe('WorkersService', () => {
   it('should be defined', () => {
-    const service = new WorkersService({} as any, {} as any);
+    const service = new WorkersService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
     expect(service).toBeDefined();
   });
 });

@@ -123,6 +123,21 @@ export class WorkerPreferencesController {
 
   /**
    * Purpose:
+   * Reject a day-off request for a specific date.
+   * Removes entries from both days_off_pattern_json and worker_availability (DAY_OFF).
+   *
+   * DELETE /workers/:workerId/preferences/days-off/:date
+   */
+  @Delete('/workers/:workerId/preferences/days-off/:date')
+  deleteDayOffRequest(
+    @Param() p: GetWorkerPreferencesParams,
+    @Param('date') date: string,
+  ) {
+    return this.service.deleteDayOffRequest(p.workerId, date);
+  }
+
+  /**
+   * Purpose:
    * Dashboard / admin view.
    * List all workers in a unit with their preferences (if any).
    *
