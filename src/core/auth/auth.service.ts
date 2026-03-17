@@ -5,16 +5,18 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 
 import { User } from '@/database/entities/users/user.entity';
 import { UnitMembership } from '@/database/entities/users/unit-membership.entity';
 import { UserRole } from '@/database/entities/users/user-role.entity';
-import { Role } from '@/database/entities/users/role.entity';
+import { Role } from '@/database/entities/core/role.entity';
+import { AuthOtp } from '@/database/entities/users/auth-otp.entity';
 import { JwtPayload } from './types/jwt-payload';
 import { SignupDto } from './dto/signup.dto';
+import { MailService } from '@/core/mail/mail.service';
 
 @Injectable()
 export class AuthService {
@@ -31,8 +33,14 @@ export class AuthService {
     @InjectRepository(Role)
     private readonly roleRepo: Repository<Role>,
 
+    @InjectRepository(AuthOtp)
+    private readonly otpRepo: Repository<AuthOtp>,
+
     private readonly jwtService: JwtService,
-  ) {}
+    private readonly mailService: MailService,
+  ) { }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
 
   private async buildContext(userId: string) {
     // 1) Unit memberships (unit-scoped roles)
@@ -57,7 +65,6 @@ export class AuthService {
       const roleRows = await this.roleRepo.find({
         where: { id: In(roleIds) },
       });
-
       globalRoleCodes = roleRows
         .map((r: any) => (r.code ?? '').trim())
         .filter(Boolean);
@@ -69,17 +76,34 @@ export class AuthService {
     return { unitIds, roles };
   }
 
-  private sign(user: User, roles: string[], unitIds: number[]) {
+  private signFull(user: User, roles: string[], unitIds: number[]) {
     const payload: JwtPayload = {
       sub: Number(user.id),
       organizationId: Number(user.organization_id),
       roles,
       unitIds,
     };
-
     return this.jwtService.sign(payload);
   }
 
+  /** Short-lived token flagging that password was verified but OTP not yet entered */
+  private signPending(userId: string): string {
+    return this.jwtService.sign(
+      { type: 'OTP_PENDING', sub: userId },
+      { expiresIn: '10m' },
+    );
+  }
+
+  private generateOtp(): string {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  }
+
+  // ── Auth flows ───────────────────────────────────────────────────────────
+
+  /**
+   * Step 1: validate credentials → send OTP email
+   * Returns { requires2FA: true, otpToken } — NOT the real JWT yet
+   */
   async login(email: string, password: string) {
     const user = await this.userRepo.findOne({
       where: { email, is_active: true },
@@ -90,8 +114,84 @@ export class AuthService {
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) throw new UnauthorizedException('Invalid credentials');
 
+    // Generate + persist OTP (invalidate any existing unused ones)
+    await this.otpRepo.delete({ user_id: user.id, used_at: IsNull() });
+
+    const otp = this.generateOtp();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    await this.otpRepo.save(
+      this.otpRepo.create({
+        user_id: user.id,
+        otp_code: otp,
+        expires_at: expiresAt,
+        used_at: null,
+      }),
+    );
+
+    // Send email (non-blocking fail OK in dev if no SMTP configured)
+    try {
+      await this.mailService.sendOtp(user.email, user.full_name, otp);
+    } catch (err: any) {
+      // In dev without SMTP, log the OTP to console so you can still test
+      console.warn(`[AUTH] Could not send OTP email. DEV fallback OTP for ${user.email}: ${otp}`);
+    }
+
+    return {
+      requires2FA: true,
+      otpToken: this.signPending(user.id),
+    };
+  }
+
+  /**
+   * Step 2: validate OTP + pending token → return real JWT
+   */
+  async verifyOtp(otpToken: string, otp: string) {
+    // Validate the pending token
+    let payload: any;
+    try {
+      payload = this.jwtService.verify(otpToken);
+    } catch {
+      throw new UnauthorizedException('Invalid or expired session. Please log in again.');
+    }
+
+    if (payload?.type !== 'OTP_PENDING' || !payload?.sub) {
+      throw new UnauthorizedException('Invalid token type');
+    }
+
+    const userId = String(payload.sub);
+
+    // Find the OTP record
+    const record = await this.otpRepo.findOne({
+      where: { user_id: userId, used_at: IsNull() },
+      order: { created_at: 'DESC' },
+    });
+
+    if (!record) {
+      throw new UnauthorizedException('No pending verification found. Please log in again.');
+    }
+
+    if (record.expires_at < new Date()) {
+      throw new UnauthorizedException('Verification code has expired. Please log in again.');
+    }
+
+    if (record.otp_code !== otp.trim()) {
+      throw new UnauthorizedException('Incorrect verification code');
+    }
+
+    // Mark as used
+    record.used_at = new Date();
+    await this.otpRepo.save(record);
+
+    // Load the user + issue real JWT
+    const user = await this.userRepo.findOne({
+      where: { id: userId as any, is_active: true },
+    });
+
+    if (!user) throw new UnauthorizedException('Account not found');
+
     const { unitIds, roles } = await this.buildContext(user.id);
-    const accessToken = this.sign(user, roles, unitIds);
+    const accessToken = this.signFull(user, roles, unitIds);
 
     return {
       accessToken,
@@ -148,7 +248,7 @@ export class AuthService {
     }
 
     const { unitIds, roles } = await this.buildContext(saved.id);
-    const accessToken = this.sign(saved, roles, unitIds);
+    const accessToken = this.signFull(saved, roles, unitIds);
 
     return {
       accessToken,
