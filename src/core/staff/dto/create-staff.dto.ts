@@ -1,4 +1,5 @@
-import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+// src/core/staff/dto/create-staff.dto.ts
+import { IsEmail, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateStaffDto {
   @IsString()
@@ -9,16 +10,22 @@ export class CreateStaffDto {
   @IsNotEmpty()
   employeeId: string;
 
+  /** LINE ID is now optional — nurse can link via invite code later */
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  lineId: string;
+  lineId?: string;
 
   @IsString()
-  @IsIn(['nurse', 'scheduler', 'admin'])
-  position: 'nurse' | 'scheduler' | 'admin';
+  @IsIn(['nurse', 'head_nurse', 'scheduler', 'admin'])
+  position: 'nurse' | 'head_nurse' | 'scheduler' | 'admin';
 
   @IsEmail()
   email: string;
+
+  /** Unit to assign this nurse to. Falls back to the caller's unit if omitted. */
+  @IsOptional()
+  @IsNumber()
+  unitId?: number;
 
   @IsOptional()
   @IsString()
