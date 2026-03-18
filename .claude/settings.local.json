@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \":*)",
+      "Bash(find 'c:\\\\Users\\\\tueyc\\\\CMKL\\\\Year 2\\\\URD-202 MayWin\\\\MayWin-Core-Backend' -type f \\\\\\(-name *.md -o -name *postman* -o -name *swagger* -o -name *openapi* \\\\\\))"
+    ]
+  }
+}

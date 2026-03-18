@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(find 'c:\\\\Users\\\\tueyc\\\\CMKL\\\\Year 2\\\\URD-202 MayWin\\\\MayWin-Core-Backend\\\\src' -name *cache* -o -name *cache*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(node -e \"const bcrypt = require\\(''bcrypt''\\); bcrypt.hash\\(''maywin12345'', 10\\).then\\(h => console.log\\(h\\)\\);\")",
+      "Bash(node -e \"const bcrypt = require\\(''bcrypt''\\); bcrypt.compare\\(''maywin12345'', ''$2b$10$MEQmS2jeeshlwgajckc7R.aypQnOZiAhnhrK/A3iz4K4s4X2A0Yqq''\\).then\\(r => console.log\\(''match:'', r\\)\\);\")"
     ]
   }
 }
