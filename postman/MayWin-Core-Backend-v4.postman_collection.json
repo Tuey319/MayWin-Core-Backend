@@ -10,18 +10,18 @@
       "name": "Auth",
       "item": [
         {
-          "name": "Login",
+          "name": "1. Login (Step 1: Submit Credentials)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "if (pm.response.code === 200) {",
                   "  const jsonData = pm.response.json();",
-                  "  if (jsonData.accessToken) {",
-                  "    pm.environment.set('authToken', jsonData.accessToken);",
-                  "    pm.environment.set('userId', jsonData.user?.id);",
-                  "    pm.environment.set('userName', jsonData.user?.name);",
+                  "  if (jsonData.otpToken) {",
+                  "    pm.environment.set('otpToken', jsonData.otpToken);",
+                  "    pm.environment.set('requires2FA', jsonData.requires2FA);",
+                  "    console.log('OTP sent to email. Check console for DEV OTP.');",
                   "  }",
                   "}"
                 ],
@@ -49,7 +49,85 @@
           }
         },
         {
-          "name": "Me",
+          "name": "2. Verify OTP (Step 2: Submit OTP Code)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const jsonData = pm.response.json();",
+                  "  if (jsonData.accessToken) {",
+                  "    pm.environment.set('authToken', jsonData.accessToken);",
+                  "    pm.environment.set('userId', jsonData.user?.id);",
+                  "    pm.environment.set('userEmail', jsonData.user?.email);",
+                  "    pm.environment.set('userFullName', jsonData.user?.fullName);",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"otpToken\": \"{{otpToken}}\", \"otp\": \"123456\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "verify-otp"]
+            }
+          }
+        },
+        {
+          "name": "3. Signup",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const jsonData = pm.response.json();",
+                  "  if (jsonData.accessToken) {",
+                  "    pm.environment.set('authToken', jsonData.accessToken);",
+                  "    pm.environment.set('userId', jsonData.user?.id);",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"organizationId\": \"1\", \"unitId\": \"2\", \"email\": \"newuser@example.com\", \"password\": \"securepassword\", \"fullName\": \"Jane Smith\", \"roleCode\": \"NURSE\", \"attributes\": {}}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/signup",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "signup"]
+            }
+          }
+        },
+        {
+          "name": "4. Get Current User (Me)",
           "request": {
             "method": "GET",
             "header": [
@@ -62,6 +140,31 @@
               "raw": "{{baseUrl}}/auth/me",
               "host": ["{{baseUrl}}"],
               "path": ["auth", "me"]
+            }
+          }
+        },
+        {
+          "name": "5. Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"deviceId\": \"postman-test\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
             }
           }
         }

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
   ChatbotConversation,
@@ -10,7 +10,7 @@ import {
   WorkerAvailability,
   AvailabilityType,
 } from '../../database/entities/workers/worker-availability.entity';
-
+import { LineLinkToken } from '../../database/entities/workers/line-link-token.entity';
 import { Worker } from '../../database/entities/workers/worker.entity';
 import { WorkerPreferencesService } from '../worker-preferences/worker-preferences.service';
 import { WorkerPreferencesDto } from '../worker-preferences/dto/put-worker-preferences.dto';
@@ -33,6 +33,8 @@ export class WebhookService {
     private workerAvailabilityRepo: Repository<WorkerAvailability>,
     @InjectRepository(Worker)
     private workerRepo: Repository<Worker>,
+    @InjectRepository(LineLinkToken)
+    private lineLinkTokenRepo: Repository<LineLinkToken>,
     private readonly workerPreferencesService: WorkerPreferencesService,
   ) {
     this.logger.log('WebhookService initialized');
@@ -40,14 +42,19 @@ export class WebhookService {
 
   async handleNurseMessage(text: string, userId: string): Promise<string> {
     try {
-      // LOG: Received message and ID
       this.logger.log(`[INCOMING] UserID: ${userId} | Message: ${text}`);
 
       const today = new Date().toISOString().split('T')[0];
-
       if (this.lastCheckedDay !== today) {
         this.lastCheckedDay = today;
         this.exhaustedKeys.clear();
+      }
+
+      // ── PHASE 0: LINE Account Linking ──────────────────────────────────────
+      // Detect: "ลงทะเบียน: A3X9K2" or "link account: A3X9K2" (case-insensitive)
+      const linkMatch = text.trim().match(/^(?:ลงทะเบียน|link\s*account)\s*:\s*([a-z0-9]+)$/i);
+      if (linkMatch) {
+        return this.handleLinkAccount(userId, linkMatch[1].toUpperCase());
       }
 
       // Get or create conversation state from database
@@ -69,15 +76,15 @@ export class WebhookService {
         const input = text.trim().toLowerCase();
         if (['yes', 'ใช่', 'คับ', 'ค่ะ', 'ครับ'].includes(input)) {
           const finalData = conversation.pending_data;
-          
+
           // Save to database
           await this.saveToDatabase(conversation, finalData);
-          
+
           // Reset conversation state
           conversation.state = ConversationState.IDLE;
           conversation.pending_data = null;
           await this.chatbotConversationRepo.save(conversation);
-          
+
           return `✅ บันทึกข้อมูลเรียบร้อยแล้วค่ะ!`;
         }
 
@@ -86,7 +93,7 @@ export class WebhookService {
           conversation.state = ConversationState.IDLE;
           conversation.pending_data = null;
           await this.chatbotConversationRepo.save(conversation);
-          
+
           return '❌ ยกเลิกรายการให้แล้วค่ะ';
         }
 
@@ -164,6 +171,49 @@ export class WebhookService {
     }
   }
 
+  // ── LINE Account Linking ─────────────────────────────────────────────────
+
+  private async handleLinkAccount(lineUserId: string, token: string): Promise<string> {
+    try {
+      this.logger.log(`[LINK] Attempting to link LINE user ${lineUserId} with token ${token}`);
+
+      const linkToken = await this.lineLinkTokenRepo.findOne({
+        where: { token, used_at: IsNull() },
+      });
+
+      if (!linkToken) {
+        return '❌ รหัสนี้ไม่ถูกต้องหรือถูกใช้งานแล้วค่ะ กรุณาขอรหัสใหม่จากผู้ดูแลระบบ';
+      }
+
+      if (linkToken.expires_at < new Date()) {
+        return '❌ รหัสนี้หมดอายุแล้วค่ะ กรุณาขอรหัสใหม่จากผู้ดูแลระบบ';
+      }
+
+      // Guard: LINE ID already linked to a DIFFERENT worker
+      const existingWorker = await this.workerRepo.findOne({ where: { line_id: lineUserId } });
+      if (existingWorker && String(existingWorker.id) !== String(linkToken.worker_id)) {
+        return '❌ LINE account นี้เชื่อมต่อกับบัญชีอื่นอยู่แล้วค่ะ กรุณาติดต่อผู้ดูแลระบบ';
+      }
+
+      // Link the worker's LINE ID
+      await this.workerRepo.update(linkToken.worker_id, { line_id: lineUserId });
+
+      // Mark token used
+      linkToken.used_at = new Date();
+      await this.lineLinkTokenRepo.save(linkToken);
+
+      const worker = await this.workerRepo.findOne({ where: { id: linkToken.worker_id as any } });
+      const name = worker?.full_name ?? 'คุณ';
+
+      this.logger.log(`[LINK] ✅ Linked LINE ${lineUserId} → Worker ${linkToken.worker_id} (${name})`);
+
+      return `✅ เชื่อมต่อบัญชีเรียบร้อยแล้วค่ะ สวัสดีค่ะ ${name}! 😊\n\nตั้งแต่นี้ไปคุณสามารถแจ้งความต้องการเข้าเวรได้เลยค่ะ เช่น "ขอเวรเช้าวันที่ 20 มีนาคม"`;
+    } catch (error) {
+      this.logger.error('[LINK] handleLinkAccount failed:', error);
+      return '❌ เกิดข้อผิดพลาดในการเชื่อมต่อบัญชี กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ';
+    }
+  }
+
   private async setupConfirmation(
     conversation: ChatbotConversation,
     extracted: any[],
@@ -172,7 +222,7 @@ export class WebhookService {
       conversation.state = ConversationState.AWAITING_CONFIRMATION;
       conversation.pending_data = extracted;
       await this.chatbotConversationRepo.save(conversation);
-      
+
       const thaiSummary = this.formatThaiSummary(extracted);
       return `${thaiSummary}\n\nข้อมูลนี้ถูกต้องไหมคะ? (พิมพ์ 'ใช่' หรือ 'ไม่')`;
     } catch (error) {
@@ -205,11 +255,11 @@ export class WebhookService {
   }
 
   private formatThaiSummary(prefs: any[]): string {
-    const shiftMap: { [key: string]: string } = { 
-      morning: 'เช้า', 
-      afternoon: 'บ่าย', 
-      night: 'ดึก', 
-      leave: 'ลาพัก/ไม่เข้าเวร' 
+    const shiftMap: { [key: string]: string } = {
+      morning: 'เช้า',
+      afternoon: 'บ่าย',
+      night: 'ดึก',
+      leave: 'ลาพัก/ไม่เข้าเวร'
     };
     const summaries = prefs.map((p) => {
       const dateObj = new Date(p.date);

@@ -1,3 +1,4 @@
+// src/core/staff/staff.controller.ts
 import {
   Body,
   Controller,
@@ -18,12 +19,11 @@ import { PatchStaffDto } from './dto/patch-staff.dto';
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class StaffController {
-  constructor(private readonly staff: StaffService) {}
+  constructor(private readonly staff: StaffService) { }
 
   private context(req: Request): { organizationId: number; unitId: number | null } {
     const user = (req as any).user ?? {};
     const unitIds = Array.isArray(user.unitIds) ? user.unitIds : [];
-
     return {
       organizationId: Number(user.organizationId ?? 0),
       unitId: unitIds.length > 0 ? Number(unitIds[0]) : null,
@@ -61,5 +61,15 @@ export class StaffController {
   @Delete('/staff/:id')
   remove(@Param('id') id: string, @Req() req: Request) {
     return this.staff.remove(id, this.actor(req), this.context(req).organizationId);
+  }
+
+  /**
+   * POST /staff/:id/link-token
+   * Generate a one-time LINE invite code for a nurse.
+   * Returns { token, expiresAt, instruction }
+   */
+  @Post('/staff/:id/link-token')
+  generateLinkToken(@Param('id') id: string, @Req() req: Request) {
+    return this.staff.generateLinkToken(id, this.context(req).organizationId, this.actor(req));
   }
 }

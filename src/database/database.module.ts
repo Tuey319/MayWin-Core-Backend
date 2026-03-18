@@ -19,6 +19,11 @@ import { Worker } from './entities/workers/worker.entity';
 import { WorkerUnitMembership } from './entities/workers/worker-unit.entity';
 import { WorkerAvailability } from './entities/workers/worker-availability.entity';
 import { WorkerPreference } from './entities/workers/worker-preferences.entity';
+import { ChatbotConversation } from './entities/workers/chatbot-conversation.entity';
+import { LineLinkToken } from './entities/workers/line-link-token.entity';
+
+// Users (additional)
+import { AuthOtp } from './entities/users/auth-otp.entity';
 
 // Scheduling
 import { ShiftTemplate } from './entities/scheduling/shift-template.entity';
@@ -49,6 +54,10 @@ const ENTITIES = [
   WorkerUnitMembership,
   WorkerAvailability,
   WorkerPreference,
+  ChatbotConversation,
+  LineLinkToken,
+
+  AuthOtp,
 
   ShiftTemplate,
   CoverageRule,
@@ -76,4 +85,4 @@ const ENTITIES = [
   ],
   exports: [TypeOrmModule],
 })
-export class DatabaseModule {}
+export class DatabaseModule { }
