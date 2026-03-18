@@ -44,8 +44,8 @@ export class AuditLogsController {
   async create(@Req() req: Request, @Body() dto: CreateAuditLogDto) {
     const user = (req as any).user ?? {};
 
-    const actorId = String(user.sub ?? user.id ?? 'unknown');
-    const actorName = String(user.fullName ?? user.name ?? user.email ?? 'Unknown');
+    const actorId = dto.actorId ?? String(user.sub ?? user.id ?? 'unknown');
+    const actorName = dto.actorName ?? String(user.fullName ?? user.name ?? user.email ?? 'Unknown');
 
     const log = await this.auditLogs.append({
       actorId,
