@@ -7,17 +7,20 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt-strategy';
+import { MailModule } from '@/core/mail/mail.module';
 
 import { User } from '@/database/entities/users/user.entity';
 import { UnitMembership } from '@/database/entities/users/unit-membership.entity';
 import { UserRole } from '@/database/entities/users/user-role.entity';
 import { Role } from '@/database/entities/core/role.entity';
+import { AuthOtp } from '@/database/entities/users/auth-otp.entity';
 
 @Module({
   imports: [
     ConfigModule,
+    MailModule,
 
-    TypeOrmModule.forFeature([User, UnitMembership, UserRole, Role]),
+    TypeOrmModule.forFeature([User, UnitMembership, UserRole, Role, AuthOtp]),
 
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -32,4 +35,4 @@ import { Role } from '@/database/entities/core/role.entity';
   providers: [AuthService, JwtStrategy],
   exports: [AuthService],
 })
-export class AuthModule {}
+export class AuthModule { }

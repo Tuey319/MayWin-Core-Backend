@@ -17,35 +17,213 @@ All requests require an `Authorization: Bearer <token>` header. The BFF handles 
 
 ## Auth
 
+All auth endpoints support 2FA via OTP (One-Time Password) sent to the user's email.
+
 ### `POST /auth/login`
 
-Used by: `src/app/api/auth/login/route.js` (real mode)
+Step 1: Validate email and password credentials. If valid, generates and sends a 6-digit OTP to the user's email.
 
 **Request**
 ```json
 {
-  "email": "admin@maywin.local",
-  "password": "maywin12345"
+  "email": "user@example.com",
+  "password": "securepassword"
 }
 ```
 
-**Expected response**
+**Response — 200 OK**
 ```json
 {
-  "accessToken": "eyJ...",
+  "requires2FA": true,
+  "otpToken": "eyJ0eXAiOiJKV1QiLCJhbGc..."
+}
+```
+
+**Notes:**
+- `otpToken` is a short-lived token (expires in 10 minutes) that flags the password as verified
+- User must provide this `otpToken` + OTP code to the `/auth/verify-otp` endpoint
+- In development without SMTP: OTP is printed to console for testing
+
+**Errors**
+- `401` — Invalid email or password
+
+---
+
+### `POST /auth/verify-otp`
+
+Step 2: Validate the OTP code sent to user's email + the pending token from `/auth/login`. Returns the real JWT access token.
+
+**Request**
+```json
+{
+  "otpToken": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+  "otp": "123456"
+}
+```
+
+**Response — 200 OK**
+```json
+{
+  "accessToken": "eyJ0eXAiOiJKV1QiLCJhbGc...",
   "user": {
-    "id": "1",
-    "name": "Admin",
-    "role": "ผู้ดูแล"
+    "id": "42",
+    "email": "user@example.com",
+    "fullName": "John Doe",
+    "organizationId": 1,
+    "roles": ["NURSE", "UNIT_MANAGER"],
+    "unitIds": [2, 3]
   }
 }
 ```
 
-> If your backend returns a different shape, update the mapping in `src/app/api/auth/login/route.js` around line 65.
+**Errors**
+- `401` — Invalid/expired otpToken, no pending verification, expired OTP, or incorrect OTP code
+
+---
+
+### `POST /auth/signup`
+
+Register a new user account.
+
+**Request**
+```json
+{
+  "organizationId": "1",
+  "unitId": "2",
+  "email": "newuser@example.com",
+  "password": "securepassword",
+  "fullName": "Jane Smith",
+  "roleCode": "NURSE",
+  "attributes": {}
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `organizationId` | numeric string | yes | Organization ID |
+| `unitId` | numeric string | no | Unit ID (if assigning to a unit immediately) |
+| `email` | string | yes | Valid email address |
+| `password` | string | yes | Minimum 6 characters |
+| `fullName` | string | yes | User's full name |
+| `roleCode` | string | no | Default: "NURSE" |
+| `attributes` | object | no | Custom attributes |
+
+**Response — 200 OK**
+```json
+{
+  "accessToken": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+  "user": {
+    "id": "43",
+    "email": "newuser@example.com",
+    "fullName": "Jane Smith",
+    "organizationId": 1,
+    "roles": ["NURSE"],
+    "unitIds": [2]
+  }
+}
+```
+
+**Errors**
+- `400` — Email already exists, organizationId required, or validation errors
+
+---
+
+### `POST /auth/logout`
+
+Logout the current user. Requires JWT authentication.
+
+Auth: JWT required (`Authorization: Bearer <token>`)
+
+**Request**
+```json
+{
+  "deviceId": "device123"
+}
+```
+
+**Response — 200 OK**
+```json
+{
+  "ok": true
+}
+```
+
+---
+
+### `GET /auth/me`
+
+Get the currently authenticated user's profile.
+
+Auth: JWT required (`Authorization: Bearer <token>`)
+
+**Response — 200 OK**
+```json
+{
+  "user": {
+    "id": "42",
+    "email": "user@example.com",
+    "fullName": "John Doe",
+    "organizationId": 1,
+    "roles": ["NURSE", "UNIT_MANAGER"],
+    "unitIds": [2, 3]
+  }
+}
+```
+
+**Errors**
+- `401` — Missing or invalid JWT token
 
 ---
 
 ## Schedule
+
+### `POST /units/:unitId/schedules`
+
+Creates a new schedule container for a unit. This does **not** run the solver — it just creates the schedule record. Use the solver endpoint afterward to generate assignments.
+
+Auth: JWT required (`Authorization: Bearer <token>`)
+
+**Request**
+```json
+{
+  "name": "March 2025",
+  "startDate": "2025-03-01",
+  "endDate": "2025-03-31",
+  "constraintProfileId": "1"
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `name` | string | yes | Human-readable label |
+| `startDate` | ISO date string | yes | e.g. `"2025-03-01"` |
+| `endDate` | ISO date string | yes | e.g. `"2025-03-31"` |
+| `constraintProfileId` | numeric string | no | Links to a constraint profile |
+
+**Response — 201 Created**
+```json
+{
+  "schedule": {
+    "id": "42",
+    "organizationId": "1",
+    "unitId": "2",
+    "name": "March 2025",
+    "startDate": "2025-03-01",
+    "endDate": "2025-03-31",
+    "status": "DRAFT",
+    "constraintProfileId": "1",
+    "jobId": null,
+    "createdAt": "2025-03-01T00:00:00.000Z"
+  }
+}
+```
+
+**Errors**
+- `400` — missing/invalid fields, or invalid authenticated user id
+- `401` — missing or unrecognized JWT user
+- `404` — unit not found
+
+---
 
 ### `GET /schedule?unitId=2`
 
@@ -274,21 +452,52 @@ Kicks off an async schedule solve. Returns immediately with a job ID.
     "strategy": { "plan": "A", "mode": "strict" },
     "solverConfig": { "timeLimitSeconds": 120 },
     "options": { "dryRun": false },
-    "notes": "30 nurses - 30 day schedule with realistic constraints",
-    "length": 31
+    "notes": "30 nurses - 30 day schedule with realistic constraints"
   }
 }
 ```
 
-**Response**
+> `dto.length` (number of days) can be provided instead of `dto.endDate`. The backend will compute `endDate` as `startDate + (length - 1)` days, end-of-day UTC.
+
+**Response — `LOCAL_RUNNER` mode** (default)
 ```json
 {
   "ok": true,
+  "mode": "LOCAL_RUNNER",
   "jobId": "job-uuid-here",
-  "executionArn": "arn:aws:states:...",
-  "mode": "async"
+  "executionArn": null,
+  "job": {
+    "id": "job-uuid-here",
+    "scheduleId": "2",
+    "state": "REQUESTED",
+    "createdAt": "2025-03-01T00:00:00.000Z"
+  }
 }
 ```
+
+**Response — `STEP_FUNCTIONS` mode** (when `ORCHESTRATION_MODE=STEP_FUNCTIONS`)
+```json
+{
+  "ok": true,
+  "mode": "STEP_FUNCTIONS",
+  "jobId": "job-uuid-here",
+  "executionArn": "arn:aws:states:...",
+  "job": {
+    "id": "job-uuid-here",
+    "scheduleId": "2",
+    "state": "REQUESTED",
+    "createdAt": "2025-03-01T00:00:00.000Z"
+  },
+  "execution": {
+    "arn": "arn:aws:states:...",
+    "startDate": "2025-03-01T00:00:00.000Z",
+    "name": "job-<uuid>-<timestamp>",
+    "stateMachineArn": "arn:aws:states:..."
+  }
+}
+```
+
+If Step Functions fails to start, `ok` will be `false` and an `error` object (`name`, `message`) is returned instead of `execution`.
 
 ---
 
@@ -301,18 +510,33 @@ Used by: `src/app/api/solver/route.js` (GET handler, polled every 4s)
 {
   "job": {
     "id": "job-uuid-here",
-    "state": "COMPLETED"
+    "scheduleId": "2",
+    "state": "COMPLETED",
+    "phase": "COMPLETED",
+    "createdAt": "2025-03-01T00:00:00.000Z",
+    "updatedAt": "2025-03-01T00:30:00.000Z",
+    "errorCode": null,
+    "errorMessage": null
   }
 }
 ```
 
-**Job states** — the BFF treats these as done:
-- `completed`, `success`, `done`, `succeeded`
+**Job states** (`state` field) — all uppercase:
 
-And these as failed:
-- `failed`, `error`, `faulted`
+| State | `phase` value | Meaning |
+|---|---|---|
+| `REQUESTED` | `REQUESTED` | Job created, not yet started |
+| `VALIDATED` | `VALIDATING` | Input validation passed |
+| `NORMALIZING` | `NORMALIZING` | Converting input data |
+| `SOLVING_A_STRICT` | `STRICT_PASS` | Running strict solver plan |
+| `SOLVING_A_RELAXED` | `RELAXED_PASS` | Running relaxed solver plan |
+| `SOLVING_B_MILP` | `MILP_FALLBACK` | Running MILP fallback solver |
+| `EVALUATING` | `EVALUATING` | Evaluating solver results |
+| `PERSISTING` | `PERSISTING` | Writing results to database |
+| `COMPLETED` | `COMPLETED` | Terminal — success |
+| `FAILED` | `FAILED` | Terminal — failed (see `errorCode`/`errorMessage`) |
 
-Any other state (e.g. `pending`, `running`) keeps polling until 3-minute timeout.
+The BFF polls until `state === 'COMPLETED'` (success) or `state === 'FAILED'` (failure), or until the 3-minute timeout is reached.
 
 ---
 

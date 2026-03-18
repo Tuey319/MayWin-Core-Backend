@@ -1,9 +1,17 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class CreateAuditLogDto {
   @IsString()
   @IsNotEmpty()
   action: string;
+
+  @IsString()
+  @IsOptional()
+  actorId?: string;
+
+  @IsString()
+  @IsOptional()
+  actorName?: string;
 
   @IsString()
   @IsNotEmpty()
