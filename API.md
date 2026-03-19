@@ -686,3 +686,4 @@ Manually append a custom log entry. The actor is taken from the JWT — do not s
 ```json
 { "ok": true, "log": { "timestamp": "2026-03-19T09:00:00.000Z", "actorId": "4", "actorName": "Admin", "action": "APPROVE_REQUEST", "targetType": "request", "targetId": "REQ001", "detail": "Approved shift swap" } }
 ```
+
