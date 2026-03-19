@@ -23,6 +23,11 @@
                   "    pm.environment.set('requires2FA', jsonData.requires2FA);",
                   "    console.log('OTP sent to email. Check console for DEV OTP.');",
                   "  }",
+                  "  if (jsonData.accessToken) {",
+                  "    pm.environment.set('authToken', jsonData.accessToken);",
+                  "    pm.environment.set('userId', jsonData.user?.id);",
+                  "    pm.environment.set('userName', jsonData.user?.fullName);",
+                  "  }",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -45,7 +50,116 @@
               "raw": "{{baseUrl}}/auth/login",
               "host": ["{{baseUrl}}"],
               "path": ["auth", "login"]
+            },
+            "description": "Step 1 of 2FA login. Validates credentials and sends a 6-digit OTP to the user's email. Returns a short-lived otpToken (10 min). In dev without SMTP, OTP is printed to console."
+          }
+        },
+        {
+          "name": "Verify OTP (Step 2 — get access token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const jsonData = pm.response.json();",
+                  "  if (jsonData.accessToken) {",
+                  "    pm.environment.set('authToken', jsonData.accessToken);",
+                  "    pm.environment.set('userId', jsonData.user?.id);",
+                  "    pm.environment.set('userName', jsonData.user?.fullName);",
+                  "    console.log('authToken saved from verify-otp');",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
             }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"otpToken\": \"{{otpToken}}\", \"otp\": \"123456\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "verify-otp"]
+            },
+            "description": "Step 2 of 2FA login. Submit the OTP from email + the otpToken from /auth/login. Returns the real JWT access token. Errors: 401 if invalid/expired otpToken or incorrect OTP."
+          }
+        },
+        {
+          "name": "Signup",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const jsonData = pm.response.json();",
+                  "  if (jsonData.accessToken) {",
+                  "    pm.environment.set('authToken', jsonData.accessToken);",
+                  "    pm.environment.set('userId', jsonData.user?.id);",
+                  "    pm.environment.set('userName', jsonData.user?.fullName);",
+                  "    console.log('authToken saved from signup');",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"organizationId\": \"1\", \"unitId\": \"{{unitId}}\", \"email\": \"newuser@example.com\", \"password\": \"securepassword\", \"fullName\": \"Jane Smith\", \"roleCode\": \"NURSE\", \"attributes\": {}}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/signup",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "signup"]
+            },
+            "description": "Register a new user account. roleCode defaults to NURSE. Returns access token immediately (no OTP step). Errors: 400 if email already exists or validation fails."
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"deviceId\": \"device123\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "Logout the current user. Requires JWT."
           }
         },
         {
@@ -140,7 +254,8 @@
               "raw": "{{baseUrl}}/auth/me",
               "host": ["{{baseUrl}}"],
               "path": ["auth", "me"]
-            }
+            },
+            "description": "Get the currently authenticated user's profile. Errors: 401 if missing or invalid JWT."
           }
         },
         {
@@ -174,6 +289,49 @@
       "name": "Schedule",
       "item": [
         {
+          "name": "Create Schedule",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const jsonData = pm.response.json();",
+                  "  if (jsonData.schedule?.id) {",
+                  "    pm.environment.set('scheduleId', jsonData.schedule.id);",
+                  "    console.log('scheduleId saved:', jsonData.schedule.id);",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"March 2025\", \"startDate\": \"2025-03-01\", \"endDate\": \"2025-03-31\", \"constraintProfileId\": \"1\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/units/{{unitId}}/schedules",
+              "host": ["{{baseUrl}}"],
+              "path": ["units", "{{unitId}}", "schedules"]
+            },
+            "description": "Creates a new schedule container for a unit (status: DRAFT). Does NOT run the solver — use POST /orchestrator/run afterward. Errors: 400 missing/invalid fields, 401 unrecognized JWT, 404 unit not found."
+          }
+        },
+        {
           "name": "Get Current Schedule",
           "request": {
             "method": "GET",
@@ -193,7 +351,8 @@
                   "value": "{{unitId}}"
                 }
               ]
-            }
+            },
+            "description": "Returns the current generated schedule for the unit. Shift codes: M/morning/d = Morning, A/evening/e = Evening, N/night/n = Night, off = Day off."
           }
         },
         {
@@ -210,7 +369,43 @@
               "raw": "{{baseUrl}}/schedule-jobs/{{jobId}}",
               "host": ["{{baseUrl}}"],
               "path": ["schedule-jobs", "{{jobId}}"]
-            }
+            },
+            "description": "Poll solver job status. States: REQUESTED → VALIDATED → NORMALIZING → SOLVING_A_STRICT → SOLVING_A_RELAXED → SOLVING_B_MILP → EVALUATING → PERSISTING → COMPLETED | FAILED. Terminal states: COMPLETED, FAILED."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard KPI",
+      "item": [
+        {
+          "name": "Get KPI Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/units/{{unitId}}/kpis/summary?startDate=2026-03-09&endDate=2026-03-15",
+              "host": ["{{baseUrl}}"],
+              "path": ["units", "{{unitId}}", "kpis", "summary"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-03-09",
+                  "description": "YYYY-MM-DD (optional)"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-03-15",
+                  "description": "YYYY-MM-DD (optional)"
+                }
+              ]
+            },
+            "description": "Returns donut-ready KPI metrics for dashboard cards: average satisfaction and fairness (workloadStdDev, workloadMin, workloadMax, workerCount). source can be: artifact_metadata, s3_kpi, solver_runs, latest_schedule_run, none."
           }
         }
       ]
@@ -238,7 +433,8 @@
                   "value": "{{unitId}}"
                 }
               ]
-            }
+            },
+            "description": "Returns nurse details to enrich the schedule table plus a top-level overallAverageSatisfaction KPI. Value may be null if no usable KPI source exists for the unit."
           }
         },
         {
@@ -261,6 +457,83 @@
       ]
     },
     {
+      "name": "Worker Preferences",
+      "item": [
+        {
+          "name": "Get Unit Worker Preferences",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/units/{{unitId}}/workers/preferences",
+              "host": ["{{baseUrl}}"],
+              "path": ["units", "{{unitId}}", "workers", "preferences"]
+            },
+            "description": "Returns shift preferences for all workers in a unit, including preference_pattern_json keyed by date and per-shift weights."
+          }
+        },
+        {
+          "name": "Delete All Worker Preferences",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/workers/{{workerId}}/preferences",
+              "host": ["{{baseUrl}}"],
+              "path": ["workers", "{{workerId}}", "preferences"]
+            },
+            "description": "Deletes all preferences for a worker. Response: { workerId, deleted: true }. Errors: 404 if worker not found or no preferences row exists."
+          }
+        },
+        {
+          "name": "Delete Worker Preference for Date (reject shift request)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/workers/{{workerId}}/preferences/requests/2026-03-01",
+              "host": ["{{baseUrl}}"],
+              "path": ["workers", "{{workerId}}", "preferences", "requests", "2026-03-01"]
+            },
+            "description": "Removes a single date entry from a worker's preference_pattern_json. Response: { workerId, deletedDate, remaining }. Errors: 404 if worker not found, no preferences row, or no entry for that date."
+          }
+        },
+        {
+          "name": "Delete Worker Day-Off for Date (reject day-off request)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/workers/{{workerId}}/preferences/days-off/2026-03-01",
+              "host": ["{{baseUrl}}"],
+              "path": ["workers", "{{workerId}}", "preferences", "days-off", "2026-03-01"]
+            },
+            "description": "Removes date from days_off_pattern_json and worker_availability rows where type=DAY_OFF. Response: { workerId, deletedDate, removedFromDaysOffPattern, removedAvailabilityRows, remainingPatternDaysOffCount }. Errors: 404 if no day-off entry found."
+          }
+        }
+      ]
+    },
+    {
       "name": "Orchestrator (Solver)",
       "item": [
         {
@@ -274,6 +547,7 @@
                   "  const jsonData = pm.response.json();",
                   "  if (jsonData.jobId) {",
                   "    pm.environment.set('jobId', jsonData.jobId);",
+                  "    console.log('jobId saved:', jsonData.jobId);",
                   "  }",
                   "}"
                 ],
@@ -295,13 +569,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"scheduleId\": \"2\", \"idempotencyKey\": \"schedule-{{$timestamp}}-abc123\", \"dto\": {\"startDate\": \"2025-03-01T00:00:00.000Z\", \"endDate\": \"2025-03-31T23:59:59.999Z\", \"strategy\": {\"plan\": \"A\", \"mode\": \"strict\"}, \"solverConfig\": {\"timeLimitSeconds\": 120}, \"options\": {\"dryRun\": false}, \"notes\": \"30 nurses - 30 day schedule\", \"length\": 31}}"
+              "raw": "{\"scheduleId\": \"{{scheduleId}}\", \"idempotencyKey\": \"schedule-{{$timestamp}}-abc123\", \"dto\": {\"startDate\": \"2025-03-01T00:00:00.000Z\", \"endDate\": \"2025-03-31T23:59:59.999Z\", \"strategy\": {\"plan\": \"A\", \"mode\": \"strict\"}, \"solverConfig\": {\"timeLimitSeconds\": 120}, \"options\": {\"dryRun\": false}, \"notes\": \"30 nurses - 30 day schedule\", \"length\": 31}}"
             },
             "url": {
               "raw": "{{baseUrl}}/orchestrator/run",
               "host": ["{{baseUrl}}"],
               "path": ["orchestrator", "run"]
-            }
+            },
+            "description": "Kicks off an async schedule solve. Returns immediately with a jobId. Poll GET /schedule-jobs/:jobId every ~4s until state=COMPLETED or FAILED. You can use dto.length instead of dto.endDate."
           }
         }
       ]
@@ -323,7 +598,8 @@
               "raw": "{{baseUrl}}/staff",
               "host": ["{{baseUrl}}"],
               "path": ["staff"]
-            }
+            },
+            "description": "Returns all staff records from data/staff.csv. Position codes: nurse (พยาบาล), scheduler (หัวหน้าพยาบาล), admin (ผู้ดูแลระบบ)."
           }
         },
         {
@@ -337,9 +613,9 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/staff/1",
+              "raw": "{{baseUrl}}/staff/{{staffId}}",
               "host": ["{{baseUrl}}"],
-              "path": ["staff", "1"]
+              "path": ["staff", "{{staffId}}"]
             }
           }
         },
@@ -354,6 +630,7 @@
                   "  const jsonData = pm.response.json();",
                   "  if (jsonData.staff?.id) {",
                   "    pm.environment.set('staffId', jsonData.staff.id);",
+                  "    console.log('staffId saved:', jsonData.staff.id);",
                   "  }",
                   "}"
                 ],
@@ -381,7 +658,8 @@
               "raw": "{{baseUrl}}/staff",
               "host": ["{{baseUrl}}"],
               "path": ["staff"]
-            }
+            },
+            "description": "Appends a new staff record to data/staff.csv and writes an audit log entry. Returns 201 with the new staff object."
           }
         },
         {
@@ -406,7 +684,8 @@
               "raw": "{{baseUrl}}/staff/{{staffId}}",
               "host": ["{{baseUrl}}"],
               "path": ["staff", "{{staffId}}"]
-            }
+            },
+            "description": "Updates any fields on the staff record. Appends an audit log entry."
           }
         },
         {
@@ -423,7 +702,8 @@
               "raw": "{{baseUrl}}/staff/{{staffId}}",
               "host": ["{{baseUrl}}"],
               "path": ["staff", "{{staffId}}"]
-            }
+            },
+            "description": "Removes a staff record from data/staff.csv. Appends an audit log entry."
           }
         }
       ]
@@ -445,7 +725,8 @@
               "raw": "{{baseUrl}}/audit-logs",
               "host": ["{{baseUrl}}"],
               "path": ["audit-logs"]
-            }
+            },
+            "description": "Returns all log entries from data/audit-logs.csv, newest-first. Append-only — rows are never deleted."
           }
         },
         {
@@ -468,7 +749,8 @@
                   "value": "csv"
                 }
               ]
-            }
+            },
+            "description": "Streams the raw CSV as a download attachment. Content-Disposition: attachment; filename=\"audit-logs-<timestamp>.csv\""
           }
         },
         {
@@ -493,7 +775,8 @@
               "raw": "{{baseUrl}}/audit-logs",
               "host": ["{{baseUrl}}"],
               "path": ["audit-logs"]
-            }
+            },
+            "description": "Manually appends a log entry. Actor is taken from the session cookie."
           }
         }
       ]
@@ -507,6 +790,11 @@
     },
     {
       "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "otpToken",
       "value": "",
       "type": "string"
     },
@@ -526,8 +814,18 @@
       "type": "string"
     },
     {
+      "key": "scheduleId",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "staffId",
       "value": "",
+      "type": "string"
+    },
+    {
+      "key": "workerId",
+      "value": "42",
       "type": "string"
     },
     {

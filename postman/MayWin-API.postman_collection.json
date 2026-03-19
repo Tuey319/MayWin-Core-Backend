@@ -1,0 +1,740 @@
+{
+  "info": {
+    "name": "MayWin API",
+    "_postman_id": "maywin-api-collection",
+    "description": "Backend Lambda and Next.js BFF routes for MayWin.\n\nBackend Lambda base URL: https://rf5wup7oy5ng7h5soteik7ajpe0iunpn.lambda-url.ap-southeast-1.on.aws/api/v1/core\n\nAll Lambda requests require Authorization: Bearer <token>. The BFF handles this automatically.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "lambdaBaseUrl",
+      "value": "https://rf5wup7oy5ng7h5soteik7ajpe0iunpn.lambda-url.ap-southeast-1.on.aws/api/v1/core",
+      "type": "string"
+    },
+    {
+      "key": "bffBaseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "otpToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "unitId",
+      "value": "2",
+      "type": "string"
+    },
+    {
+      "key": "workerId",
+      "value": "42",
+      "type": "string"
+    },
+    {
+      "key": "scheduleId",
+      "value": "2",
+      "type": "string"
+    },
+    {
+      "key": "jobId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "staffId",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Backend Lambda",
+      "item": [
+        {
+          "name": "Auth",
+          "item": [
+            {
+              "name": "Login (Step 1 — send OTP)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const res = pm.response.json();",
+                      "if (res.otpToken) {",
+                      "  pm.collectionVariables.set('otpToken', res.otpToken);",
+                      "  console.log('otpToken saved');",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"securepassword\"\n}"
+                },
+                "url": {
+                  "raw": "{{lambdaBaseUrl}}/auth/login",
+                  "host": ["{{lambdaBaseUrl}}"],
+                  "path": ["auth", "login"]
+                },
+                "description": "Step 1: Validates credentials and sends a 6-digit OTP to the user's email. Returns a short-lived otpToken (10 min) to be used with /auth/verify-otp."
+              }
+            },
+            {
+              "name": "Verify OTP (Step 2 — get access token)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const res = pm.response.json();",
+                      "if (res.accessToken) {",
+                      "  pm.collectionVariables.set('accessToken', res.accessToken);",
+                      "  console.log('accessToken saved');",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"otpToken\": \"{{otpToken}}\",\n  \"otp\": \"123456\"\n}"
+                },
+                "url": {
+                  "raw": "{{lambdaBaseUrl}}/auth/verify-otp",
+                  "host": ["{{lambdaBaseUrl}}"],
+                  "path": ["auth", "verify-otp"]
+                },
+                "description": "Step 2: Submit the OTP code from email + the otpToken from /auth/login. Returns the real JWT access token."
+              }
+            },
+            {
+              "name": "Signup",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const res = pm.response.json();",
+                      "if (res.accessToken) {",
+                      "  pm.collectionVariables.set('accessToken', res.accessToken);",
+                      "  console.log('accessToken saved from signup');",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"organizationId\": \"1\",\n  \"unitId\": \"2\",\n  \"email\": \"newuser@example.com\",\n  \"password\": \"securepassword\",\n  \"fullName\": \"Jane Smith\",\n  \"roleCode\": \"NURSE\",\n  \"attributes\": {}\n}"
+                },
+                "url": {
+                  "raw": "{{lambdaBaseUrl}}/auth/signup",
+                  "host": ["{{lambdaBaseUrl}}"],
+                  "path": ["auth", "signup"]
+                },
+                "description": "Register a new user account. roleCode defaults to NURSE if omitted. Returns access token immediately (no OTP step)."
+              }
+            },
+            {
+              "name": "Logout",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"deviceId\": \"device123\"\n}"
+                },
+                "url": {
+                  "raw": "{{lambdaBaseUrl}}/auth/logout",
+                  "host": ["{{lambdaBaseUrl}}"],
+                  "path": ["auth", "logout"]
+                },
+                "description": "Logout the current user. Requires JWT."
+              }
+            },
+            {
+              "name": "Get Current User",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": {
+                  "raw": "{{lambdaBaseUrl}}/auth/me",
+                  "host": ["{{lambdaBaseUrl}}"],
+                  "path": ["auth", "me"]
+                },
+                "description": "Returns the currently authenticated user's profile."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Schedule",
+          "item": [
+            {
+              "name": "Create Schedule",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const res = pm.response.json();",
+                      "if (res.schedule && res.schedule.id) {",
+                      "  pm.collectionVariables.set('scheduleId', res.schedule.id);",
+                      "  console.log('scheduleId saved:', res.schedule.id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"March 2025\",\n  \"startDate\": \"2025-03-01\",\n  \"endDate\": \"2025-03-31\",\n  \"constraintProfileId\": \"1\"\n}"
+                },
+                "url": {
+                  "raw": "{{lambdaBaseUrl}}/units/{{unitId}}/schedules",
+                  "host": ["{{lambdaBaseUrl}}"],
+                  "path": ["units", "{{unitId}}", "schedules"]
+                },
+                "description": "Creates a new schedule container for a unit. Does NOT run the solver — use POST /orchestrator/run afterward."
+              }
+            },
+            {
+              "name": "Get Schedule by Unit",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": {
+                  "raw": "{{lambdaBaseUrl}}/schedule?unitId={{unitId}}",
+                  "host": ["{{lambdaBaseUrl}}"],
+                  "path": ["schedule"],
+                  "query": [
+                    { "key": "unitId", "value": "{{unitId}}" }
+                  ]
+                },
+                "description": "Returns the current generated schedule for the given unit. Shift codes: M/morning/d, A/evening/e, N/night/n, off."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Nurse Export",
+          "item": [
+            {
+              "name": "Export Nurses",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": {
+                  "raw": "{{lambdaBaseUrl}}/nurses/export",
+                  "host": ["{{lambdaBaseUrl}}"],
+                  "path": ["nurses", "export"]
+                },
+                "description": "Returns nurse details for enriching the schedule table plus a top-level overallAverageSatisfaction KPI. Value may be null if no usable KPI source exists."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dashboard KPI",
+          "item": [
+            {
+              "name": "Get KPI Summary",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": {
+                  "raw": "{{lambdaBaseUrl}}/units/{{unitId}}/kpis/summary?startDate=2026-03-09&endDate=2026-03-15",
+                  "host": ["{{lambdaBaseUrl}}"],
+                  "path": ["units", "{{unitId}}", "kpis", "summary"],
+                  "query": [
+                    { "key": "startDate", "value": "2026-03-09" },
+                    { "key": "endDate", "value": "2026-03-15" }
+                  ]
+                },
+                "description": "Returns donut-ready KPI metrics: average satisfaction and fairness (workloadStdDev). source can be: artifact_metadata, s3_kpi, solver_runs, latest_schedule_run, none."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Worker Preferences",
+          "item": [
+            {
+              "name": "Get Unit Worker Preferences",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": {
+                  "raw": "{{lambdaBaseUrl}}/units/{{unitId}}/workers/preferences",
+                  "host": ["{{lambdaBaseUrl}}"],
+                  "path": ["units", "{{unitId}}", "workers", "preferences"]
+                },
+                "description": "Returns shift preferences for all workers in a unit, including preference_pattern_json keyed by date."
+              }
+            },
+            {
+              "name": "Delete All Worker Preferences",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": {
+                  "raw": "{{lambdaBaseUrl}}/workers/{{workerId}}/preferences",
+                  "host": ["{{lambdaBaseUrl}}"],
+                  "path": ["workers", "{{workerId}}", "preferences"]
+                },
+                "description": "Deletes all preferences for a worker. 404 if worker not found or no preferences row exists."
+              }
+            },
+            {
+              "name": "Delete Worker Preference for Date",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": {
+                  "raw": "{{lambdaBaseUrl}}/workers/{{workerId}}/preferences/requests/2026-03-01",
+                  "host": ["{{lambdaBaseUrl}}"],
+                  "path": ["workers", "{{workerId}}", "preferences", "requests", "2026-03-01"]
+                },
+                "description": "Removes a single date entry from a worker's preference_pattern_json. 404 if worker not found or no entry for that date."
+              }
+            },
+            {
+              "name": "Delete Worker Day-Off for Date",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": {
+                  "raw": "{{lambdaBaseUrl}}/workers/{{workerId}}/preferences/days-off/2026-03-01",
+                  "host": ["{{lambdaBaseUrl}}"],
+                  "path": ["workers", "{{workerId}}", "preferences", "days-off", "2026-03-01"]
+                },
+                "description": "Removes date from days_off_pattern_json and worker_availability rows where type=DAY_OFF. 404 if no day-off entry found for that date."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Solver",
+          "item": [
+            {
+              "name": "Run Solver (kick off async job)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const res = pm.response.json();",
+                      "if (res.jobId) {",
+                      "  pm.collectionVariables.set('jobId', res.jobId);",
+                      "  console.log('jobId saved:', res.jobId);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"scheduleId\": \"{{scheduleId}}\",\n  \"idempotencyKey\": \"schedule-1234567890-abc123\",\n  \"dto\": {\n    \"startDate\": \"2025-03-01T00:00:00.000Z\",\n    \"endDate\": \"2025-03-31T23:59:59.999Z\",\n    \"strategy\": { \"plan\": \"A\", \"mode\": \"strict\" },\n    \"solverConfig\": { \"timeLimitSeconds\": 120 },\n    \"options\": { \"dryRun\": false },\n    \"notes\": \"30 nurses - 30 day schedule with realistic constraints\"\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{lambdaBaseUrl}}/orchestrator/run",
+                  "host": ["{{lambdaBaseUrl}}"],
+                  "path": ["orchestrator", "run"]
+                },
+                "description": "Kicks off async schedule solve. Returns immediately with a jobId. Poll GET /schedule-jobs/:jobId every 4s until state=COMPLETED or FAILED. You can use dto.length instead of dto.endDate."
+              }
+            },
+            {
+              "name": "Get Solver Job Status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": {
+                  "raw": "{{lambdaBaseUrl}}/schedule-jobs/{{jobId}}",
+                  "host": ["{{lambdaBaseUrl}}"],
+                  "path": ["schedule-jobs", "{{jobId}}"]
+                },
+                "description": "Poll job status. States: REQUESTED → VALIDATED → NORMALIZING → SOLVING_A_STRICT → SOLVING_A_RELAXED → SOLVING_B_MILP → EVALUATING → PERSISTING → COMPLETED | FAILED. Terminal states: COMPLETED, FAILED."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "BFF Routes (Next.js)",
+      "item": [
+        {
+          "name": "Auth",
+          "item": [
+            {
+              "name": "BFF Login",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "// BFF sets an HttpOnly cookie — visible in browser but not here.",
+                      "console.log('Login response:', pm.response.code);"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"securepassword\"\n}"
+                },
+                "url": {
+                  "raw": "{{bffBaseUrl}}/api/auth/login",
+                  "host": ["{{bffBaseUrl}}"],
+                  "path": ["api", "auth", "login"]
+                },
+                "description": "Proxies to Lambda /auth/login. The BFF manages the token in an HttpOnly cookie."
+              }
+            },
+            {
+              "name": "BFF Logout",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{bffBaseUrl}}/api/auth/logout",
+                  "host": ["{{bffBaseUrl}}"],
+                  "path": ["api", "auth", "logout"]
+                },
+                "description": "Clears the session cookie. Does NOT call the Lambda backend."
+              }
+            },
+            {
+              "name": "BFF Get Current User",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{bffBaseUrl}}/api/auth/me",
+                  "host": ["{{bffBaseUrl}}"],
+                  "path": ["api", "auth", "me"]
+                },
+                "description": "Reads user info from the session cookie. Does NOT call the Lambda backend."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Schedule",
+          "item": [
+            {
+              "name": "BFF Get Schedule",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{bffBaseUrl}}/api/schedule",
+                  "host": ["{{bffBaseUrl}}"],
+                  "path": ["api", "schedule"]
+                },
+                "description": "Proxies to Lambda GET /schedule?unitId=2. Returns assignments with shiftCode values."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Export",
+          "item": [
+            {
+              "name": "BFF Export Nurses",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{bffBaseUrl}}/api/export",
+                  "host": ["{{bffBaseUrl}}"],
+                  "path": ["api", "export"]
+                },
+                "description": "Proxies to Lambda GET /nurses/export. Returns nurse details + overallAverageSatisfaction."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preferences",
+          "item": [
+            {
+              "name": "BFF Get Preferences",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{bffBaseUrl}}/api/preferences?unitId={{unitId}}",
+                  "host": ["{{bffBaseUrl}}"],
+                  "path": ["api", "preferences"],
+                  "query": [
+                    { "key": "unitId", "value": "{{unitId}}" }
+                  ]
+                },
+                "description": "Proxies to Lambda GET /units/:id/workers/preferences."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Solver",
+          "item": [
+            {
+              "name": "BFF Run Solver",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const res = pm.response.json();",
+                      "if (res.jobId) {",
+                      "  pm.collectionVariables.set('jobId', res.jobId);",
+                      "  console.log('jobId saved:', res.jobId);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"scheduleId\": \"{{scheduleId}}\",\n  \"idempotencyKey\": \"schedule-1234567890-abc123\",\n  \"dto\": {\n    \"startDate\": \"2025-03-01T00:00:00.000Z\",\n    \"endDate\": \"2025-03-31T23:59:59.999Z\",\n    \"strategy\": { \"plan\": \"A\", \"mode\": \"strict\" },\n    \"solverConfig\": { \"timeLimitSeconds\": 120 },\n    \"options\": { \"dryRun\": false },\n    \"notes\": \"30 nurses - 30 day schedule\"\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{bffBaseUrl}}/api/solver",
+                  "host": ["{{bffBaseUrl}}"],
+                  "path": ["api", "solver"]
+                },
+                "description": "Proxies to Lambda POST /orchestrator/run."
+              }
+            },
+            {
+              "name": "BFF Poll Solver Job",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{bffBaseUrl}}/api/solver?jobId={{jobId}}",
+                  "host": ["{{bffBaseUrl}}"],
+                  "path": ["api", "solver"],
+                  "query": [
+                    { "key": "jobId", "value": "{{jobId}}" }
+                  ]
+                },
+                "description": "Proxies to Lambda GET /schedule-jobs/:id. BFF polls this every 4s with a 3-minute timeout."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff (mock CSV)",
+          "item": [
+            {
+              "name": "Get All Staff",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{bffBaseUrl}}/api/staff",
+                  "host": ["{{bffBaseUrl}}"],
+                  "path": ["api", "staff"]
+                },
+                "description": "Returns all staff records from data/staff.csv. No Lambda call."
+              }
+            },
+            {
+              "name": "Get Staff by ID",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{bffBaseUrl}}/api/staff/{{staffId}}",
+                  "host": ["{{bffBaseUrl}}"],
+                  "path": ["api", "staff", "{{staffId}}"]
+                },
+                "description": "Returns a single staff record from data/staff.csv."
+              }
+            },
+            {
+              "name": "Create Staff",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"ชื่อ นามสกุล\",\n  \"employeeId\": \"EMP009\",\n  \"lineId\": \"line_id\",\n  \"position\": \"nurse\",\n  \"email\": \"staff@example.com\",\n  \"status\": \"active\"\n}"
+                },
+                "url": {
+                  "raw": "{{bffBaseUrl}}/api/staff",
+                  "host": ["{{bffBaseUrl}}"],
+                  "path": ["api", "staff"]
+                },
+                "description": "Appends a new staff record to data/staff.csv and writes an audit log entry. Position codes: nurse, scheduler, admin."
+              }
+            },
+            {
+              "name": "Update Staff",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"inactive\"\n}"
+                },
+                "url": {
+                  "raw": "{{bffBaseUrl}}/api/staff/{{staffId}}",
+                  "host": ["{{bffBaseUrl}}"],
+                  "path": ["api", "staff", "{{staffId}}"]
+                },
+                "description": "Updates any fields on the staff record. Appends an audit log entry."
+              }
+            },
+            {
+              "name": "Delete Staff",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{bffBaseUrl}}/api/staff/{{staffId}}",
+                  "host": ["{{bffBaseUrl}}"],
+                  "path": ["api", "staff", "{{staffId}}"]
+                },
+                "description": "Removes a staff record from data/staff.csv. Appends an audit log entry."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Audit Logs (mock CSV)",
+          "item": [
+            {
+              "name": "Get All Audit Logs",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{bffBaseUrl}}/api/audit-logs",
+                  "host": ["{{bffBaseUrl}}"],
+                  "path": ["api", "audit-logs"]
+                },
+                "description": "Returns all log entries from data/audit-logs.csv, newest-first. Append-only — rows are never deleted."
+              }
+            },
+            {
+              "name": "Export Audit Logs (CSV download)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{bffBaseUrl}}/api/audit-logs?export=csv",
+                  "host": ["{{bffBaseUrl}}"],
+                  "path": ["api", "audit-logs"],
+                  "query": [
+                    { "key": "export", "value": "csv" }
+                  ]
+                },
+                "description": "Streams the raw CSV as a download. Content-Disposition: attachment; filename=\"audit-logs-<timestamp>.csv\""
+              }
+            },
+            {
+              "name": "Create Audit Log Entry",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"APPROVE_REQUEST\",\n  \"targetType\": \"request\",\n  \"targetId\": \"REQ001\",\n  \"detail\": \"Approved shift swap\"\n}"
+                },
+                "url": {
+                  "raw": "{{bffBaseUrl}}/api/audit-logs",
+                  "host": ["{{bffBaseUrl}}"],
+                  "path": ["api", "audit-logs"]
+                },
+                "description": "Manually appends a log entry. Actor is taken from the session cookie."
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

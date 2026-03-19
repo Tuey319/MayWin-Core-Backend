@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "Bash(node -e \":*)",
-      "Bash(find 'c:\\\\Users\\\\tueyc\\\\CMKL\\\\Year 2\\\\URD-202 MayWin\\\\MayWin-Core-Backend' -type f \\\\\\(-name *.md -o -name *postman* -o -name *swagger* -o -name *openapi* \\\\\\))"
+      "Bash(find 'c:\\\\Users\\\\tueyc\\\\CMKL\\\\Year 2\\\\URD-202 MayWin\\\\MayWin-Core-Backend' -type f \\\\\\(-name *.md -o -name *postman* -o -name *swagger* -o -name *openapi* \\\\\\))",
+      "Bash(grep -r 'INSERT INTO.*roles' '/c/Users/tueyc/CMKL/Year 2/URD-202 MayWin/MayWin-Core-Backend/src' --include=*.sql --include=*.ts)",
+      "Bash(aws s3:*)",
+      "Bash(printf 'timestamp,actorId,actorName,action,targetType,targetId,detail\\\\n')",
+      "Bash(aws lambda:*)",
+      "Bash(aws iam:*)",
+      "Read(//tmp/**)",
+      "Bash(aws lambda invoke --function-name maywin-core-api --region ap-southeast-1 --payload '{:*)",
+      "Bash(aws stepfunctions:*)"
     ]
   }
 }
