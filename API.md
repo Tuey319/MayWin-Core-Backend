@@ -1313,6 +1313,107 @@ Content-Type: text/csv; charset=utf-8
 Content-Disposition: attachment; filename="audit-logs-<timestamp>.csv"
 ```
 
+---
+
+## Sites
+
+Sites are physical locations belonging to an organization (e.g. a hospital campus or clinic branch). All endpoints are scoped to the caller's organization via JWT.
+
+### `GET /sites`
+
+List sites in the caller's organization.
+
+**Query parameters**
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `search` | string | — | Filter by name or code (case-insensitive) |
+| `active` | `"true"` \| `"false"` | — | Filter by active status |
+| `limit` | number | 100 | Max results (1–300) |
+| `offset` | number | 0 | Pagination offset |
+| `sort` | `"ASC"` \| `"DESC"` | `"DESC"` | Sort by `created_at` |
+
+**Response — 200 OK**
+```json
+{
+  "items": [
+    {
+      "id": "1",
+      "organizationId": "1",
+      "name": "Main Hospital",
+      "code": "MH01",
+      "address": "123 Health St, Bangkok",
+      "timezone": "Asia/Bangkok",
+      "attributes": {},
+      "isActive": true,
+      "createdAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "meta": { "limit": 100, "offset": 0 }
+}
+```
+
+---
+
+### `POST /sites`
+
+Create a new site. Requires `ORG_ADMIN` or `UNIT_MANAGER` role.
+
+**Request**
+```json
+{
+  "organizationId": "1",
+  "name": "Main Hospital",
+  "code": "MH01",
+  "address": "123 Health St, Bangkok",
+  "timezone": "Asia/Bangkok",
+  "attributes": {},
+  "isActive": true
+}
+```
+
+**Response — 201 Created**
+```json
+{
+  "site": {
+    "id": "1",
+    "organizationId": "1",
+    "name": "Main Hospital",
+    "code": "MH01",
+    "address": "123 Health St, Bangkok",
+    "timezone": "Asia/Bangkok",
+    "attributes": {},
+    "isActive": true,
+    "createdAt": "2026-01-01T00:00:00.000Z"
+  }
+}
+```
+
+**Notes:**
+- `organizationId` must match the caller's JWT organization
+- `code` must be unique within the organization
+
+**Errors**
+- `400` — Validation error or duplicate `code` within org
+- `403` — Insufficient role or organization mismatch
+
+---
+
+### `POST /sites/:siteId/deactivate`
+
+Deactivate a site (soft delete). Requires `ORG_ADMIN` or `UNIT_MANAGER` role.
+
+**Response — 200 OK**
+```json
+{ "ok": true, "siteId": "1" }
+```
+
+**Errors**
+- `403` — Insufficient role
+- `404` — Site not found or belongs to a different org
+
+---
+
 ### `POST /audit-logs`
 Manually append a custom log entry. The actor is taken from the JWT — do not send actorId/actorName in the body.
 
