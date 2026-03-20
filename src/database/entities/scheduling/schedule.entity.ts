@@ -15,8 +15,8 @@ export class Schedule {
   @Column({ type: 'bigint' })
   organization_id: string;
 
-  @Column({ type: 'bigint' })
-  unit_id: string;
+  @Column({ type: 'bigint', nullable: true })
+  unit_id: string | null;
 
   @Column({ type: 'uuid', nullable: true })
   job_id: string | null;
@@ -53,6 +53,9 @@ export class Schedule {
 
   @Column({ type: 'bigint', nullable: true })
   published_by: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  notes: string | null;
 
   @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
   attributes: Record<string, any>;

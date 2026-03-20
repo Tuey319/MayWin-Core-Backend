@@ -19,6 +19,9 @@ export class SolverRunAssignment {
   @Column({ type: 'text' })
   shift_code: string;
 
+  @Column({ type: 'boolean', default: false })
+  emergency_override: boolean;
+
   @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
   attributes: Record<string, any>;
 }

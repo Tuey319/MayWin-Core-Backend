@@ -563,6 +563,645 @@ These are the Next.js API routes in `src/app/api/` that the browser talks to. Th
 | `GET` | `/api/audit-logs` | `/audit-logs` |
 | `GET` | `/api/audit-logs?export=csv` | `/audit-logs?export=csv` |
 | `POST` | `/api/audit-logs` | `/audit-logs` |
+| `GET` | `/api/hospital` | `GET /organizations` → `GET /organizations/:id` → `GET /units` → session fallback |
+| `PUT` | `/api/hospital` | `PUT /organizations` |
+| `GET` | `/api/hospital/containers` | `GET /organizations/:orgId/schedule-containers` |
+| `POST` | `/api/hospital/containers` | `POST /organizations/:orgId/schedule-containers` |
+| `PUT` | `/api/hospital/containers/:id` | `PUT /organizations/:orgId/schedule-containers/:id` |
+| `DELETE` | `/api/hospital/containers/:id` | `DELETE /organizations/:orgId/schedule-containers/:id` |
+| `GET` | `/api/hospital/profiles` | `GET /organizations/:orgId/constraint-profiles` |
+| `POST` | `/api/hospital/profiles` | `POST /organizations/:orgId/constraint-profiles` |
+| `PUT` | `/api/hospital/profiles/:id` | `PUT /organizations/:orgId/constraint-profiles/:id` |
+| `DELETE` | `/api/hospital/profiles/:id` | `DELETE /organizations/:orgId/constraint-profiles/:id` |
+
+---
+
+## Hospital Organisation
+
+These endpoints are used by the BFF routes under `src/app/api/hospital/` to fetch and save the organisation tree, schedule containers, and constraint profiles.
+
+> **Backend status:** Organisation tree endpoints may not exist yet on the Lambda — the BFF falls back gracefully. Schedule container and constraint profile endpoints are designed below and pending backend implementation; the frontend uses `localStorage` as a write-through cache in the meantime.
+
+### `GET /organizations`
+
+Returns all organizations the authenticated user belongs to.
+
+Auth: JWT required (`Authorization: Bearer <token>`)
+
+**Response — 200 OK**
+```json
+{
+  "organizations": [
+    {
+      "id": "1",
+      "name": "Bangkok Hospital",
+      "code": "BKK",
+      "sites": [
+        {
+          "id": "site-1",
+          "name": "Main Campus",
+          "code": "MAIN",
+          "departments": [
+            { "id": "dept-1", "name": "Surgery", "code": "SURG" }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+The BFF also accepts `{ "data": [...] }` as the top-level wrapper in place of `"organizations"`.
+
+**Errors**
+- `401` — missing or invalid JWT
+
+---
+
+### `GET /organizations/:orgId`
+
+Returns a single organization by ID. Used as a fallback when `GET /organizations` is unavailable.
+
+Auth: JWT required (`Authorization: Bearer <token>`)
+
+**Response — 200 OK**
+```json
+{
+  "organization": {
+    "id": "1",
+    "name": "Bangkok Hospital",
+    "code": "BKK",
+    "sites": [...]
+  }
+}
+```
+
+The BFF also accepts `{ "data": { ... } }` as the wrapper in place of `"organization"`.
+
+**Errors**
+- `401` — missing or invalid JWT
+- `404` — organization not found
+
+---
+
+### `GET /units`
+
+Returns all units (departments) the user has access to. Used as a second fallback when the organization endpoints above are unavailable — the BFF maps units to a single synthetic site under the session `organizationId`.
+
+Auth: JWT required (`Authorization: Bearer <token>`)
+
+**Query params** (all optional)
+
+| Param | Type | Notes |
+|---|---|---|
+| `search` | string | Filter by name/code |
+| `siteId` | numeric string | Filter by site |
+| `active` | `"true"` \| `"false"` | Filter by active status |
+| `limit` | numeric string | Page size |
+| `offset` | numeric string | Page offset |
+| `sort` | `"ASC"` \| `"DESC"` | Sort order |
+
+**Response — 200 OK**
+```json
+{
+  "units": [
+    { "id": "2", "name": "ICU", "code": "ICU", "organizationId": "1", "siteId": null, "description": null, "isActive": true, "attributes": {} },
+    { "id": "3", "name": "Surgery", "code": "SURG", "organizationId": "1", "siteId": null, "description": null, "isActive": true, "attributes": {} }
+  ]
+}
+```
+
+The BFF also accepts `{ "data": [...] }` or a bare array.
+
+**Errors**
+- `401` — missing or invalid JWT
+
+---
+
+### `GET /units/:unitId`
+
+Returns a single unit by ID.
+
+Auth: JWT required
+
+**Response — 200 OK**
+```json
+{
+  "unit": { "id": "2", "name": "ICU", "code": "ICU", "organizationId": "1", "siteId": null, "description": null, "isActive": true, "attributes": {} }
+}
+```
+
+**Errors**
+- `401` — missing or invalid JWT
+- `404` — unit not found
+
+---
+
+### `POST /units`
+
+Creates a new unit.
+
+Auth: JWT required
+
+**Request**
+```json
+{
+  "organizationId": "1",
+  "name": "ICU",
+  "code": "ICU",
+  "siteId": null,
+  "description": "Intensive Care Unit",
+  "attributes": {},
+  "isActive": true
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `organizationId` | numeric string | yes | Parent organization |
+| `name` | string | yes | Unit display name |
+| `code` | string | yes | Short code (e.g. `"ICU"`) |
+| `siteId` | numeric string \| null | no | Parent site if applicable |
+| `description` | string \| null | no | Free-text description |
+| `attributes` | object | no | Custom key-value metadata |
+| `isActive` | boolean | no | Default: `true` |
+
+**Response — 201 Created**
+```json
+{
+  "unit": { "id": "4", "name": "ICU", "code": "ICU", "organizationId": "1", ... }
+}
+```
+
+**Errors**
+- `400` — missing required fields
+- `401` — missing or invalid JWT
+
+---
+
+### `PATCH /units/:unitId`
+
+Updates any subset of fields on a unit.
+
+Auth: JWT required
+
+**Request** — all fields optional (same as POST minus `organizationId`)
+
+**Response — 200 OK**
+```json
+{
+  "unit": { "id": "2", "name": "ICU Updated", ... }
+}
+```
+
+**Errors**
+- `401` — missing or invalid JWT
+- `404` — unit not found
+
+---
+
+### `POST /units/:unitId/deactivate`
+
+Soft-deactivates a unit (sets `isActive = false`).
+
+Auth: JWT required
+
+**Response — 200 OK**
+```json
+{ "ok": true }
+```
+
+**Errors**
+- `401` — missing or invalid JWT
+- `404` — unit not found
+
+---
+
+### `GET /units/:unitId/members`
+
+Lists all members of a unit.
+
+Auth: JWT required
+
+**Response — 200 OK**
+```json
+{
+  "members": [
+    { "id": "1", "userId": "42", "unitId": "2", "roleCode": "NURSE", "createdAt": "2026-01-01T00:00:00.000Z" }
+  ]
+}
+```
+
+**Errors**
+- `401` — missing or invalid JWT
+- `404` — unit not found
+
+---
+
+### `POST /units/:unitId/members`
+
+Adds a user to a unit.
+
+Auth: JWT required
+
+**Request**
+```json
+{
+  "userId": "42",
+  "roleCode": "NURSE"
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `userId` | numeric string | yes | ID of the user to add |
+| `roleCode` | string | no | Default: `"NURSE"` |
+
+**Response — 201 Created**
+```json
+{
+  "member": { "id": "1", "userId": "42", "unitId": "2", "roleCode": "NURSE", "createdAt": "2026-01-01T00:00:00.000Z" }
+}
+```
+
+**Errors**
+- `401` — missing or invalid JWT
+- `404` — unit not found
+- `409` — user is already a member of this unit
+
+---
+
+### `DELETE /units/:unitId/members/:userId`
+
+Removes a user from a unit.
+
+Auth: JWT required
+
+**Response — 200 OK**
+```json
+{ "ok": true }
+```
+
+**Errors**
+- `401` — missing or invalid JWT
+- `404` — unit or membership not found
+
+---
+
+### `PUT /organizations`
+
+Saves the full organisation tree (all organizations, sites, departments). The BFF sends the client's current `data` array as the request body.
+
+Auth: JWT required (`Authorization: Bearer <token>`)
+
+**Request** — the full organization array as returned by `GET /organizations`
+```json
+{
+  "organizations": [
+    {
+      "id": "1",
+      "name": "Bangkok Hospital",
+      "code": "BKK",
+      "sites": [
+        {
+          "id": "site-1",
+          "name": "Main Campus",
+          "code": "MAIN",
+          "departments": [
+            { "id": "dept-1", "name": "Surgery", "code": "SURG" }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Response — 200 OK**
+```json
+{ "ok": true }
+```
+
+**Notes**
+- If the backend does not yet support this endpoint the BFF responds with `{ "ok": true, "saved": false, "message": "Saved locally (backend sync pending)" }` instead of returning an error.
+
+**Errors**
+- `400` — malformed body
+- `401` — missing or invalid JWT
+
+---
+
+### `GET /organizations/:orgId/schedule-containers`
+
+Returns all schedule containers (scheduling periods) for the given organization.
+
+Auth: JWT required
+
+**Response — 200 OK**
+```json
+{
+  "containers": [
+    {
+      "id": "c-1",
+      "name": "May 2025",
+      "site": "Main Campus",
+      "dept": "ICU",
+      "start": "2025-05-01",
+      "end": "2025-05-31",
+      "status": "active",
+      "notes": "Covers long weekend",
+      "profileId": "p-1"
+    }
+  ]
+}
+```
+
+The BFF also accepts `{ "data": [...] }` or a bare array.
+
+**Errors**
+- `401` — missing or invalid JWT
+- `404` — organization not found
+
+---
+
+### `POST /organizations/:orgId/schedule-containers`
+
+Creates a new schedule container.
+
+Auth: JWT required
+
+**Request**
+```json
+{
+  "name": "May 2025",
+  "site": "Main Campus",
+  "dept": "ICU",
+  "start": "2025-05-01",
+  "end": "2025-05-31",
+  "status": "draft",
+  "notes": "",
+  "profileId": "p-1"
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `name` | string | yes | Human-readable label |
+| `site` | string | no | Site name (display only) |
+| `dept` | string | no | Department name (display only) |
+| `start` | ISO date string (`YYYY-MM-DD`) | yes | Period start |
+| `end` | ISO date string (`YYYY-MM-DD`) | yes | Period end |
+| `status` | `"draft"` \| `"active"` \| `"archived"` | no | Default: `"draft"` |
+| `notes` | string | no | Free-text notes |
+| `profileId` | string | no | ID of the linked constraint profile |
+
+**Response — 201 Created**
+```json
+{
+  "container": {
+    "id": "c-123",
+    "name": "May 2025",
+    ...
+  }
+}
+```
+
+**Errors**
+- `400` — missing required fields
+- `401` — missing or invalid JWT
+
+---
+
+### `PUT /organizations/:orgId/schedule-containers/:id`
+
+Updates an existing schedule container. All fields are optional — only provided fields are updated.
+
+Auth: JWT required
+
+**Request** — same shape as POST, all fields optional.
+
+**Response — 200 OK**
+```json
+{ "container": { "id": "c-123", ... } }
+```
+
+**Errors**
+- `401` — missing or invalid JWT
+- `404` — container not found
+
+---
+
+### `DELETE /organizations/:orgId/schedule-containers/:id`
+
+Permanently deletes a schedule container.
+
+Auth: JWT required
+
+**Response — 200 OK**
+```json
+{ "ok": true }
+```
+
+**Errors**
+- `401` — missing or invalid JWT
+- `404` — container not found
+
+---
+
+### Constraint Profiles
+
+Constraint profiles are a unified concept — every profile has UI display fields (`description`, `color`, `assignedTo`) and solver fields (`maxConsecutiveWorkDays`, `forbidNightToMorning`, etc.) in one model. What the user configures on the constraint profile page is exactly what the solver uses. Profiles are scoped to either an **org** (`orgId` set) or a **unit** (`unitId` set).
+
+All profile endpoints return the same shape:
+
+```json
+{
+  "id": "1",
+  "unitId": null,
+  "orgId": "1",
+  "name": "ICU Standard",
+  "description": "Standard ICU shift rules",
+  "assignedTo": "ICU",
+  "color": "primary",
+  "maxConsecutiveWorkDays": 5,
+  "maxConsecutiveNightShifts": 2,
+  "minRestHoursBetweenShifts": 11,
+  "maxShiftsPerDay": 1,
+  "minDaysOffPerWeek": 2,
+  "maxNightsPerWeek": 2,
+  "forbidNightToMorning": true,
+  "forbidMorningToNightSameDay": false,
+  "guaranteeFullCoverage": true,
+  "allowEmergencyOverrides": true,
+  "allowSecondShiftSameDayInEmergency": true,
+  "ignoreAvailabilityInEmergency": false,
+  "allowNightCapOverrideInEmergency": true,
+  "allowRestRuleOverrideInEmergency": true,
+  "goalMinimizeStaffCost": true,
+  "goalMaximizePreferenceSatisfaction": true,
+  "goalBalanceWorkload": false,
+  "goalBalanceNightWorkload": false,
+  "goalReduceUndesirableShifts": true,
+  "penaltyWeightJson": null,
+  "fairnessWeightJson": null,
+  "goalPriorityJson": null,
+  "numSearchWorkers": 8,
+  "timeLimitSec": 20,
+  "attributes": {},
+  "isActive": true,
+  "createdAt": "2026-03-01T00:00:00.000Z"
+}
+```
+
+All create/update request fields:
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `name` | string | yes (create) | Profile name |
+| `description` | string | no | Free-text description |
+| `assignedTo` | string | no | Department label (display only) |
+| `color` | `"primary"` \| `"warning"` \| `"success"` | no | UI accent color, default `"primary"` |
+| `maxConsecutiveWorkDays` | int \| null | no | |
+| `maxConsecutiveNightShifts` | int \| null | no | |
+| `minRestHoursBetweenShifts` | int \| null | no | |
+| `maxShiftsPerDay` | int | no | Default: 1 |
+| `minDaysOffPerWeek` | int | no | Default: 2 |
+| `maxNightsPerWeek` | int | no | Default: 2 |
+| `forbidNightToMorning` | boolean | no | Default: true |
+| `forbidMorningToNightSameDay` | boolean | no | Default: false |
+| `guaranteeFullCoverage` | boolean | no | Default: true |
+| `allowEmergencyOverrides` | boolean | no | Default: true |
+| `allowSecondShiftSameDayInEmergency` | boolean | no | Default: true |
+| `ignoreAvailabilityInEmergency` | boolean | no | Default: false |
+| `allowNightCapOverrideInEmergency` | boolean | no | Default: true |
+| `allowRestRuleOverrideInEmergency` | boolean | no | Default: true |
+| `goalMinimizeStaffCost` | boolean | no | Default: true |
+| `goalMaximizePreferenceSatisfaction` | boolean | no | Default: true |
+| `goalBalanceWorkload` | boolean | no | Default: false |
+| `goalBalanceNightWorkload` | boolean | no | Default: false |
+| `goalReduceUndesirableShifts` | boolean | no | Default: true |
+| `penaltyWeightJson` | object \| null | no | Solver penalty weights |
+| `fairnessWeightJson` | object \| null | no | Solver fairness weights |
+| `goalPriorityJson` | object \| null | no | Solver goal priority ordering |
+| `numSearchWorkers` | int | no | Default: 8 |
+| `timeLimitSec` | number | no | Default: 20 |
+| `isActive` | boolean | no | Default: true |
+
+---
+
+### `GET /organizations/:orgId/constraint-profiles`
+
+Returns all constraint profiles for the org — both org-scoped profiles and unit-scoped profiles belonging to units within the org.
+
+Auth: JWT required
+
+**Response — 200 OK**
+```json
+{ "profiles": [ { ...profile shape... } ] }
+```
+
+**Errors**
+- `401` — missing or invalid JWT
+- `404` — organization not found
+
+---
+
+### `POST /organizations/:orgId/constraint-profiles`
+
+Creates a new org-scoped constraint profile.
+
+Auth: JWT required
+
+**Request** — any fields from the table above. `name` is required.
+
+**Response — 201 Created**
+```json
+{ "profile": { ...profile shape... } }
+```
+
+**Errors**
+- `400` — missing required fields
+- `401` — missing or invalid JWT
+
+---
+
+### `PUT /organizations/:orgId/constraint-profiles/:id`
+
+Updates an org-scoped constraint profile. All fields optional.
+
+Auth: JWT required
+
+**Request** — any fields from the table above.
+
+**Response — 200 OK**
+```json
+{ "profile": { ...profile shape... } }
+```
+
+**Errors**
+- `401` — missing or invalid JWT
+- `404` — profile not found
+
+---
+
+### `DELETE /organizations/:orgId/constraint-profiles/:id`
+
+Permanently deletes an org-scoped constraint profile.
+
+Auth: JWT required
+
+**Response — 200 OK**
+```json
+{ "ok": true }
+```
+
+**Errors**
+- `401` — missing or invalid JWT
+- `404` — profile not found
+
+---
+
+### `POST /units/:unitId/constraint-profiles`
+
+Creates a unit-scoped constraint profile.
+
+Auth: JWT required
+
+**Request** — any fields from the table above. `name` is required.
+
+**Response — 201 Created**
+```json
+{ "profile": { ...profile shape... } }
+```
+
+---
+
+### `PATCH /units/:unitId/constraint-profiles/:id`
+
+Updates a unit-scoped constraint profile. All fields optional.
+
+Auth: JWT required
+
+**Response — 200 OK**
+```json
+{ "profile": { ...profile shape... } }
+```
+
+---
+
+### `POST /units/:unitId/constraint-profiles/:id/activate`
+
+Marks a profile as active. By default deactivates all other profiles for that unit.
+
+Auth: JWT required
+
+**Query params**
+- `deactivateOthers` — `"false"` to skip deactivating others (default: `true`)
+
+**Response — 200 OK**
+```json
+{ "profile": { ...profile shape... } }
+```
 
 ---
 
@@ -686,4 +1325,5 @@ Manually append a custom log entry. The actor is taken from the JWT — do not s
 ```json
 { "ok": true, "log": { "timestamp": "2026-03-19T09:00:00.000Z", "actorId": "4", "actorName": "Admin", "action": "APPROVE_REQUEST", "targetType": "request", "targetId": "REQ001", "detail": "Approved shift swap" } }
 ```
+
 

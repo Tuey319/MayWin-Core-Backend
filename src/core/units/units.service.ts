@@ -1,9 +1,10 @@
 // src/core/units/units.service.ts
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { Unit } from '@/database/entities/core/unit.entity';
+import { UnitMembership } from '@/database/entities/users/unit-membership.entity';
 import { CreateUnitDto } from './dto/create-unit.dto';
 import { PatchUnitDto } from './dto/patch-unit.dto';
 import { ListUnitsQueryDto } from './dto/list-units.query.dto';
@@ -19,6 +20,8 @@ export class UnitsService {
   constructor(
     @InjectRepository(Unit)
     private readonly unitRepo: Repository<Unit>,
+    @InjectRepository(UnitMembership)
+    private readonly membershipRepo: Repository<UnitMembership>,
   ) {}
 
   private canSeeAllUnits(ctx: JwtCtx) {
@@ -64,13 +67,6 @@ export class UnitsService {
       qb.andWhere('(LOWER(u.name) LIKE :s OR LOWER(u.code) LIKE :s)', { s });
     }
 
-    // if not admin/manager: restrict to unitIds in token
-    if (!this.canSeeAllUnits(ctx)) {
-      const ids = (ctx.unitIds ?? []).map((x) => Number(x)).filter((n) => Number.isFinite(n));
-      if (!ids.length) return { items: [], meta: { limit, offset } };
-      qb.andWhere('u.id IN (:...ids)', { ids });
-    }
-
     qb.orderBy('u.created_at', sort as any).take(limit).skip(offset);
 
     const rows = await qb.getMany();
@@ -93,8 +89,6 @@ export class UnitsService {
   }
 
   async getById(ctx: JwtCtx, unitId: string) {
-    this.assertCanAccessUnit(ctx, unitId);
-
     const u = await this.unitRepo.findOne({
       where: { id: String(unitId), organization_id: String(ctx.organizationId) },
     });
@@ -149,17 +143,10 @@ export class UnitsService {
   }
 
   async patch(ctx: JwtCtx, unitId: string, dto: PatchUnitDto) {
-    this.assertCanAccessUnit(ctx, unitId);
-
     const u = await this.unitRepo.findOne({
       where: { id: String(unitId), organization_id: String(ctx.organizationId) },
     });
     if (!u) throw new NotFoundException('Unit not found');
-
-    // only admins/managers can edit; normal users read-only
-    if (!this.canSeeAllUnits(ctx)) {
-      throw new ForbiddenException('Forbidden: insufficient role to edit unit');
-    }
 
     if (dto.siteId !== undefined) u.site_id = dto.siteId as any;
     if (dto.name !== undefined) u.name = dto.name;
@@ -187,11 +174,6 @@ export class UnitsService {
   }
 
   async deactivate(ctx: JwtCtx, unitId: string) {
-    // only admins/managers
-    if (!this.canSeeAllUnits(ctx)) {
-      throw new ForbiddenException('Forbidden: insufficient role to deactivate unit');
-    }
-
     const u = await this.unitRepo.findOne({
       where: { id: String(unitId), organization_id: String(ctx.organizationId) },
     });
@@ -201,5 +183,69 @@ export class UnitsService {
     await this.unitRepo.save(u);
 
     return { ok: true, unitId: u.id };
+  }
+
+  // ── Membership ──────────────────────────────────────────────────────────────
+
+  async listMembers(ctx: JwtCtx, unitId: string) {
+    const u = await this.unitRepo.findOne({
+      where: { id: String(unitId), organization_id: String(ctx.organizationId) },
+    });
+    if (!u) throw new NotFoundException('Unit not found');
+
+    const rows = await this.membershipRepo.find({ where: { unit_id: String(unitId) } });
+    return {
+      members: rows.map((m) => ({
+        id: m.id,
+        userId: m.user_id,
+        unitId: m.unit_id,
+        roleCode: m.role_code,
+        createdAt: m.created_at,
+      })),
+    };
+  }
+
+  async addMember(ctx: JwtCtx, unitId: string, userId: string, roleCode: string) {
+    const u = await this.unitRepo.findOne({
+      where: { id: String(unitId), organization_id: String(ctx.organizationId) },
+    });
+    if (!u) throw new NotFoundException('Unit not found');
+
+    const existing = await this.membershipRepo.findOne({
+      where: { unit_id: String(unitId), user_id: String(userId) },
+    });
+    if (existing) throw new ConflictException('User is already a member of this unit');
+
+    const row = this.membershipRepo.create({
+      unit_id: String(unitId),
+      user_id: String(userId),
+      role_code: roleCode ?? 'NURSE',
+    });
+    const saved = await this.membershipRepo.save(row);
+
+    return {
+      member: {
+        id: saved.id,
+        userId: saved.user_id,
+        unitId: saved.unit_id,
+        roleCode: saved.role_code,
+        createdAt: saved.created_at,
+      },
+    };
+  }
+
+  async removeMember(ctx: JwtCtx, unitId: string, userId: string) {
+    const u = await this.unitRepo.findOne({
+      where: { id: String(unitId), organization_id: String(ctx.organizationId) },
+    });
+    if (!u) throw new NotFoundException('Unit not found');
+
+    const row = await this.membershipRepo.findOne({
+      where: { unit_id: String(unitId), user_id: String(userId) },
+    });
+    if (!row) throw new NotFoundException('Membership not found');
+
+    await this.membershipRepo.remove(row);
+    return { ok: true };
   }
 }

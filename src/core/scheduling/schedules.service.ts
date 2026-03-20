@@ -259,7 +259,7 @@ export class SchedulesService {
       order: { date: 'ASC' },
     });
 
-    const shiftTemplates = await this.loadShiftTemplatesForUnit(schedule.unit_id);
+    const shiftTemplates = await this.loadShiftTemplatesForUnit(schedule.unit_id ?? '');
 
     return {
       schedule: {

@@ -1,0 +1,850 @@
+{
+  "info": {
+    "name": "MayWin Core API",
+    "description": "Complete API collection for the MayWin Nurse Scheduling backend Lambda.\n\nBase URL: https://rf5wup7oy5ng7h5soteik7ajpe0iunpn.lambda-url.ap-southeast-1.on.aws/api/v1/core\n\n**Quick start:**\n1. Run `POST /auth/login` — the `otpToken` is saved automatically.\n2. Run `POST /auth/verify-otp` with your OTP — the `accessToken` is saved automatically.\n3. All subsequent requests use Bearer token auth from the `accessToken` variable.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",     "value": "https://rf5wup7oy5ng7h5soteik7ajpe0iunpn.lambda-url.ap-southeast-1.on.aws/api/v1/core", "type": "string" },
+    { "key": "accessToken", "value": "", "type": "string" },
+    { "key": "otpToken",    "value": "", "type": "string" },
+    { "key": "orgId",       "value": "1",  "type": "string" },
+    { "key": "unitId",      "value": "2",  "type": "string" },
+    { "key": "workerId",    "value": "42", "type": "string" },
+    { "key": "scheduleId",  "value": "",   "type": "string" },
+    { "key": "jobId",       "value": "",   "type": "string" },
+    { "key": "staffId",     "value": "",   "type": "string" },
+    { "key": "containerId", "value": "",   "type": "string" },
+    { "key": "profileId",   "value": "",   "type": "string" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "item": [
+
+    {
+      "name": "Auth",
+      "item": [
+
+        {
+          "name": "Login (step 1)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.otpToken) {",
+                "  pm.environment.set('otpToken', res.otpToken);",
+                "  console.log('otpToken saved');",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{loginEmail}}\",\n  \"password\": \"{{loginPassword}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+            "description": "Step 1 of 2FA login. Validates email + password, sends a 6-digit OTP to the user's email. Returns a short-lived `otpToken` (10 min TTL) — pass it to `/auth/verify-otp` together with the OTP code."
+          }
+        },
+
+        {
+          "name": "Verify OTP (step 2)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.accessToken) {",
+                "  pm.environment.set('accessToken', res.accessToken);",
+                "  console.log('accessToken saved');",
+                "}",
+                "if (res.user && res.user.organizationId) {",
+                "  pm.environment.set('orgId', String(res.user.organizationId));",
+                "}",
+                "if (res.user && res.user.unitIds && res.user.unitIds.length > 0) {",
+                "  pm.environment.set('unitId', String(res.user.unitIds[0]));",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"otpToken\": \"{{otpToken}}\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/verify-otp", "host": ["{{baseUrl}}"], "path": ["auth", "verify-otp"] },
+            "description": "Step 2 of 2FA login. Validates the OTP code + the pending `otpToken` from step 1. Returns the real JWT `accessToken`. The test script saves the token and sets `orgId` / `unitId` automatically."
+          }
+        },
+
+        {
+          "name": "Signup",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationId\": \"{{orgId}}\",\n  \"unitId\": \"{{unitId}}\",\n  \"email\": \"newuser@example.com\",\n  \"password\": \"securepassword\",\n  \"fullName\": \"Jane Smith\",\n  \"roleCode\": \"NURSE\",\n  \"attributes\": {}\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/signup", "host": ["{{baseUrl}}"], "path": ["auth", "signup"] },
+            "description": "Register a new user account. `roleCode` defaults to NURSE if omitted. `unitId` is optional."
+          }
+        },
+
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceId\": \"device123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/logout", "host": ["{{baseUrl}}"], "path": ["auth", "logout"] },
+            "description": "Logout the current user. Requires JWT."
+          }
+        },
+
+        {
+          "name": "Get Current User (me)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/auth/me", "host": ["{{baseUrl}}"], "path": ["auth", "me"] },
+            "description": "Returns the authenticated user's profile derived from the JWT."
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "Organizations",
+      "item": [
+
+        {
+          "name": "List Organizations",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/organizations", "host": ["{{baseUrl}}"], "path": ["organizations"] },
+            "description": "Returns all organizations the authenticated user belongs to (currently scoped to their own org)."
+          }
+        },
+
+        {
+          "name": "Get My Organization",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/organizations/me", "host": ["{{baseUrl}}"], "path": ["organizations", "me"] },
+            "description": "Returns the authenticated user's organization."
+          }
+        },
+
+        {
+          "name": "Get Organization by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/organizations/{{orgId}}", "host": ["{{baseUrl}}"], "path": ["organizations", "{{orgId}}"] },
+            "description": "Returns a single organization. Only accessible if the JWT's organization matches `:orgId`."
+          }
+        },
+
+        {
+          "name": "Create Organization",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Bangkok Hospital\",\n  \"code\": \"BKK\",\n  \"timezone\": \"Asia/Bangkok\",\n  \"attributes\": {}\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/organizations", "host": ["{{baseUrl}}"], "path": ["organizations"] },
+            "description": "Creates a new organization. Admin/bootstrap use only."
+          }
+        },
+
+        {
+          "name": "Save Full Org Tree (PUT)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Bangkok Hospital\",\n  \"code\": \"BKK\",\n  \"timezone\": \"Asia/Bangkok\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/organizations", "host": ["{{baseUrl}}"], "path": ["organizations"] },
+            "description": "Saves/updates the caller's organization tree. Used by the BFF `PUT /api/hospital` route."
+          }
+        },
+
+        {
+          "name": "Patch Organization",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Bangkok Hospital Updated\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/organizations/{{orgId}}", "host": ["{{baseUrl}}"], "path": ["organizations", "{{orgId}}"] },
+            "description": "Partially updates an organization. Fields not provided are unchanged."
+          }
+        },
+
+        {
+          "name": "Get Units",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/units", "host": ["{{baseUrl}}"], "path": ["units"] },
+            "description": "Returns all units the user has access to. Used as fallback by the BFF when organization endpoints are unavailable."
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "Schedule Containers",
+      "description": "Org-level scheduling periods managed by hospital admins. Backed by the `schedules` table with `unit_id = null`.",
+      "item": [
+
+        {
+          "name": "List Containers",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/organizations/{{orgId}}/schedule-containers", "host": ["{{baseUrl}}"], "path": ["organizations", "{{orgId}}", "schedule-containers"] },
+            "description": "Returns all schedule containers (scheduling periods) for the given organization."
+          }
+        },
+
+        {
+          "name": "Create Container",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.container && res.container.id) {",
+                "  pm.environment.set('containerId', res.container.id);",
+                "  console.log('containerId saved:', res.container.id);",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"May 2025\",\n  \"site\": \"Main Campus\",\n  \"dept\": \"ICU\",\n  \"start\": \"2025-05-01\",\n  \"end\": \"2025-05-31\",\n  \"status\": \"draft\",\n  \"notes\": \"Covers long weekend\",\n  \"profileId\": \"\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/organizations/{{orgId}}/schedule-containers", "host": ["{{baseUrl}}"], "path": ["organizations", "{{orgId}}", "schedule-containers"] },
+            "description": "Creates a new scheduling period container. `site` and `dept` are display-only text labels. Status: draft | active | archived."
+          }
+        },
+
+        {
+          "name": "Update Container",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"May 2025 (revised)\",\n  \"status\": \"active\",\n  \"notes\": \"Updated notes\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/organizations/{{orgId}}/schedule-containers/{{containerId}}", "host": ["{{baseUrl}}"], "path": ["organizations", "{{orgId}}", "schedule-containers", "{{containerId}}"] },
+            "description": "Updates an existing schedule container. All fields are optional — only provided fields are changed."
+          }
+        },
+
+        {
+          "name": "Delete Container",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/organizations/{{orgId}}/schedule-containers/{{containerId}}", "host": ["{{baseUrl}}"], "path": ["organizations", "{{orgId}}", "schedule-containers", "{{containerId}}"] },
+            "description": "Permanently deletes a schedule container. Irreversible."
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "Units",
+      "description": "CRUD for units (departments) within an organization.",
+      "item": [
+
+        {
+          "name": "List Units",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/units",
+              "host": ["{{baseUrl}}"],
+              "path": ["units"],
+              "query": [
+                { "key": "search",  "value": "",      "disabled": true },
+                { "key": "siteId",  "value": "",      "disabled": true },
+                { "key": "active",  "value": "true",  "disabled": true },
+                { "key": "limit",   "value": "50",    "disabled": true },
+                { "key": "offset",  "value": "0",     "disabled": true },
+                { "key": "sort",    "value": "ASC",   "disabled": true }
+              ]
+            },
+            "description": "Returns all units for the caller's organization. Supports optional filtering by search, siteId, active status, pagination, and sort order."
+          }
+        },
+
+        {
+          "name": "Get Unit",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/units/{{unitId}}", "host": ["{{baseUrl}}"], "path": ["units", "{{unitId}}"] },
+            "description": "Returns a single unit by ID."
+          }
+        },
+
+        {
+          "name": "Create Unit",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.unit && res.unit.id) {",
+                "  pm.environment.set('unitId', String(res.unit.id));",
+                "  console.log('unitId saved:', res.unit.id);",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationId\": \"{{orgId}}\",\n  \"name\": \"ICU\",\n  \"code\": \"ICU\",\n  \"siteId\": null,\n  \"description\": \"Intensive Care Unit\",\n  \"attributes\": {},\n  \"isActive\": true\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/units", "host": ["{{baseUrl}}"], "path": ["units"] },
+            "description": "Creates a new unit. Required: organizationId, name, code. The test script saves the new unitId automatically."
+          }
+        },
+
+        {
+          "name": "Update Unit",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ICU Updated\",\n  \"description\": \"Updated description\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/units/{{unitId}}", "host": ["{{baseUrl}}"], "path": ["units", "{{unitId}}"] },
+            "description": "Partially updates a unit. All fields are optional."
+          }
+        },
+
+        {
+          "name": "Deactivate Unit",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/units/{{unitId}}/deactivate", "host": ["{{baseUrl}}"], "path": ["units", "{{unitId}}", "deactivate"] },
+            "description": "Soft-deactivates a unit (sets isActive = false)."
+          }
+        },
+
+        {
+          "name": "List Unit Members",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/units/{{unitId}}/members", "host": ["{{baseUrl}}"], "path": ["units", "{{unitId}}", "members"] },
+            "description": "Lists all members of a unit with their roleCode."
+          }
+        },
+
+        {
+          "name": "Add Unit Member",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{workerId}}\",\n  \"roleCode\": \"NURSE\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/units/{{unitId}}/members", "host": ["{{baseUrl}}"], "path": ["units", "{{unitId}}", "members"] },
+            "description": "Adds a user to a unit. roleCode defaults to NURSE if omitted. Returns 409 if user is already a member."
+          }
+        },
+
+        {
+          "name": "Remove Unit Member",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/units/{{unitId}}/members/{{workerId}}", "host": ["{{baseUrl}}"], "path": ["units", "{{unitId}}", "members", "{{workerId}}"] },
+            "description": "Removes a user from a unit."
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "Constraint Profiles",
+      "description": "Constraint profiles — one model, one source of truth. UI display fields (name, description, color, assignedTo) and solver fields (maxConsecutiveWorkDays, forbidNightToMorning, timeLimitSec, etc.) all live in the same record. What the user configures is exactly what the solver uses.\n\nProfiles are either org-scoped (orgId set, unitId null — managed from hospital settings) or unit-scoped (unitId set, orgId null — consumed directly by the solver). All endpoints return the same shape.",
+      "item": [
+
+        {
+          "name": "List Org Profiles",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/organizations/{{orgId}}/constraint-profiles", "host": ["{{baseUrl}}"], "path": ["organizations", "{{orgId}}", "constraint-profiles"] },
+            "description": "Returns all constraint profiles for the org — both org-scoped profiles and unit-scoped profiles belonging to units within the org."
+          }
+        },
+
+        {
+          "name": "Create Org Profile",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.profile && res.profile.id) {",
+                "  pm.environment.set('profileId', res.profile.id);",
+                "  console.log('profileId saved:', res.profile.id);",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ICU Standard\",\n  \"description\": \"Standard ICU shift rules\",\n  \"assignedTo\": \"ICU\",\n  \"color\": \"primary\",\n  \"maxConsecutiveWorkDays\": 5,\n  \"maxConsecutiveNightShifts\": 2,\n  \"minRestHoursBetweenShifts\": 11,\n  \"maxShiftsPerDay\": 1,\n  \"minDaysOffPerWeek\": 2,\n  \"maxNightsPerWeek\": 2,\n  \"forbidNightToMorning\": true,\n  \"forbidMorningToNightSameDay\": false,\n  \"guaranteeFullCoverage\": true,\n  \"allowEmergencyOverrides\": true,\n  \"allowSecondShiftSameDayInEmergency\": true,\n  \"ignoreAvailabilityInEmergency\": false,\n  \"allowNightCapOverrideInEmergency\": true,\n  \"allowRestRuleOverrideInEmergency\": true,\n  \"goalMinimizeStaffCost\": true,\n  \"goalMaximizePreferenceSatisfaction\": true,\n  \"goalBalanceWorkload\": false,\n  \"goalBalanceNightWorkload\": false,\n  \"goalReduceUndesirableShifts\": true,\n  \"penaltyWeightJson\": { \"uncovered_demand\": 1000, \"preference_violation\": 10 },\n  \"fairnessWeightJson\": { \"workload_balance\": 1, \"night_balance\": 2, \"shift_type_balance\": 2 },\n  \"numSearchWorkers\": 8,\n  \"timeLimitSec\": 20,\n  \"isActive\": true\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/organizations/{{orgId}}/constraint-profiles", "host": ["{{baseUrl}}"], "path": ["organizations", "{{orgId}}", "constraint-profiles"] },
+            "description": "Creates a new org-scoped constraint profile. `color` must be: primary | warning | success."
+          }
+        },
+
+        {
+          "name": "Update Org Profile",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ICU Standard (updated)\",\n  \"description\": \"Revised ICU rules for Q2\",\n  \"color\": \"warning\",\n  \"maxConsecutiveWorkDays\": 6,\n  \"timeLimitSec\": 30\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/organizations/{{orgId}}/constraint-profiles/{{profileId}}", "host": ["{{baseUrl}}"], "path": ["organizations", "{{orgId}}", "constraint-profiles", "{{profileId}}"] },
+            "description": "Updates an org-scoped constraint profile. All fields are optional."
+          }
+        },
+
+        {
+          "name": "Delete Org Profile",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/organizations/{{orgId}}/constraint-profiles/{{profileId}}", "host": ["{{baseUrl}}"], "path": ["organizations", "{{orgId}}", "constraint-profiles", "{{profileId}}"] },
+            "description": "Permanently deletes an org-scoped constraint profile."
+          }
+        },
+
+        {
+          "name": "Create Unit Profile",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.profile && res.profile.id) {",
+                "  pm.environment.set('profileId', res.profile.id);",
+                "  console.log('profileId saved:', res.profile.id);",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ICU Solver Profile\",\n  \"description\": \"Unit-level solver config for ICU\",\n  \"assignedTo\": \"ICU\",\n  \"color\": \"primary\",\n  \"maxConsecutiveWorkDays\": 5,\n  \"maxConsecutiveNightShifts\": 2,\n  \"minRestHoursBetweenShifts\": 11,\n  \"maxShiftsPerDay\": 1,\n  \"minDaysOffPerWeek\": 2,\n  \"maxNightsPerWeek\": 2,\n  \"forbidNightToMorning\": true,\n  \"forbidMorningToNightSameDay\": false,\n  \"guaranteeFullCoverage\": true,\n  \"allowEmergencyOverrides\": true,\n  \"allowSecondShiftSameDayInEmergency\": true,\n  \"ignoreAvailabilityInEmergency\": false,\n  \"allowNightCapOverrideInEmergency\": true,\n  \"allowRestRuleOverrideInEmergency\": true,\n  \"goalMinimizeStaffCost\": true,\n  \"goalMaximizePreferenceSatisfaction\": true,\n  \"goalBalanceWorkload\": false,\n  \"goalBalanceNightWorkload\": false,\n  \"goalReduceUndesirableShifts\": true,\n  \"numSearchWorkers\": 8,\n  \"timeLimitSec\": 20,\n  \"isActive\": true\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/units/{{unitId}}/constraint-profiles", "host": ["{{baseUrl}}"], "path": ["units", "{{unitId}}", "constraint-profiles"] },
+            "description": "Creates a unit-scoped constraint profile consumed directly by the solver."
+          }
+        },
+
+        {
+          "name": "Update Unit Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"maxConsecutiveWorkDays\": 6,\n  \"timeLimitSec\": 30\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/units/{{unitId}}/constraint-profiles/{{profileId}}", "host": ["{{baseUrl}}"], "path": ["units", "{{unitId}}", "constraint-profiles", "{{profileId}}"] },
+            "description": "Partially updates a unit-scoped constraint profile. Only provided fields are changed."
+          }
+        },
+
+        {
+          "name": "Activate Unit Profile",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/units/{{unitId}}/constraint-profiles/{{profileId}}/activate?deactivateOthers=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["units", "{{unitId}}", "constraint-profiles", "{{profileId}}", "activate"],
+              "query": [{ "key": "deactivateOthers", "value": "true" }]
+            },
+            "description": "Marks a profile as active. Deactivates all other unit profiles first unless `deactivateOthers=false`."
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "Schedules",
+      "item": [
+
+        {
+          "name": "Create Schedule",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.schedule && res.schedule.id) {",
+                "  pm.environment.set('scheduleId', res.schedule.id);",
+                "  console.log('scheduleId saved:', res.schedule.id);",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"March 2025\",\n  \"startDate\": \"2025-03-01\",\n  \"endDate\": \"2025-03-31\",\n  \"constraintProfileId\": \"{{profileId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/units/{{unitId}}/schedules", "host": ["{{baseUrl}}"], "path": ["units", "{{unitId}}", "schedules"] },
+            "description": "Creates a new schedule container for a unit. Does NOT run the solver — call `POST /orchestrator/run` afterward."
+          }
+        },
+
+        {
+          "name": "Get Current Schedule (unit)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/units/{{unitId}}/schedules/current",
+              "host": ["{{baseUrl}}"],
+              "path": ["units", "{{unitId}}", "schedules", "current"]
+            },
+            "description": "Returns the current schedule + assignments + shift templates for the unit."
+          }
+        },
+
+        {
+          "name": "Get Current Schedule (BFF compat)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/schedule?unitId={{unitId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["schedule"],
+              "query": [{ "key": "unitId", "value": "{{unitId}}" }]
+            },
+            "description": "Compatibility alias used by the BFF `/api/schedule` route. Returns `{ success, result: { assignments } }`."
+          }
+        },
+
+        {
+          "name": "Get Schedule History",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/units/{{unitId}}/schedules/history?limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["units", "{{unitId}}", "schedules", "history"],
+              "query": [{ "key": "limit", "value": "10" }]
+            },
+            "description": "Lists past schedules for a unit, newest first."
+          }
+        },
+
+        {
+          "name": "Get Schedule by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/schedules/{{scheduleId}}", "host": ["{{baseUrl}}"], "path": ["schedules", "{{scheduleId}}"] },
+            "description": "Returns a single schedule with its assignments and shift templates."
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "Nurses & KPIs",
+      "item": [
+
+        {
+          "name": "Export Nurses",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/nurses/export", "host": ["{{baseUrl}}"], "path": ["nurses", "export"] },
+            "description": "Returns nurse details for the schedule table + top-level `overallAverageSatisfaction` KPI."
+          }
+        },
+
+        {
+          "name": "KPI Summary",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/units/{{unitId}}/kpis/summary?startDate=2026-03-01&endDate=2026-03-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["units", "{{unitId}}", "kpis", "summary"],
+              "query": [
+                { "key": "startDate", "value": "2026-03-01" },
+                { "key": "endDate",   "value": "2026-03-31" }
+              ]
+            },
+            "description": "Returns donut-ready KPI metrics: satisfaction average and fairness (workloadStdDev). Both query params are optional."
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "Worker Preferences",
+      "item": [
+
+        {
+          "name": "Get Unit Worker Preferences",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/units/{{unitId}}/workers/preferences", "host": ["{{baseUrl}}"], "path": ["units", "{{unitId}}", "workers", "preferences"] },
+            "description": "Returns shift preferences for all workers in a unit. Used by the BFF `/api/preferences` route."
+          }
+        },
+
+        {
+          "name": "Delete All Worker Preferences",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/workers/{{workerId}}/preferences", "host": ["{{baseUrl}}"], "path": ["workers", "{{workerId}}", "preferences"] },
+            "description": "Deletes all shift preferences for a worker. 404 if worker not found or no preferences row exists."
+          }
+        },
+
+        {
+          "name": "Reject Shift Request by Date",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/workers/{{workerId}}/preferences/requests/2026-03-01", "host": ["{{baseUrl}}"], "path": ["workers", "{{workerId}}", "preferences", "requests", "2026-03-01"] },
+            "description": "Removes a single date from the worker's `preference_pattern_json`. Replace `2026-03-01` with the actual date."
+          }
+        },
+
+        {
+          "name": "Reject Day-Off Request by Date",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/workers/{{workerId}}/preferences/days-off/2026-03-01", "host": ["{{baseUrl}}"], "path": ["workers", "{{workerId}}", "preferences", "days-off", "2026-03-01"] },
+            "description": "Rejects a single day-off request. Removes the date from both `days_off_pattern_json` and `worker_availability` rows of type DAY_OFF."
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "Solver",
+      "item": [
+
+        {
+          "name": "Run Solver",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.jobId) {",
+                "  pm.environment.set('jobId', res.jobId);",
+                "  console.log('jobId saved:', res.jobId);",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scheduleId\": \"{{scheduleId}}\",\n  \"idempotencyKey\": \"schedule-{{scheduleId}}-{{$timestamp}}\",\n  \"dto\": {\n    \"startDate\": \"2025-03-01T00:00:00.000Z\",\n    \"endDate\": \"2025-03-31T23:59:59.999Z\",\n    \"strategy\": { \"plan\": \"A\", \"mode\": \"strict\" },\n    \"solverConfig\": { \"timeLimitSeconds\": 120 },\n    \"options\": { \"dryRun\": false },\n    \"notes\": \"30 nurses - 30 day schedule\"\n  }\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/orchestrator/run", "host": ["{{baseUrl}}"], "path": ["orchestrator", "run"] },
+            "description": "Kicks off an async schedule solve. Returns immediately with a `jobId`. Poll `GET /schedule-jobs/:jobId` every ~4s until `state === COMPLETED` or `FAILED`."
+          }
+        },
+
+        {
+          "name": "Poll Job Status",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/schedule-jobs/{{jobId}}", "host": ["{{baseUrl}}"], "path": ["schedule-jobs", "{{jobId}}"] },
+            "description": "Polls the status of a solver job. States: REQUESTED → VALIDATED → NORMALIZING → SOLVING_A_STRICT → SOLVING_A_RELAXED → SOLVING_B_MILP → EVALUATING → PERSISTING → COMPLETED / FAILED."
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "Staff",
+      "item": [
+
+        {
+          "name": "List Staff",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/staff", "host": ["{{baseUrl}}"], "path": ["staff"] },
+            "description": "Returns all staff records for the caller's organization."
+          }
+        },
+
+        {
+          "name": "Get Staff by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/staff/{{staffId}}", "host": ["{{baseUrl}}"], "path": ["staff", "{{staffId}}"] },
+            "description": "Returns a single staff record. 404 if not found or belongs to a different org."
+          }
+        },
+
+        {
+          "name": "Create Staff",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.staff && res.staff.id) {",
+                "  pm.environment.set('staffId', res.staff.id);",
+                "  console.log('staffId saved:', res.staff.id);",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"สมชาย ใจดี\",\n  \"employeeId\": \"EMP009\",\n  \"lineId\": \"line_id_here\",\n  \"position\": \"nurse\",\n  \"email\": \"staff@example.com\",\n  \"status\": \"active\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/staff", "host": ["{{baseUrl}}"], "path": ["staff"] },
+            "description": "Creates a new staff member. Automatically writes a CREATE_STAFF audit log to S3. Position: nurse | scheduler | admin."
+          }
+        },
+
+        {
+          "name": "Update Staff (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"สมชาย ใจดี (updated)\",\n  \"position\": \"scheduler\",\n  \"status\": \"active\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/staff/{{staffId}}", "host": ["{{baseUrl}}"], "path": ["staff", "{{staffId}}"] },
+            "description": "Updates any subset of staff fields. Automatically writes an UPDATE_STAFF audit log to S3."
+          }
+        },
+
+        {
+          "name": "Delete Staff",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/staff/{{staffId}}", "host": ["{{baseUrl}}"], "path": ["staff", "{{staffId}}"] },
+            "description": "Hard-deletes the staff record. Automatically writes a DELETE_STAFF audit log to S3. Irreversible."
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "Audit Logs",
+      "item": [
+
+        {
+          "name": "List Audit Logs",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/audit-logs", "host": ["{{baseUrl}}"], "path": ["audit-logs"] },
+            "description": "Returns all audit log entries from S3, newest first. Actions include CREATE_STAFF, UPDATE_STAFF, DELETE_STAFF and any manual entries."
+          }
+        },
+
+        {
+          "name": "Export Audit Logs (CSV)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/audit-logs?export=csv",
+              "host": ["{{baseUrl}}"],
+              "path": ["audit-logs"],
+              "query": [{ "key": "export", "value": "csv" }]
+            },
+            "description": "Streams the raw audit log CSV from S3 as a file download (Content-Disposition: attachment)."
+          }
+        },
+
+        {
+          "name": "Create Audit Log Entry",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"APPROVE_REQUEST\",\n  \"targetType\": \"request\",\n  \"targetId\": \"REQ001\",\n  \"detail\": \"Approved shift swap request\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/audit-logs", "host": ["{{baseUrl}}"], "path": ["audit-logs"] },
+            "description": "Manually appends a custom audit log entry. Actor (actorId, actorName) is derived from the JWT — do not send in body."
+          }
+        }
+
+      ]
+    }
+
+  ]
+}

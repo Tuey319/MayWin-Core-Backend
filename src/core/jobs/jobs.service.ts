@@ -1,5 +1,5 @@
 // src/core/jobs/jobs.service.ts
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -41,6 +41,7 @@ export class JobsService {
   ) {
     const schedule = await this.schedulesRepo.findOne({ where: { id: scheduleId } });
     if (!schedule) throw new NotFoundException('Schedule not found');
+    if (!schedule.unit_id) throw new BadRequestException('Solver jobs require a unit-scoped schedule');
 
     // Better idempotency: scope by org + unit + key
     if (idempotencyKey) {

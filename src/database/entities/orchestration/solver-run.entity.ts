@@ -65,6 +65,14 @@ export class SolverRun {
   @Column({ type: 'numeric', precision: 12, scale: 4, nullable: true })
   objective_value: string | null;
 
+  /** Per-nurse stats from the solver (NurseStats array from app3.py) */
+  @Column({ type: 'jsonb', nullable: true })
+  nurse_stats_json: Record<string, any>[] | null;
+
+  /** Understaffed slots from the solver (UnderstaffItem array from app3.py) */
+  @Column({ type: 'jsonb', nullable: true })
+  understaffed_json: Record<string, any>[] | null;
+
   @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
   attributes: Record<string, any>;
 }

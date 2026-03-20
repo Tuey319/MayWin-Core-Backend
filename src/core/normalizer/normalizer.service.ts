@@ -139,6 +139,11 @@ export class NormalizerService {
         primaryUnitId: w.primary_unit_id ?? null,
         tags: this.extractWorkerTags(w.attributes),
         attributes: w.attributes ?? {},
+        // solver v3 fields
+        isBackup: w.is_backup_worker ?? false,
+        maxOvertimeShifts: w.max_overtime_shifts ?? null,
+        regularShiftsPerPeriod: w.regular_shifts_per_period ?? null,
+        minShiftsPerPeriod: w.min_shifts_per_period ?? null,
       };
     });
 
@@ -431,11 +436,45 @@ export class NormalizerService {
     return {
       constraintProfileId: cp?.id ?? null,
       name: cp?.name ?? 'DEFAULT',
+
+      // sequence / rest
       maxConsecutiveWorkDays: cp?.max_consecutive_work_days ?? null,
       maxConsecutiveNightShifts: cp?.max_consecutive_night_shifts ?? null,
       minRestHoursBetweenShifts: cp?.min_rest_hours_between_shifts ?? null,
-      fairnessWeightJson: cp?.fairness_weight_json ?? null,
+
+      // daily / weekly limits (solver v3)
+      maxShiftsPerDay: cp?.max_shifts_per_day ?? 1,
+      minDaysOffPerWeek: cp?.min_days_off_per_week ?? 2,
+      maxNightsPerWeek: cp?.max_nights_per_week ?? 2,
+
+      // shift-sequence toggles (solver v3)
+      forbidNightToMorning: cp?.forbid_night_to_morning ?? true,
+      forbidMorningToNightSameDay: cp?.forbid_morning_to_night_same_day ?? false,
+
+      // coverage / emergency toggles (solver v3)
+      guaranteeFullCoverage: cp?.guarantee_full_coverage ?? true,
+      allowEmergencyOverrides: cp?.allow_emergency_overrides ?? true,
+      allowSecondShiftSameDayInEmergency: cp?.allow_second_shift_same_day_in_emergency ?? true,
+      ignoreAvailabilityInEmergency: cp?.ignore_availability_in_emergency ?? false,
+      allowNightCapOverrideInEmergency: cp?.allow_night_cap_override_in_emergency ?? true,
+      allowRestRuleOverrideInEmergency: cp?.allow_rest_rule_override_in_emergency ?? true,
+
+      // goal toggles (solver v3)
+      goalMinimizeStaffCost: cp?.goal_minimize_staff_cost ?? true,
+      goalMaximizePreferenceSatisfaction: cp?.goal_maximize_preference_satisfaction ?? true,
+      goalBalanceWorkload: cp?.goal_balance_workload ?? false,
+      goalBalanceNightWorkload: cp?.goal_balance_night_workload ?? false,
+      goalReduceUndesirableShifts: cp?.goal_reduce_undesirable_shifts ?? true,
+
+      // objective weights / fairness / goal priority (solver v3)
       penaltyWeightJson: cp?.penalty_weight_json ?? null,
+      fairnessWeightJson: cp?.fairness_weight_json ?? null,
+      goalPriorityJson: cp?.goal_priority_json ?? null,
+
+      // solver execution tuning (solver v3)
+      numSearchWorkers: cp?.num_search_workers ?? 8,
+      timeLimitSec: cp?.time_limit_sec ?? 20,
+
       attributes: cp?.attributes ?? {},
     };
   }

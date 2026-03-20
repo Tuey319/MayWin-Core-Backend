@@ -1,5 +1,5 @@
 // src/core/units/units.controller.ts
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { UnitsService } from './units.service';
@@ -49,5 +49,27 @@ export class UnitsController {
   @Post('/units/:unitId/deactivate')
   deactivate(@Req() req: Request, @Param('unitId') unitId: string) {
     return this.svc.deactivate(this.ctx(req), unitId);
+  }
+
+  // GET /units/:unitId/members
+  @Get('/units/:unitId/members')
+  listMembers(@Req() req: Request, @Param('unitId') unitId: string) {
+    return this.svc.listMembers(this.ctx(req), unitId);
+  }
+
+  // POST /units/:unitId/members
+  @Post('/units/:unitId/members')
+  addMember(
+    @Req() req: Request,
+    @Param('unitId') unitId: string,
+    @Body() body: { userId: string; roleCode?: string },
+  ) {
+    return this.svc.addMember(this.ctx(req), unitId, body.userId, body.roleCode ?? 'NURSE');
+  }
+
+  // DELETE /units/:unitId/members/:userId
+  @Delete('/units/:unitId/members/:userId')
+  removeMember(@Req() req: Request, @Param('unitId') unitId: string, @Param('userId') userId: string) {
+    return this.svc.removeMember(this.ctx(req), unitId, userId);
   }
 }

@@ -20,20 +20,37 @@ export class OrganizationsService {
     }
   }
 
+  /** GET /organizations — returns the user's org as a single-element list */
+  async list(requestOrgId: number) {
+    const org = await this.orgRepo.findOne({ where: { id: String(requestOrgId) } });
+    if (!org) throw new NotFoundException('Organization not found');
+    return { organizations: [this.toApi(org)] };
+  }
+
+  /** GET /organizations/:orgId */
+  async getById(orgId: string, requestOrgId: number) {
+    this.assertSameOrg(requestOrgId, orgId);
+    const org = await this.orgRepo.findOne({ where: { id: String(orgId) } });
+    if (!org) throw new NotFoundException('Organization not found');
+    return { organization: this.toApi(org) };
+  }
+
+  /** GET /organizations/me */
   async getMe(requestOrgId: number) {
     const org = await this.orgRepo.findOne({ where: { id: String(requestOrgId) } });
     if (!org) throw new NotFoundException('Organization not found');
+    return { organization: this.toApi(org) };
+  }
 
+  private toApi(org: Organization) {
     return {
-      organization: {
-        id: org.id,
-        name: org.name,
-        code: org.code,
-        timezone: org.timezone,
-        attributes: org.attributes ?? {},
-        createdAt: org.created_at,
-        updatedAt: org.updated_at,
-      },
+      id: org.id,
+      name: org.name,
+      code: org.code,
+      timezone: org.timezone,
+      attributes: org.attributes ?? {},
+      createdAt: org.created_at,
+      updatedAt: org.updated_at,
     };
   }
 
@@ -45,20 +62,8 @@ export class OrganizationsService {
       timezone: dto.timezone ?? 'Asia/Bangkok',
       attributes: dto.attributes ?? {},
     });
-
     const saved = await this.orgRepo.save(row);
-
-    return {
-      organization: {
-        id: saved.id,
-        name: saved.name,
-        code: saved.code,
-        timezone: saved.timezone,
-        attributes: saved.attributes ?? {},
-        createdAt: saved.created_at,
-        updatedAt: saved.updated_at,
-      },
-    };
+    return { organization: this.toApi(saved) };
   }
 
   async patch(orgId: string, requestOrgId: number, dto: PatchOrganizationDto) {
@@ -73,17 +78,6 @@ export class OrganizationsService {
     if (dto.attributes !== undefined) org.attributes = dto.attributes;
 
     const saved = await this.orgRepo.save(org);
-
-    return {
-      organization: {
-        id: saved.id,
-        name: saved.name,
-        code: saved.code,
-        timezone: saved.timezone,
-        attributes: saved.attributes ?? {},
-        createdAt: saved.created_at,
-        updatedAt: saved.updated_at,
-      },
-    };
+    return { organization: this.toApi(saved) };
   }
 }
