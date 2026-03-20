@@ -38,6 +38,18 @@ export class Worker {
   @Column({ type: 'boolean', default: true })
   is_active: boolean;
 
+  @Column({ type: 'boolean', default: false })
+  is_backup_worker: boolean;
+
+  @Column({ type: 'int', nullable: true })
+  max_overtime_shifts: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  regular_shifts_per_period: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  min_shifts_per_period: number | null;
+
   @Column({ type: 'bigint', nullable: true })
   linked_user_id: string | null;
 

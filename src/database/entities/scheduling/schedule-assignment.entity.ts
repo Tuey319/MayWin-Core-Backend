@@ -25,6 +25,9 @@ export class ScheduleAssignment {
   @Column({ type: 'text', default: 'SOLVER' })
   source: string;
 
+  @Column({ type: 'boolean', default: false })
+  emergency_override: boolean;
+
   @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
   attributes: Record<string, any>;
 

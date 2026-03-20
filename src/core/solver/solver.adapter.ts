@@ -6,71 +6,29 @@ import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
 
-/**
- * Solver plan types for optimization strategies
- */
 export type SolverPlan = 'A_STRICT' | 'A_RELAXED' | 'B_MILP';
 
-/**
- * Options for configuring solver execution
- */
 export interface SolveOptions {
-  /** Unique identifier for the solve job */
   jobId?: string;
-  /** Strategy plan to use for solving */
   plan?: SolverPlan;
-  /** Maximum time allowed for solving in seconds */
   timeLimitSeconds?: number;
 }
 
-/**
- * Response structure from CLI solver execution
- */
 export interface CliSolveResponse {
-  /** Whether a feasible solution was found */
   feasible?: boolean;
-  /** Status of the solve operation */
-  status?: string; // OPTIMAL/FEASIBLE/INFEASIBLE/UNKNOWN/TIMEOUT/ERROR
-  /** Objective function value */
+  status?: string;
   objective?: number | null;
-  /** Array of assignments in the solution */
   assignments?: any[];
-  /** Additional metadata about the solve operation */
+  nurse_stats?: any[];
+  understaffed?: any[];
   meta?: Record<string, any>;
-  /** Detailed information (can be string or object from Python) */
   details?: any;
 }
 
-/**
- * Adapter service for interfacing with the Python-based solver CLI
- *
- * This service manages the execution of optimization problems by:
- * - Spawning Python solver processes
- * - Managing temporary file I/O for solver input/output
- * - Converting between TypeScript and Python data structures
- * - Handling timeouts and error conditions
- *
- * @remarks
- * Configure via environment variables:
- * - SOLVER_PYTHON: Python command ("python", "python3", "py")
- * - SOLVER_CLI_PATH: Path to solver_cli.py script
- */
 @Injectable()
 export class SolverAdapter {
   private readonly logger = new Logger(SolverAdapter.name);
 
-  /**
-   * Gets the Python command to use for spawning solver processes
-   *
-   * Configured via SOLVER_PYTHON environment variable.
-   * Defaults to 'py' on Windows, 'python3' on Unix-like systems.
-   *
-   * @returns Python command string
-   *
-   * @example
-   * Windows: SOLVER_PYTHON=py
-   * Linux/Mac: SOLVER_PYTHON=python3
-   */
   private getPythonCmd(): string {
     return (
       process.env.SOLVER_PYTHON?.trim() ||
@@ -78,30 +36,12 @@ export class SolverAdapter {
     );
   }
 
-  /**
-   * Gets the absolute path to the solver CLI script
-   *
-   * Configured via SOLVER_CLI_PATH environment variable.
-   * Defaults to 'src/core/solver/solver_cli.py' relative to process.cwd().
-   *
-   * @returns Absolute path to solver CLI script
-   *
-   * @example
-   * SOLVER_CLI_PATH=src/core/solver/solver_cli.py
-   */
   private getCliPath(): string {
     const p =
       process.env.SOLVER_CLI_PATH?.trim() || 'src/core/solver/solver_cli.py';
     return path.isAbsolute(p) ? p : path.resolve(process.cwd(), p);
   }
 
-  /**
-   * Main entry point for solving optimization problems
-   *
-   * @param input - Problem input data (either NormalizedInput.v1 or Python SolveRequest format)
-   * @param opts - Optional solver configuration
-   * @returns Promise resolving to solve results
-   */
   async solve(
     input: Record<string, any>,
     opts?: SolveOptions,
@@ -109,24 +49,6 @@ export class SolverAdapter {
     return this.solveViaCli(input, opts);
   }
 
-  /**
-   * Executes the Python solver CLI using temporary files for I/O
-   *
-   * Process:
-   * 1. Detects and converts input format if needed
-   * 2. Creates temporary directory for file I/O
-   * 3. Writes input JSON to temp file
-   * 4. Spawns Python process: <python> <cliPath> --cli --input <in.json> --output <out.json>
-   * 5. Reads and parses output JSON
-   * 6. Handles timeouts and errors
-   * 7. Cleans up temporary files
-   *
-   * @param input - Problem input data
-   * @param opts - Optional solver configuration
-   * @returns Promise resolving to solve results with status, assignments, and metadata
-   *
-   * @private
-   */
   private async solveViaCli(
     input: Record<string, any>,
     opts?: SolveOptions,
@@ -135,7 +57,7 @@ export class SolverAdapter {
     const plan = opts?.plan ?? 'A_STRICT';
     const timeLimitSeconds = opts?.timeLimitSeconds ?? 30;
 
-    // Detect if "input" is NormalizedInput.v1 (rich objects) and convert to Python SolveRequest.
+    // Detect NormalizedInput.v1 (rich objects from NormalizerService)
     const looksLikeNormalizedInput =
       input?.horizon?.days &&
       Array.isArray(input?.horizon?.days) &&
@@ -144,7 +66,9 @@ export class SolverAdapter {
       Array.isArray(input?.shifts) &&
       input?.shifts?.[0]?.code;
 
-    const pythonReq = looksLikeNormalizedInput ? this.toSolveRequest(input) : input;
+    const pythonReq = looksLikeNormalizedInput
+      ? this.toSolveRequest(input, timeLimitSeconds)
+      : input;
 
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'maywin-solver-'));
     const reqId = crypto.randomUUID();
@@ -156,8 +80,6 @@ export class SolverAdapter {
 
       const py = this.getPythonCmd();
       const cli = this.getCliPath();
-
-      // Python CLI supports: --cli --input <file> --output <file>
       const args: string[] = [cli, '--cli', '--input', inPath, '--output', outPath];
 
       const startedAt = Date.now();
@@ -168,7 +90,6 @@ export class SolverAdapter {
       );
       const elapsedMs = Date.now() - startedAt;
 
-      // Prefer output file JSON (Python writes it even on errors)
       let parsed: any = null;
       try {
         const raw = await fs.readFile(outPath, 'utf8');
@@ -182,17 +103,20 @@ export class SolverAdapter {
           feasible: false,
           status: 'TIMEOUT',
           assignments: [],
+          nurse_stats: [],
+          understaffed: [],
           details: `Solver timed out after ${timeLimitSeconds}s`,
           meta: { plan, jobId, elapsedMs, cliPath: cli },
         };
       }
 
-      // If python exited nonzero and didn't produce JSON, surface stdout/stderr
       if (code !== 0 && !parsed) {
         return {
           feasible: false,
           status: 'ERROR',
           assignments: [],
+          nurse_stats: [],
+          understaffed: [],
           details: `Solver CLI exited with code=${code}`,
           meta: {
             plan,
@@ -205,14 +129,17 @@ export class SolverAdapter {
         };
       }
 
-      // Normalize Python SolveResponse -> your runner expectations
       const status: string | undefined = parsed?.status;
       const assignments = Array.isArray(parsed?.assignments) ? parsed.assignments : [];
+      const nurseStats = Array.isArray(parsed?.nurse_stats) ? parsed.nurse_stats : [];
+      const understaffed = Array.isArray(parsed?.understaffed) ? parsed.understaffed : [];
 
-      // "feasible" may not exist; infer from status
+      // app3.py statuses that indicate a usable schedule
       const feasible =
         status === 'OPTIMAL' ||
         status === 'FEASIBLE' ||
+        status === 'EMERGENCY_OPTIMAL' ||
+        status === 'EMERGENCY_FEASIBLE' ||
         status === 'RELAXED_OPTIMAL' ||
         status === 'RELAXED_FEASIBLE' ||
         status === 'HEURISTIC';
@@ -222,6 +149,8 @@ export class SolverAdapter {
         status: status ?? undefined,
         objective: parsed?.objective_value ?? null,
         assignments,
+        nurse_stats: nurseStats,
+        understaffed,
         details: parsed?.details ?? undefined,
         meta: {
           ...(parsed?.details ? { solverDetails: parsed.details } : {}),
@@ -240,6 +169,8 @@ export class SolverAdapter {
         feasible: false,
         status: 'ERROR',
         assignments: [],
+        nurse_stats: [],
+        understaffed: [],
         details: e?.message ?? String(e),
         meta: { plan, jobId, error: true },
       };
@@ -251,47 +182,39 @@ export class SolverAdapter {
   }
 
   /**
-   * Converts NormalizedInput.v1 (rich objects) to Python SolveRequest (flat schema)
+   * Convert NormalizedInput.v1 (from NormalizerService) → app3.py SolveRequest.
    *
-   * Transforms TypeScript domain objects into the flat structure expected by Python solver:
-   * - nurses: Array of nurse codes
-   * - shifts: Array of shift codes
-   * - days: Array of date strings
-   * - demand: Nested dict of {date: {shift: minWorkers}}
-   * - availability: Nested dict of {nurse: {date: {shift: available}}}
-   * - preferences (optional): Nested dict of {nurse: {date: {shift: penalty}}}
+   * Nurse-level fields added by normalizer v3:
+   *   isBackup, maxOvertimeShifts, regularShiftsPerPeriod, minShiftsPerPeriod, tags (skills)
    *
-   * @param normalized - Input data in NormalizedInput.v1 format
-   * @returns Converted data in Python SolveRequest format
-   *
-   * @remarks
-   * Python expects availability as: dict[nurse][day] = dict[shift] = bool (NOT list)
-   *
-   * @private
+   * Constraint fields added by normalizer v3 (from ConstraintProfile):
+   *   guaranteeFullCoverage, allowEmergencyOverrides,
+   *   maxShiftsPerDay, minDaysOffPerWeek, maxNightsPerWeek,
+   *   forbidNightToMorning, forbidMorningToNightSameDay,
+   *   allowSecondShiftSameDayInEmergency, ignoreAvailabilityInEmergency,
+   *   allowNightCapOverrideInEmergency, allowRestRuleOverrideInEmergency,
+   *   goalMinimizeStaffCost, goalMaximizePreferenceSatisfaction,
+   *   goalBalanceWorkload, goalBalanceNightWorkload, goalReduceUndesirableShifts,
+   *   penaltyWeightJson, fairnessWeightJson, goalPriorityJson,
+   *   numSearchWorkers, timeLimitSec
    */
-  private toSolveRequest(normalized: any) {
-    // Days: ['2025-01-01', ...]
+  private toSolveRequest(normalized: any, fallbackTimeLimitSec: number): Record<string, any> {
     const days: string[] = (normalized?.horizon?.days ?? []).map((d: any) =>
       String(d.date),
     );
-
-    // Shifts: ['D','N',...]
     const shifts: string[] = (normalized?.shifts ?? []).map((s: any) =>
       String(s.code),
     );
-
-    // Nurses: ['W001','W002',...]
     const nurses: string[] = (normalized?.nurses ?? []).map((n: any) =>
       String(n.code),
     );
 
-    // demand[date][shift] = minWorkers (or 0)
+    // ── demand ────────────────────────────────────────────────────────────────
     const demand: Record<string, Record<string, number>> = {};
     for (const day of normalized?.horizon?.days ?? []) {
       const date = String(day.date);
-      const dayType = String(day.dayType); // WEEKDAY / WEEKEND
+      const dayType = String(day.dayType);
       demand[date] = {};
-
       for (const sc of shifts) {
         const rule = (normalized?.coverageRules ?? []).find(
           (r: any) => String(r.shiftCode) === sc && String(r.dayType) === dayType,
@@ -300,11 +223,8 @@ export class SolverAdapter {
       }
     }
 
-    // ✅ availability[nurse][date] = { D: true, N: true }
-    const availability: Record<string, Record<string, Record<string, boolean>>> =
-      {};
-
-    // init empty dicts
+    // ── availability ─────────────────────────────────────────────────────────
+    const availability: Record<string, Record<string, Record<string, number>>> = {};
     for (const n of nurses) {
       availability[n] = {};
       for (const d of days) availability[n][d] = {};
@@ -317,72 +237,165 @@ export class SolverAdapter {
       const type = row?.type ? String(row.type) : null;
 
       if (!nurse || !date || !sc) continue;
-
-      // Safer default: only block explicit "UNAVAILABLE"/"BLOCKED"
-      if (type === 'UNAVAILABLE' || type === 'BLOCKED') continue;
-
       if (!availability[nurse]) availability[nurse] = {};
       if (!availability[nurse][date]) availability[nurse][date] = {};
 
-      availability[nurse][date][sc] = true;
+      // 0 = unavailable, 1 = available (default)
+      if (type === 'UNAVAILABLE' || type === 'BLOCKED' || type === 'DAY_OFF') {
+        availability[nurse][date][sc] = 0;
+      } else {
+        availability[nurse][date][sc] = 1;
+      }
     }
 
-    // ✅ preferences[nurse][date][shift] = penalty (optional)
-    // We forward it only if it is an object; we also sanitize values to be integers >= 0.
-    let preferences:
-      | Record<string, Record<string, Record<string, number>>>
-      | undefined;
-
+    // ── preferences ───────────────────────────────────────────────────────────
+    let preferences: Record<string, Record<string, Record<string, number>>> | undefined;
     const rawPrefs = normalized?.preferences;
     if (rawPrefs && typeof rawPrefs === 'object') {
       const cleaned: Record<string, Record<string, Record<string, number>>> = {};
-
       for (const nurse of Object.keys(rawPrefs)) {
         const byDate = rawPrefs[nurse];
         if (!byDate || typeof byDate !== 'object') continue;
-
         for (const date of Object.keys(byDate)) {
           const byShift = byDate[date];
           if (!byShift || typeof byShift !== 'object') continue;
-
           for (const shift of Object.keys(byShift)) {
-            const val = Number(byShift[shift]);
-            if (!Number.isFinite(val)) continue;
-
-            const penalty = Math.trunc(val);
-            if (penalty < 0) continue;
-
+            const penalty = Math.trunc(Number(byShift[shift]));
+            if (!Number.isFinite(penalty) || penalty <= 0) continue;
             cleaned[nurse] = cleaned[nurse] ?? {};
             cleaned[nurse][date] = cleaned[nurse][date] ?? {};
             cleaned[nurse][date][shift] = penalty;
           }
         }
       }
-
       if (Object.keys(cleaned).length > 0) preferences = cleaned;
     }
 
-    const req: Record<string, any> = { nurses, shifts, days, demand, availability };
+    // ── per-nurse overrides ───────────────────────────────────────────────────
+    const backupNurses: string[] = [];
+    const nurseSkills: Record<string, string[]> = {};
+    const regularShiftsPerNurse: Record<string, number> = {};
+    const maxOvertimePerNurse: Record<string, number> = {};
+    const minTotalShiftsPerNurse: Record<string, number> = {};
+
+    for (const n of normalized?.nurses ?? []) {
+      const code = String(n.code);
+
+      if (n.isBackup === true) backupNurses.push(code);
+
+      const skills: string[] = Array.isArray(n.tags) ? n.tags.filter(Boolean).map(String) : [];
+      if (skills.length > 0) nurseSkills[code] = skills;
+
+      if (n.regularShiftsPerPeriod != null && Number.isFinite(Number(n.regularShiftsPerPeriod))) {
+        regularShiftsPerNurse[code] = Number(n.regularShiftsPerPeriod);
+      }
+      if (n.maxOvertimeShifts != null && Number.isFinite(Number(n.maxOvertimeShifts))) {
+        maxOvertimePerNurse[code] = Number(n.maxOvertimeShifts);
+      }
+      if (n.minShiftsPerPeriod != null && Number.isFinite(Number(n.minShiftsPerPeriod))) {
+        minTotalShiftsPerNurse[code] = Number(n.minShiftsPerPeriod);
+      }
+    }
+
+    // ── required skills from coverage rules ───────────────────────────────────
+    // coverageRules have: { shiftCode, dayType, requiredTag }
+    // Build: { date: { shiftCode: { skill: 1 } } }
+    const requiredSkills: Record<string, Record<string, Record<string, number>>> = {};
+    for (const day of normalized?.horizon?.days ?? []) {
+      const date = String(day.date);
+      const dayType = String(day.dayType);
+      for (const rule of normalized?.coverageRules ?? []) {
+        if (!rule.requiredTag) continue;
+        if (String(rule.dayType) !== dayType) continue;
+        const sc = String(rule.shiftCode);
+        requiredSkills[date] = requiredSkills[date] ?? {};
+        requiredSkills[date][sc] = requiredSkills[date][sc] ?? {};
+        requiredSkills[date][sc][String(rule.requiredTag)] =
+          (requiredSkills[date][sc][String(rule.requiredTag)] ?? 0) + 1;
+      }
+    }
+
+    // ── constraints → Rules, Weights, GoalPriority, FairnessWeights ──────────
+    const cp = normalized?.constraints ?? {};
+    const penaltyWeightJson = cp.penaltyWeightJson ?? {};
+    const fairnessWeightJson = cp.fairnessWeightJson ?? {};
+    const goalPriorityJson = cp.goalPriorityJson ?? {};
+
+    const rules: Record<string, any> = {
+      guarantee_full_coverage: cp.guaranteeFullCoverage ?? true,
+      allow_emergency_overrides: cp.allowEmergencyOverrides ?? true,
+      max_shifts_per_day: cp.maxShiftsPerDay ?? 1,
+      max_consecutive_work_days: cp.maxConsecutiveWorkDays ?? null,
+      max_consecutive_shifts: cp.maxConsecutiveNightShifts ?? null,
+      min_days_off_per_week: cp.minDaysOffPerWeek ?? 2,
+      max_nights_per_week: cp.maxNightsPerWeek ?? 2,
+      min_rest_hours_between_shifts: cp.minRestHoursBetweenShifts ?? null,
+      forbid_night_to_morning: cp.forbidNightToMorning ?? true,
+      forbid_morning_to_night_same_day: cp.forbidMorningToNightSameDay ?? false,
+      allow_second_shift_same_day_in_emergency: cp.allowSecondShiftSameDayInEmergency ?? true,
+      ignore_availability_in_emergency: cp.ignoreAvailabilityInEmergency ?? false,
+      allow_night_cap_override_in_emergency: cp.allowNightCapOverrideInEmergency ?? true,
+      allow_rest_rule_override_in_emergency: cp.allowRestRuleOverrideInEmergency ?? true,
+      goal_minimize_staff_cost: cp.goalMinimizeStaffCost ?? true,
+      goal_maximize_preference_satisfaction: cp.goalMaximizePreferenceSatisfaction ?? true,
+      goal_balance_workload: cp.goalBalanceWorkload ?? false,
+      goal_balance_night_workload: cp.goalBalanceNightWorkload ?? false,
+      goal_reduce_undesirable_shifts: cp.goalReduceUndesirableShifts ?? true,
+    };
+
+    const weights: Record<string, any> = {
+      understaff_penalty: penaltyWeightJson.understaff_penalty ?? 10000,
+      overtime_penalty: penaltyWeightJson.overtime_penalty ?? 20,
+      preference_penalty_multiplier: penaltyWeightJson.preference_penalty_multiplier ?? 1,
+      workload_balance_weight: penaltyWeightJson.workload_balance_weight ?? 0,
+      emergency_override_penalty: penaltyWeightJson.emergency_override_penalty ?? 500,
+      same_day_second_shift_penalty: penaltyWeightJson.same_day_second_shift_penalty ?? 150,
+      weekly_night_over_penalty: penaltyWeightJson.weekly_night_over_penalty ?? 120,
+    };
+
+    const goalPriority: Record<string, any> = {
+      coverage: goalPriorityJson.coverage ?? 1,
+      cost: goalPriorityJson.cost ?? 2,
+      preference: goalPriorityJson.preference ?? 3,
+      fairness: goalPriorityJson.fairness ?? 4,
+    };
+
+    const fairnessWeights: Record<string, any> = {
+      workload_balance: fairnessWeightJson.workload_balance ?? 1,
+      night_balance: fairnessWeightJson.night_balance ?? 1,
+      shift_type_balance: fairnessWeightJson.shift_type_balance ?? 1,
+    };
+
+    const timeLimitSec = cp.timeLimitSec ?? fallbackTimeLimitSec;
+    const numSearchWorkers = cp.numSearchWorkers ?? 8;
+
+    // ── assemble final request ────────────────────────────────────────────────
+    const req: Record<string, any> = {
+      nurses,
+      shifts,
+      days,
+      demand,
+      availability,
+      rules,
+      weights,
+      goal_priority: goalPriority,
+      fairness_weights: fairnessWeights,
+      time_limit_sec: timeLimitSec,
+      num_search_workers: numSearchWorkers,
+    };
+
     if (preferences) req.preferences = preferences;
+
+    if (backupNurses.length > 0) req.backup_nurses = backupNurses;
+    if (Object.keys(nurseSkills).length > 0) req.nurse_skills = nurseSkills;
+    if (Object.keys(regularShiftsPerNurse).length > 0) req.regular_shifts_per_nurse = regularShiftsPerNurse;
+    if (Object.keys(maxOvertimePerNurse).length > 0) req.max_overtime_per_nurse = maxOvertimePerNurse;
+    if (Object.keys(minTotalShiftsPerNurse).length > 0) req.min_total_shifts_per_nurse = minTotalShiftsPerNurse;
+    if (Object.keys(requiredSkills).length > 0) req.required_skills = requiredSkills;
 
     return req;
   }
 
-  /**
-   * Spawns a child process and waits for completion with timeout
-   *
-   * @param cmd - Command to execute (e.g., 'python3')
-   * @param args - Array of command-line arguments
-   * @param timeLimitSeconds - Maximum execution time in seconds
-   * @returns Promise resolving to process results including exit code, stdout, stderr, and timeout status
-   *
-   * @remarks
-   * - Captures stdout and stderr streams
-   * - Kills process with SIGKILL if timeout is exceeded
-   * - Adds 500ms grace period to timeout before killing
-   *
-   * @private
-   */
   private spawnAndWait(
     cmd: string,
     args: string[],
@@ -402,9 +415,7 @@ export class SolverAdapter {
 
       const killTimer = setTimeout(() => {
         timedOut = true;
-        try {
-          child.kill('SIGKILL');
-        } catch {}
+        try { child.kill('SIGKILL'); } catch {}
       }, Math.max(1, timeLimitSeconds) * 1000 + 500);
 
       child.stdout.on('data', (d) => (stdout += d.toString()));
