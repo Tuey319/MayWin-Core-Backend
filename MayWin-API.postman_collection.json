@@ -15,7 +15,8 @@
     { "key": "jobId",       "value": "",   "type": "string" },
     { "key": "staffId",     "value": "",   "type": "string" },
     { "key": "containerId", "value": "",   "type": "string" },
-    { "key": "profileId",   "value": "",   "type": "string" }
+    { "key": "profileId",   "value": "",   "type": "string" },
+    { "key": "siteId",      "value": "",   "type": "string" }
   ],
   "auth": {
     "type": "bearer",
@@ -840,6 +841,73 @@
             },
             "url": { "raw": "{{baseUrl}}/audit-logs", "host": ["{{baseUrl}}"], "path": ["audit-logs"] },
             "description": "Manually appends a custom audit log entry. Actor (actorId, actorName) is derived from the JWT — do not send in body."
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "Sites",
+      "item": [
+
+        {
+          "name": "List Sites",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/sites?limit=100&offset=0&sort=DESC",
+              "host": ["{{baseUrl}}"],
+              "path": ["sites"],
+              "query": [
+                { "key": "search", "value": "", "disabled": true },
+                { "key": "active", "value": "true", "disabled": true },
+                { "key": "limit",  "value": "100" },
+                { "key": "offset", "value": "0" },
+                { "key": "sort",   "value": "DESC" }
+              ]
+            },
+            "description": "List sites in the caller's organization. Scoped automatically via JWT. Optional filters: search (name/code), active, limit, offset, sort."
+          }
+        },
+
+        {
+          "name": "Create Site",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.site && res.site.id) {",
+                "  pm.environment.set('siteId', String(res.site.id));",
+                "  console.log('siteId saved:', res.site.id);",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationId\": \"{{orgId}}\",\n  \"name\": \"Main Hospital\",\n  \"code\": \"MH01\",\n  \"address\": \"123 Health St, Bangkok\",\n  \"timezone\": \"Asia/Bangkok\",\n  \"attributes\": {},\n  \"isActive\": true\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/sites", "host": ["{{baseUrl}}"], "path": ["sites"] },
+            "description": "Create a new site. Requires ORG_ADMIN or UNIT_MANAGER role. organizationId must match the caller's JWT org. code must be unique within the org. Saves siteId to environment on success."
+          }
+        },
+
+        {
+          "name": "Deactivate Site",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/sites/{{siteId}}/deactivate",
+              "host": ["{{baseUrl}}"],
+              "path": ["sites", "{{siteId}}", "deactivate"]
+            },
+            "description": "Soft-delete a site by setting is_active = false. Requires ORG_ADMIN or UNIT_MANAGER role."
           }
         }
 
