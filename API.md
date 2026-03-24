@@ -573,6 +573,8 @@ These are the Next.js API routes in `src/app/api/` that the browser talks to. Th
 | `POST` | `/api/hospital/profiles` | `POST /organizations/:orgId/constraint-profiles` |
 | `PUT` | `/api/hospital/profiles/:id` | `PUT /organizations/:orgId/constraint-profiles/:id` |
 | `DELETE` | `/api/hospital/profiles/:id` | `DELETE /organizations/:orgId/constraint-profiles/:id` |
+| `GET` | `/api/units/:unitId/members` | `GET /units/:unitId/members` |
+| `GET` | `/api/units/:unitId/profiles` | `GET /units/:unitId/profiles` (alias for `/constraint-profiles`) |
 
 ---
 
@@ -584,7 +586,7 @@ These endpoints are used by the BFF routes under `src/app/api/hospital/` to fetc
 
 ### `GET /organizations`
 
-Returns all organizations the authenticated user belongs to.
+Returns all organizations the authenticated user belongs to. Users with the `ADMIN` role receive every organization in the system; all other roles receive only their own organization.
 
 Auth: JWT required (`Authorization: Bearer <token>`)
 
@@ -618,9 +620,50 @@ The BFF also accepts `{ "data": [...] }` as the top-level wrapper in place of `"
 
 ---
 
+### `POST /organizations`
+
+Creates a new organization. Bootstrap/admin use only — no JWT org scoping enforced.
+
+**Request**
+```json
+{
+  "name": "Bangkok Hospital",
+  "code": "BKK",
+  "timezone": "Asia/Bangkok",
+  "attributes": {}
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `name` | string | yes | Display name |
+| `code` | string | yes | Short unique code |
+| `timezone` | string | no | Default: `"Asia/Bangkok"` |
+| `attributes` | object | no | Arbitrary metadata |
+
+**Response — 201 Created**
+```json
+{
+  "organization": {
+    "id": "1",
+    "name": "Bangkok Hospital",
+    "code": "BKK",
+    "timezone": "Asia/Bangkok",
+    "attributes": {},
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  }
+}
+```
+
+**Errors**
+- `400` — Validation error
+
+---
+
 ### `GET /organizations/:orgId`
 
-Returns a single organization by ID. Used as a fallback when `GET /organizations` is unavailable.
+Returns a single organization by ID. `ADMIN` users can fetch any organization; all other roles are restricted to their own org (`403` otherwise).
 
 Auth: JWT required (`Authorization: Bearer <token>`)
 
@@ -777,24 +820,84 @@ Auth: JWT required
 
 ---
 
-### `GET /units/:unitId/members`
+### `DELETE /units/:unitId`
 
-Lists all members of a unit.
+Permanently deletes a unit.
 
 Auth: JWT required
 
 **Response — 200 OK**
 ```json
-{
-  "members": [
-    { "id": "1", "userId": "42", "unitId": "2", "roleCode": "NURSE", "createdAt": "2026-01-01T00:00:00.000Z" }
-  ]
-}
+{ "ok": true, "unitId": "2" }
 ```
 
 **Errors**
 - `401` — missing or invalid JWT
 - `404` — unit not found
+
+---
+
+### `GET /units/:unitId/members`
+
+Lists all members of a unit. Returns records from **both** membership sources:
+
+| Source | Table | `type` value | Key field |
+|---|---|---|---|
+| User-account memberships | `unit_memberships` | `"user"` | `userId` |
+| Worker-profile memberships | `worker_unit_memberships` | `"worker"` | `workerId` |
+
+Auth: JWT required
+
+**Access control** — a user can access this endpoint if **any** of the following is true:
+- Their JWT `roles` includes `ADMIN`
+- Their JWT `unitIds` includes the requested `unitId` (explicit unit membership — checked first, bypasses org check)
+- Their JWT `organizationId` matches the unit's organization
+
+**Response — 200 OK**
+```json
+{
+  "members": [
+    {
+      "id": "1",
+      "type": "user",
+      "userId": "42",
+      "workerId": null,
+      "unitId": "2",
+      "roleCode": "NURSE",
+      "name": null,
+      "workerCode": null,
+      "createdAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "69",
+      "type": "worker",
+      "userId": "42",
+      "workerId": "69",
+      "unitId": "5",
+      "roleCode": "NURSE",
+      "name": "สมชาย ใจดี",
+      "workerCode": "EMP069",
+      "createdAt": "2026-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | string | `unit_memberships.id` for user records; `worker_id` for worker records |
+| `type` | `"user"` \| `"worker"` | Source table |
+| `userId` | string \| null | Linked user-account ID. `null` for workers with no web account |
+| `workerId` | string \| null | Worker profile ID. `null` for pure user-account members |
+| `unitId` | string | Unit this membership belongs to |
+| `roleCode` | string | e.g. `NURSE`, `UNIT_MANAGER`, `ORG_ADMIN` |
+| `name` | string \| null | Worker's full name (populated for `type: "worker"`, `null` for `type: "user"`) |
+| `workerCode` | string \| null | Employee code (populated for `type: "worker"`) |
+| `createdAt` | ISO timestamp \| null | Creation time |
+
+**Errors**
+- `401` — missing or invalid JWT
+- `404` — unit not found (or caller has no access to it)
 
 ---
 
@@ -845,6 +948,62 @@ Auth: JWT required
 **Errors**
 - `401` — missing or invalid JWT
 - `404` — unit or membership not found
+
+---
+
+### `PATCH /organizations/:orgId`
+
+Partially updates an organization. `ADMIN` users can edit any organization; all other roles are restricted to their own org.
+
+Auth: JWT required
+
+**Request** — all fields optional
+```json
+{
+  "name": "Updated Name",
+  "code": "NEW_CODE",
+  "timezone": "Asia/Bangkok",
+  "attributes": {}
+}
+```
+
+**Response — 200 OK**
+```json
+{
+  "organization": {
+    "id": "1",
+    "name": "Updated Name",
+    "code": "NEW_CODE",
+    "timezone": "Asia/Bangkok",
+    "attributes": {},
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-03-22T00:00:00.000Z"
+  }
+}
+```
+
+**Errors**
+- `401` — missing or invalid JWT
+- `403` — organization mismatch (non-admin only)
+- `404` — organization not found
+
+---
+
+### `DELETE /organizations/:orgId`
+
+Permanently deletes an organization. `ADMIN` users can delete any organization; all other roles are restricted to their own org.
+
+Auth: JWT required
+
+**Response — 200 OK**
+```json
+{ "ok": true, "organizationId": "1" }
+```
+
+**Errors**
+- `401` — missing or invalid JWT
+- `403` — organization mismatch (non-admin only)
+- `404` — organization not found
 
 ---
 
@@ -1161,6 +1320,30 @@ Auth: JWT required
 
 ---
 
+### `GET /units/:unitId/constraint-profiles`
+
+Returns all constraint profiles for a unit, ordered by creation date.
+
+Auth: JWT required
+
+**Response — 200 OK**
+```json
+{ "profiles": [ { ...profile shape... } ] }
+```
+
+**Errors**
+- `401` — missing or invalid JWT
+
+---
+
+### `GET /units/:unitId/profiles` *(alias)*
+
+Alias for `GET /units/:unitId/constraint-profiles`. Exists so frontend routes that call `/units/:id/profiles` resolve correctly without a path change on either side.
+
+Same auth requirements and response shape as above.
+
+---
+
 ### `POST /units/:unitId/constraint-profiles`
 
 Creates a unit-scoped constraint profile.
@@ -1357,7 +1540,7 @@ List sites in the caller's organization.
 
 ### `POST /sites`
 
-Create a new site. Requires `ORG_ADMIN` or `UNIT_MANAGER` role.
+Create a new site.
 
 **Request**
 ```json
@@ -1395,13 +1578,51 @@ Create a new site. Requires `ORG_ADMIN` or `UNIT_MANAGER` role.
 
 **Errors**
 - `400` — Validation error or duplicate `code` within org
-- `403` — Insufficient role or organization mismatch
+- `403` — Organization mismatch
 
 ---
 
-### `POST /sites/:siteId/deactivate`
+### `PATCH /sites/:siteId`
 
-Deactivate a site (soft delete). Requires `ORG_ADMIN` or `UNIT_MANAGER` role.
+Edit an existing site. All fields are optional — only provided fields are updated.
+
+**Request**
+```json
+{
+  "name": "Updated Hospital Name",
+  "code": "UH01",
+  "address": "456 New St, Bangkok",
+  "timezone": "Asia/Bangkok",
+  "attributes": {}
+}
+```
+
+**Response — 200 OK**
+```json
+{
+  "site": {
+    "id": "1",
+    "organizationId": "1",
+    "name": "Updated Hospital Name",
+    "code": "UH01",
+    "address": "456 New St, Bangkok",
+    "timezone": "Asia/Bangkok",
+    "attributes": {},
+    "isActive": true,
+    "createdAt": "2026-01-01T00:00:00.000Z"
+  }
+}
+```
+
+**Errors**
+- `403` — Organization mismatch
+- `404` — Site not found
+
+---
+
+### `POST /sites/:siteId/activate`
+
+Activate a site (sets `isActive = true`).
 
 **Response — 200 OK**
 ```json
@@ -1409,7 +1630,35 @@ Deactivate a site (soft delete). Requires `ORG_ADMIN` or `UNIT_MANAGER` role.
 ```
 
 **Errors**
-- `403` — Insufficient role
+- `404` — Site not found or belongs to a different org
+
+---
+
+### `POST /sites/:siteId/deactivate`
+
+Deactivate a site (sets `isActive = false`).
+
+**Response — 200 OK**
+```json
+{ "ok": true, "siteId": "1" }
+```
+
+**Errors**
+- `404` — Site not found or belongs to a different org
+
+---
+
+### `DELETE /sites/:siteId`
+
+Permanently deletes a site.
+
+**Response — 200 OK**
+```json
+{ "ok": true, "siteId": "1" }
+```
+
+**Errors**
+- `401` — missing or invalid JWT
 - `404` — Site not found or belongs to a different org
 
 ---

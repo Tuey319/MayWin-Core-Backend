@@ -29,6 +29,14 @@ export class ConstraintProfilesService {
     return { profile: this.toApi(await this.repo.save(row)) };
   }
 
+  async listByUnit(unitId: string) {
+    const rows = await this.repo.find({
+      where: { unit_id: unitId as any } as any,
+      order: { created_at: 'ASC' as any },
+    });
+    return { profiles: rows.map((r) => this.toApi(r)) };
+  }
+
   async activate(unitId: string, id: string, deactivateOthers = true) {
     const row = await this.repo.findOne({ where: { id, unit_id: unitId } as any });
     if (!row) throw new NotFoundException('Constraint profile not found');
@@ -97,6 +105,7 @@ export class ConstraintProfilesService {
       max_nights_per_week: dto.maxNightsPerWeek ?? 2,
       forbid_night_to_morning: dto.forbidNightToMorning ?? true,
       forbid_morning_to_night_same_day: dto.forbidMorningToNightSameDay ?? false,
+      forbid_evening_to_night: dto.forbidEveningToNight ?? true,
       guarantee_full_coverage: dto.guaranteeFullCoverage ?? true,
       allow_emergency_overrides: dto.allowEmergencyOverrides ?? true,
       allow_second_shift_same_day_in_emergency: dto.allowSecondShiftSameDayInEmergency ?? true,
@@ -131,6 +140,7 @@ export class ConstraintProfilesService {
     if (dto.maxNightsPerWeek !== undefined) row.max_nights_per_week = dto.maxNightsPerWeek;
     if (dto.forbidNightToMorning !== undefined) row.forbid_night_to_morning = dto.forbidNightToMorning;
     if (dto.forbidMorningToNightSameDay !== undefined) row.forbid_morning_to_night_same_day = dto.forbidMorningToNightSameDay;
+    if (dto.forbidEveningToNight !== undefined) row.forbid_evening_to_night = dto.forbidEveningToNight;
     if (dto.guaranteeFullCoverage !== undefined) row.guarantee_full_coverage = dto.guaranteeFullCoverage;
     if (dto.allowEmergencyOverrides !== undefined) row.allow_emergency_overrides = dto.allowEmergencyOverrides;
     if (dto.allowSecondShiftSameDayInEmergency !== undefined) row.allow_second_shift_same_day_in_emergency = dto.allowSecondShiftSameDayInEmergency;
@@ -168,6 +178,7 @@ export class ConstraintProfilesService {
       maxNightsPerWeek: c.max_nights_per_week,
       forbidNightToMorning: c.forbid_night_to_morning,
       forbidMorningToNightSameDay: c.forbid_morning_to_night_same_day,
+      forbidEveningToNight: c.forbid_evening_to_night,
       guaranteeFullCoverage: c.guarantee_full_coverage,
       allowEmergencyOverrides: c.allow_emergency_overrides,
       allowSecondShiftSameDayInEmergency: c.allow_second_shift_same_day_in_emergency,

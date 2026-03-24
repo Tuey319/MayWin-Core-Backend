@@ -205,6 +205,15 @@
         },
 
         {
+          "name": "Delete Organization",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/organizations/{{orgId}}", "host": ["{{baseUrl}}"], "path": ["organizations", "{{orgId}}"] },
+            "description": "Permanently deletes an organization. The caller's JWT org must match the orgId. Irreversible."
+          }
+        },
+
+        {
           "name": "Get Units",
           "request": {
             "method": "GET",
@@ -369,6 +378,15 @@
         },
 
         {
+          "name": "Delete Unit",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/units/{{unitId}}", "host": ["{{baseUrl}}"], "path": ["units", "{{unitId}}"] },
+            "description": "Permanently deletes a unit. Irreversible."
+          }
+        },
+
+        {
           "name": "List Unit Members",
           "request": {
             "method": "GET",
@@ -464,6 +482,24 @@
             "method": "DELETE",
             "url": { "raw": "{{baseUrl}}/organizations/{{orgId}}/constraint-profiles/{{profileId}}", "host": ["{{baseUrl}}"], "path": ["organizations", "{{orgId}}", "constraint-profiles", "{{profileId}}"] },
             "description": "Permanently deletes an org-scoped constraint profile."
+          }
+        },
+
+        {
+          "name": "List Unit Profiles",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/units/{{unitId}}/constraint-profiles", "host": ["{{baseUrl}}"], "path": ["units", "{{unitId}}", "constraint-profiles"] },
+            "description": "Returns all constraint profiles for a unit, ordered by creation date."
+          }
+        },
+
+        {
+          "name": "List Unit Profiles (alias /profiles)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/units/{{unitId}}/profiles", "host": ["{{baseUrl}}"], "path": ["units", "{{unitId}}", "profiles"] },
+            "description": "Alias for GET /units/:unitId/constraint-profiles. Used by frontend routes that call /profiles instead of /constraint-profiles. Same response shape."
           }
         },
 
@@ -709,7 +745,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"scheduleId\": \"{{scheduleId}}\",\n  \"idempotencyKey\": \"schedule-{{scheduleId}}-{{$timestamp}}\",\n  \"dto\": {\n    \"startDate\": \"2025-03-01T00:00:00.000Z\",\n    \"endDate\": \"2025-03-31T23:59:59.999Z\",\n    \"strategy\": { \"plan\": \"A\", \"mode\": \"strict\" },\n    \"solverConfig\": { \"timeLimitSeconds\": 120 },\n    \"options\": { \"dryRun\": false },\n    \"notes\": \"30 nurses - 30 day schedule\"\n  }\n}"
+              "raw": "{\n  \"scheduleId\": \"{{scheduleId}}\",\n  \"idempotencyKey\": \"schedule-{{scheduleId}}-{{$timestamp}}\",\n  \"dto\": {\n    \"startDate\": \"2026-04-01T00:00:00.000Z\",\n    \"endDate\": \"2026-04-30T23:59:59.999Z\",\n    \"strategy\": { \"plan\": \"A\", \"mode\": \"strict\" },\n    \"solverConfig\": { \"timeLimitSeconds\": 120 },\n    \"options\": { \"dryRun\": false },\n    \"notes\": \"Ward 3A April 2026 schedule\"\n  }\n}"
             },
             "url": { "raw": "{{baseUrl}}/orchestrator/run", "host": ["{{baseUrl}}"], "path": ["orchestrator", "run"] },
             "description": "Kicks off an async schedule solve. Returns immediately with a `jobId`. Poll `GET /schedule-jobs/:jobId` every ~4s until `state === COMPLETED` or `FAILED`."
@@ -894,7 +930,38 @@
               "raw": "{\n  \"organizationId\": \"{{orgId}}\",\n  \"name\": \"Main Hospital\",\n  \"code\": \"MH01\",\n  \"address\": \"123 Health St, Bangkok\",\n  \"timezone\": \"Asia/Bangkok\",\n  \"attributes\": {},\n  \"isActive\": true\n}"
             },
             "url": { "raw": "{{baseUrl}}/sites", "host": ["{{baseUrl}}"], "path": ["sites"] },
-            "description": "Create a new site. Requires ORG_ADMIN or UNIT_MANAGER role. organizationId must match the caller's JWT org. code must be unique within the org. Saves siteId to environment on success."
+            "description": "Create a new site. organizationId must match caller JWT org. Saves siteId to environment on success."
+          }
+        },
+
+        {
+          "name": "Edit Site",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Hospital Name\",\n  \"code\": \"UH01\",\n  \"address\": \"456 New St, Bangkok\",\n  \"timezone\": \"Asia/Bangkok\",\n  \"attributes\": {}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sites/{{siteId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["sites", "{{siteId}}"]
+            },
+            "description": "Edit an existing site. All fields optional — only provided fields are updated. Scoped to caller org via JWT."
+          }
+        },
+
+        {
+          "name": "Activate Site",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/sites/{{siteId}}/activate",
+              "host": ["{{baseUrl}}"],
+              "path": ["sites", "{{siteId}}", "activate"]
+            },
+            "description": "Set is_active = true on a site."
           }
         },
 
@@ -907,7 +974,16 @@
               "host": ["{{baseUrl}}"],
               "path": ["sites", "{{siteId}}", "deactivate"]
             },
-            "description": "Soft-delete a site by setting is_active = false. Requires ORG_ADMIN or UNIT_MANAGER role."
+            "description": "Set is_active = false on a site."
+          }
+        },
+
+        {
+          "name": "Delete Site",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/sites/{{siteId}}", "host": ["{{baseUrl}}"], "path": ["sites", "{{siteId}}"] },
+            "description": "Permanently deletes a site. Scoped to caller org via JWT. Irreversible."
           }
         }
 

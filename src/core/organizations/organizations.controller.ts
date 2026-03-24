@@ -26,8 +26,10 @@ export class OrganizationsController {
   /** GET /organizations — returns the authenticated user's organization */
   @Get('/organizations')
   list(@Req() req: Request) {
-    const orgId = Number((req as any).user?.organizationId);
-    return this.svc.list(orgId);
+    const u = (req as any).user ?? {};
+    const orgId = Number(u.organizationId);
+    const roles: string[] = Array.isArray(u.roles) ? u.roles : [];
+    return this.svc.list(orgId, roles);
   }
 
   /** GET /organizations/me */
@@ -40,8 +42,9 @@ export class OrganizationsController {
   /** GET /organizations/:orgId */
   @Get('/organizations/:orgId')
   getById(@Req() req: Request, @Param('orgId') orgId: string) {
-    const requestOrgId = Number((req as any).user?.organizationId);
-    return this.svc.getById(orgId, requestOrgId);
+    const u = (req as any).user ?? {};
+    const roles: string[] = Array.isArray(u.roles) ? u.roles : [];
+    return this.svc.getById(orgId, Number(u.organizationId), roles);
   }
 
   /** POST /organizations (bootstrapping only) */
@@ -53,16 +56,25 @@ export class OrganizationsController {
   /** PUT /organizations — save full org tree (upsert via patch of caller's org) */
   @Put('/organizations')
   put(@Req() req: Request, @Body() dto: PatchOrganizationDto) {
-    const orgId = String((req as any).user?.organizationId);
-    const requestOrgId = Number((req as any).user?.organizationId);
-    return this.svc.patch(orgId, requestOrgId, dto);
+    const u = (req as any).user ?? {};
+    const roles: string[] = Array.isArray(u.roles) ? u.roles : [];
+    return this.svc.patch(String(u.organizationId), Number(u.organizationId), dto, roles);
   }
 
   /** PATCH /organizations/:orgId */
   @Patch('/organizations/:orgId')
   patch(@Req() req: Request, @Param('orgId') orgId: string, @Body() dto: PatchOrganizationDto) {
-    const requestOrgId = Number((req as any).user?.organizationId);
-    return this.svc.patch(orgId, requestOrgId, dto);
+    const u = (req as any).user ?? {};
+    const roles: string[] = Array.isArray(u.roles) ? u.roles : [];
+    return this.svc.patch(orgId, Number(u.organizationId), dto, roles);
+  }
+
+  /** DELETE /organizations/:orgId */
+  @Delete('/organizations/:orgId')
+  delete(@Req() req: Request, @Param('orgId') orgId: string) {
+    const u = (req as any).user ?? {};
+    const roles: string[] = Array.isArray(u.roles) ? u.roles : [];
+    return this.svc.delete(orgId, Number(u.organizationId), roles);
   }
 
   // ── Schedule containers ─────────────────────────────────────────────────────

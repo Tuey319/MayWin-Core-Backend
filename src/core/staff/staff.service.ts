@@ -66,9 +66,9 @@ export class StaffService {
   private mapPositionToRoleCode(position: StaffRow['position']): string {
     const map: Record<string, string> = {
       nurse: 'NURSE',
-      head_nurse: 'HEAD_NURSE',
-      scheduler: 'HEAD_NURSE',
-      admin: 'ADMIN',
+      head_nurse: 'UNIT_MANAGER',
+      scheduler: 'UNIT_MANAGER',
+      admin: 'ORG_ADMIN',
     };
     return map[position] ?? 'NURSE';
   }

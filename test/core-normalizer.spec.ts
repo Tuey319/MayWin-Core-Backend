@@ -11,6 +11,7 @@ describe('NormalizerService', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     );
     expect(service).toBeDefined();
   });

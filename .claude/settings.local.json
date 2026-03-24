@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(aws s3:*)",
+      "Bash(python -m json.tool --no-ensure-ascii)",
+      "Bash(aws ecr:*)",
+      "Bash(docker login:*)",
+      "Bash(docker buildx:*)",
+      "Bash(__NEW_LINE_7f34d7bf20460960__ curl:*)",
+      "Bash(__NEW_LINE_fd843112e0328208__ curl:*)"
+    ]
+  }
+}
