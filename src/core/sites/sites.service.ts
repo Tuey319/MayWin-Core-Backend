@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 
 import { Site } from '@/database/entities/core/site.entity';
 import { CreateSiteDto } from './dto/create-site.dto';
+import { PatchSiteDto } from './dto/patch-site.dto';
 import { ListSitesQueryDto } from './dto/list-sites.query.dto';
 
 type JwtCtx = { organizationId: number; roles: string[] };
@@ -17,14 +18,23 @@ export class SitesService {
   ) {}
 
   private isAdmin(ctx: JwtCtx) {
-    const r = ctx.roles ?? [];
-    return r.includes('ORG_ADMIN') || r.includes('UNIT_MANAGER');
+    return ctx.roles.includes('ADMIN');
   }
 
   private assertOrg(ctx: JwtCtx, orgId: string) {
+    if (this.isAdmin(ctx)) return;
     if (Number(orgId) !== Number(ctx.organizationId)) {
       throw new ForbiddenException('Forbidden: organization mismatch');
     }
+  }
+
+  private findSite(ctx: JwtCtx, siteId: string) {
+    if (this.isAdmin(ctx)) {
+      return this.siteRepo.findOne({ where: { id: String(siteId) } });
+    }
+    return this.siteRepo.findOne({
+      where: { id: String(siteId), organization_id: String(ctx.organizationId) },
+    });
   }
 
   async list(ctx: JwtCtx, q: ListSitesQueryDto) {
@@ -34,9 +44,11 @@ export class SitesService {
     const activeFilter =
       q.active === undefined ? undefined : q.active !== 'false';
 
-    const qb = this.siteRepo
-      .createQueryBuilder('s')
-      .where('s.organization_id = :orgId', { orgId: String(ctx.organizationId) });
+    const qb = this.siteRepo.createQueryBuilder('s');
+
+    if (!this.isAdmin(ctx)) {
+      qb.where('s.organization_id = :orgId', { orgId: String(ctx.organizationId) });
+    }
 
     if (activeFilter !== undefined) {
       qb.andWhere('s.is_active = :isActive', { isActive: activeFilter });
@@ -52,24 +64,12 @@ export class SitesService {
     const rows = await qb.getMany();
 
     return {
-      items: rows.map((s) => ({
-        id: s.id,
-        organizationId: s.organization_id,
-        name: s.name,
-        code: s.code,
-        address: s.address,
-        timezone: s.timezone,
-        attributes: s.attributes ?? {},
-        isActive: s.is_active,
-        createdAt: s.created_at,
-      })),
+      items: rows.map((s) => this.toApi(s)),
       meta: { limit, offset },
     };
   }
 
   async create(ctx: JwtCtx, dto: CreateSiteDto) {
-    if (!this.isAdmin(ctx)) throw new ForbiddenException('Forbidden: insufficient role');
-
     this.assertOrg(ctx, dto.organizationId);
 
     const row = this.siteRepo.create({
@@ -84,32 +84,60 @@ export class SitesService {
 
     const saved = await this.siteRepo.save(row);
 
+    return { site: this.toApi(saved) };
+  }
+
+  private toApi(s: Site) {
     return {
-      site: {
-        id: saved.id,
-        organizationId: saved.organization_id,
-        name: saved.name,
-        code: saved.code,
-        address: saved.address,
-        timezone: saved.timezone,
-        attributes: saved.attributes ?? {},
-        isActive: saved.is_active,
-        createdAt: saved.created_at,
-      },
+      id: s.id,
+      organizationId: s.organization_id,
+      name: s.name,
+      code: s.code,
+      address: s.address,
+      timezone: s.timezone,
+      attributes: s.attributes ?? {},
+      isActive: s.is_active,
+      createdAt: s.created_at,
     };
   }
 
-  async deactivate(ctx: JwtCtx, siteId: string) {
-    if (!this.isAdmin(ctx)) throw new ForbiddenException('Forbidden: insufficient role');
+  async patch(ctx: JwtCtx, siteId: string, dto: PatchSiteDto) {
+    const s = await this.findSite(ctx, siteId);
+    if (!s) throw new NotFoundException('Site not found');
 
-    const s = await this.siteRepo.findOne({
-      where: { id: String(siteId), organization_id: String(ctx.organizationId) },
-    });
+    if (dto.name !== undefined) s.name = dto.name;
+    if (dto.code !== undefined) s.code = dto.code;
+    if (dto.address !== undefined) s.address = dto.address ?? null;
+    if (dto.timezone !== undefined) s.timezone = dto.timezone ?? null;
+    if (dto.attributes !== undefined) s.attributes = dto.attributes;
+
+    const saved = await this.siteRepo.save(s);
+    return { site: this.toApi(saved) };
+  }
+
+  async activate(ctx: JwtCtx, siteId: string) {
+    const s = await this.findSite(ctx, siteId);
+    if (!s) throw new NotFoundException('Site not found');
+
+    s.is_active = true;
+    await this.siteRepo.save(s);
+    return { ok: true, siteId: s.id };
+  }
+
+  async deactivate(ctx: JwtCtx, siteId: string) {
+    const s = await this.findSite(ctx, siteId);
     if (!s) throw new NotFoundException('Site not found');
 
     s.is_active = false;
     await this.siteRepo.save(s);
-
     return { ok: true, siteId: s.id };
+  }
+
+  async delete(ctx: JwtCtx, siteId: string) {
+    const s = await this.findSite(ctx, siteId);
+    if (!s) throw new NotFoundException('Site not found');
+
+    await this.siteRepo.remove(s);
+    return { ok: true, siteId };
   }
 }

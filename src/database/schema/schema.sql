@@ -434,6 +434,7 @@ CREATE TABLE IF NOT EXISTS maywin_db.constraint_profiles (
   -- ── shift-sequence toggles ─────────────────────────────────────────────────
   forbid_night_to_morning           boolean NOT NULL DEFAULT true,
   forbid_morning_to_night_same_day  boolean NOT NULL DEFAULT false,
+  forbid_evening_to_night           boolean NOT NULL DEFAULT true,  -- prevents 16:00-24:00 → 00:00-08:00 (0h rest)
 
   -- ── coverage / emergency toggles ──────────────────────────────────────────
   guarantee_full_coverage                   boolean NOT NULL DEFAULT true,

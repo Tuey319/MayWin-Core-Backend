@@ -5,6 +5,8 @@ import { Repository } from 'typeorm';
 
 import { Unit } from '@/database/entities/core/unit.entity';
 import { UnitMembership } from '@/database/entities/users/unit-membership.entity';
+import { WorkerUnitMembership } from '@/database/entities/workers/worker-unit.entity';
+import { Worker } from '@/database/entities/workers/worker.entity';
 import { CreateUnitDto } from './dto/create-unit.dto';
 import { PatchUnitDto } from './dto/patch-unit.dto';
 import { ListUnitsQueryDto } from './dto/list-units.query.dto';
@@ -22,25 +24,34 @@ export class UnitsService {
     private readonly unitRepo: Repository<Unit>,
     @InjectRepository(UnitMembership)
     private readonly membershipRepo: Repository<UnitMembership>,
+    @InjectRepository(WorkerUnitMembership)
+    private readonly workerMembershipRepo: Repository<WorkerUnitMembership>,
+    @InjectRepository(Worker)
+    private readonly workerRepo: Repository<Worker>,
   ) {}
 
-  private canSeeAllUnits(ctx: JwtCtx) {
-    const roles = ctx.roles ?? [];
-    return roles.includes('ORG_ADMIN') || roles.includes('UNIT_MANAGER');
+  private isAdmin(ctx: JwtCtx) {
+    return ctx.roles.includes('ADMIN');
   }
 
   private assertOrg(ctx: JwtCtx, orgId: string) {
+    if (this.isAdmin(ctx)) return;
     if (Number(orgId) !== Number(ctx.organizationId)) {
       throw new ForbiddenException('Forbidden: organization mismatch');
     }
   }
 
-  private assertCanAccessUnit(ctx: JwtCtx, unitId: string) {
-    if (this.canSeeAllUnits(ctx)) return;
-    const allowed = new Set((ctx.unitIds ?? []).map((x) => Number(x)));
-    if (!allowed.has(Number(unitId))) {
-      throw new ForbiddenException('Forbidden: unit not in token context');
+  private findUnit(ctx: JwtCtx, unitId: string) {
+    if (this.isAdmin(ctx)) {
+      return this.unitRepo.findOne({ where: { id: String(unitId) } });
     }
+    // Allow access if user is an explicit member of this unit (unitIds claim)
+    if (ctx.unitIds.includes(Number(unitId))) {
+      return this.unitRepo.findOne({ where: { id: String(unitId) } });
+    }
+    return this.unitRepo.findOne({
+      where: { id: String(unitId), organization_id: String(ctx.organizationId) },
+    });
   }
 
   async list(ctx: JwtCtx, q: ListUnitsQueryDto) {
@@ -50,9 +61,11 @@ export class UnitsService {
     const activeFilter =
       q.active === undefined ? undefined : q.active !== 'false';
 
-    const qb = this.unitRepo
-      .createQueryBuilder('u')
-      .where('u.organization_id = :orgId', { orgId: String(ctx.organizationId) });
+    const qb = this.unitRepo.createQueryBuilder('u');
+
+    if (!this.isAdmin(ctx)) {
+      qb.where('u.organization_id = :orgId', { orgId: String(ctx.organizationId) });
+    }
 
     if (activeFilter !== undefined) {
       qb.andWhere('u.is_active = :isActive', { isActive: activeFilter });
@@ -89,9 +102,7 @@ export class UnitsService {
   }
 
   async getById(ctx: JwtCtx, unitId: string) {
-    const u = await this.unitRepo.findOne({
-      where: { id: String(unitId), organization_id: String(ctx.organizationId) },
-    });
+    const u = await this.findUnit(ctx, unitId);
     if (!u) throw new NotFoundException('Unit not found');
 
     return {
@@ -111,7 +122,6 @@ export class UnitsService {
   }
 
   async create(ctx: JwtCtx, dto: CreateUnitDto) {
-    // must match caller org
     this.assertOrg(ctx, dto.organizationId);
 
     const row = this.unitRepo.create({
@@ -143,9 +153,7 @@ export class UnitsService {
   }
 
   async patch(ctx: JwtCtx, unitId: string, dto: PatchUnitDto) {
-    const u = await this.unitRepo.findOne({
-      where: { id: String(unitId), organization_id: String(ctx.organizationId) },
-    });
+    const u = await this.findUnit(ctx, unitId);
     if (!u) throw new NotFoundException('Unit not found');
 
     if (dto.siteId !== undefined) u.site_id = dto.siteId as any;
@@ -174,9 +182,7 @@ export class UnitsService {
   }
 
   async deactivate(ctx: JwtCtx, unitId: string) {
-    const u = await this.unitRepo.findOne({
-      where: { id: String(unitId), organization_id: String(ctx.organizationId) },
-    });
+    const u = await this.findUnit(ctx, unitId);
     if (!u) throw new NotFoundException('Unit not found');
 
     u.is_active = false;
@@ -185,30 +191,63 @@ export class UnitsService {
     return { ok: true, unitId: u.id };
   }
 
+  async delete(ctx: JwtCtx, unitId: string) {
+    const u = await this.findUnit(ctx, unitId);
+    if (!u) throw new NotFoundException('Unit not found');
+
+    await this.unitRepo.remove(u);
+    return { ok: true, unitId };
+  }
+
   // ── Membership ──────────────────────────────────────────────────────────────
 
   async listMembers(ctx: JwtCtx, unitId: string) {
-    const u = await this.unitRepo.findOne({
-      where: { id: String(unitId), organization_id: String(ctx.organizationId) },
-    });
+    const u = await this.findUnit(ctx, unitId);
     if (!u) throw new NotFoundException('Unit not found');
 
-    const rows = await this.membershipRepo.find({ where: { unit_id: String(unitId) } });
-    return {
-      members: rows.map((m) => ({
-        id: m.id,
-        userId: m.user_id,
+    // User-account memberships (unit_memberships)
+    const userRows = await this.membershipRepo.find({ where: { unit_id: String(unitId) } });
+
+    // Worker-profile memberships (worker_unit_memberships) joined with worker details
+    const workerRows = await this.workerMembershipRepo.find({ where: { unit_id: String(unitId) } });
+    const workerIds = workerRows.map((r) => r.worker_id);
+    const workers = workerIds.length
+      ? await this.workerRepo.findByIds(workerIds)
+      : [];
+    const workerMap = new Map(workers.map((w) => [String(w.id), w]));
+
+    const userMembers = userRows.map((m) => ({
+      id: m.id,
+      type: 'user' as const,
+      userId: m.user_id,
+      workerId: null,
+      unitId: m.unit_id,
+      roleCode: m.role_code,
+      name: null,
+      workerCode: null,
+      createdAt: m.created_at,
+    }));
+
+    const workerMembers = workerRows.map((m) => {
+      const w = workerMap.get(String(m.worker_id));
+      return {
+        id: String(m.worker_id),
+        type: 'worker' as const,
+        userId: w?.linked_user_id ?? null,
+        workerId: m.worker_id,
         unitId: m.unit_id,
-        roleCode: m.role_code,
-        createdAt: m.created_at,
-      })),
-    };
+        roleCode: m.role_code ?? 'NURSE',
+        name: w?.full_name ?? null,
+        workerCode: w?.worker_code ?? null,
+        createdAt: w?.created_at ?? null,
+      };
+    });
+
+    return { members: [...userMembers, ...workerMembers] };
   }
 
   async addMember(ctx: JwtCtx, unitId: string, userId: string, roleCode: string) {
-    const u = await this.unitRepo.findOne({
-      where: { id: String(unitId), organization_id: String(ctx.organizationId) },
-    });
+    const u = await this.findUnit(ctx, unitId);
     if (!u) throw new NotFoundException('Unit not found');
 
     const existing = await this.membershipRepo.findOne({
@@ -235,9 +274,7 @@ export class UnitsService {
   }
 
   async removeMember(ctx: JwtCtx, unitId: string, userId: string) {
-    const u = await this.unitRepo.findOne({
-      where: { id: String(unitId), organization_id: String(ctx.organizationId) },
-    });
+    const u = await this.findUnit(ctx, unitId);
     if (!u) throw new NotFoundException('Unit not found');
 
     const row = await this.membershipRepo.findOne({

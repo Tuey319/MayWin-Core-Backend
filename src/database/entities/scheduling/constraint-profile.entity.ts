@@ -64,6 +64,10 @@ export class ConstraintProfile {
   @Column({ type: 'boolean', default: false })
   forbid_morning_to_night_same_day: boolean;
 
+  /** Forbid evening → night back-to-back across day boundary (16:00-24:00 then 00:00-08:00 = 0h rest) */
+  @Column({ type: 'boolean', default: true })
+  forbid_evening_to_night: boolean;
+
   // ── Global coverage / emergency toggles ───────────────────────────────────
 
   /** If true, solver will retry in emergency mode to achieve full coverage */

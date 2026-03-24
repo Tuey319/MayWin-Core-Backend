@@ -51,6 +51,7 @@ class Rules(BaseModel):
     # Rest / sequence toggles
     forbid_night_to_morning: bool = True
     forbid_morning_to_night_same_day: bool = False
+    forbid_evening_to_night: bool = True
 
     # Relax / emergency behavior
     allow_second_shift_same_day_in_emergency: bool = True
@@ -362,6 +363,12 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
         for n in nurses:
             for i in range(len(days) - 1):
                 model.Add(x[(n, days[i], night_label)] + x[(n, days[i + 1], morning_label)] <= 1)
+
+    # Evening -> Night cross-day (16:00-24:00 then 00:00-08:00 = 0h rest)
+    if evening_label and night_label and rules.forbid_evening_to_night:
+        for n in nurses:
+            for i in range(len(days) - 1):
+                model.Add(x[(n, days[i], evening_label)] + x[(n, days[i + 1], night_label)] <= 1)
 
     # Morning -> Night same day toggle
     if morning_label and night_label and rules.forbid_morning_to_night_same_day:

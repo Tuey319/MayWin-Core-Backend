@@ -1231,10 +1231,20 @@ export const handler = async (event: AnyObj, _context: Context) => {
     }
   } catch (e: any) {
     logger.error(e?.stack ?? e);
+    
+    // Extract real error message (handles DB errors, etc.)
+    let errorMsg = e?.message;
+    if (!errorMsg) {
+      if (e?.detail) errorMsg = e.detail; // QueryFailedError.detail
+      else if (e?.driverError?.message) errorMsg = e.driverError.message; // Nested driver error
+      else if (typeof e === 'object') errorMsg = JSON.stringify(e); // Fallback to JSON
+      else errorMsg = String(e);
+    }
+    
     return {
       status: 'FAILED',
-      name: e?.name ?? 'Error',
-      message: e?.message ?? String(e),
+      name: e?.name ?? e?.code ?? 'Error',
+      message: errorMsg,
     };
   }
 };

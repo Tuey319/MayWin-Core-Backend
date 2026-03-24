@@ -65,13 +65,40 @@ def _normalize_availability(src, nurse_codes, day_dates, shift_codes):
                     out[n][d][s] = 1 if int(val) != 0 else 0
         return out
 
-    # Case 2: list of rules/windows
+    # Case 2: list — two sub-formats supported:
+    #   (a) v1 flat rows: {"nurseCode":"...", "date":"...", "shiftCode":"...", "type":"UNAVAILABLE"/...}
+    #   (b) grouped windows: {"nurseCode":"...", "windows":[{"date":"...", "shiftCode":"...", "allowed":bool}]}
     if isinstance(src, list):
         out = {n: {d: {s: 1 for s in shift_codes} for d in day_dates} for n in nurse_codes}
+        day_date_set = set(day_dates)
+        shift_code_set = set(shift_codes)
 
         for rule in src:
             if not isinstance(rule, dict):
                 continue
+
+            # Sub-format (a): v1 flat row — has "type" + "date" + "shiftCode" directly on row
+            if "type" in rule and "date" in rule and "shiftCode" in rule:
+                nurse = rule.get("nurseCode") or rule.get("nurse")
+                date = rule.get("date")
+                sc = rule.get("shiftCode")
+                typ = rule.get("type", "")
+
+                if not nurse or nurse not in out:
+                    continue
+                if date not in day_date_set:
+                    continue
+
+                val = 0 if typ in ("UNAVAILABLE", "BLOCKED", "DAY_OFF") else 1
+
+                if str(sc).upper() == "ALL":
+                    for shift in shift_codes:
+                        out[nurse][date][shift] = val
+                elif sc in shift_code_set:
+                    out[nurse][date][sc] = val
+                continue
+
+            # Sub-format (b): grouped windows
             nurse = rule.get("nurseCode") or rule.get("nurse") or rule.get("code")
             windows = rule.get("windows") or rule.get("items") or []
 
@@ -87,7 +114,7 @@ def _normalize_availability(src, nurse_codes, day_dates, shift_codes):
                 shift = w.get("shiftCode") or w.get("shift")
                 allowed = w.get("allowed")
 
-                if date in day_dates and shift in shift_codes and allowed is not None:
+                if date in day_date_set and shift in shift_code_set and allowed is not None:
                     out[nurse][date][shift] = 1 if bool(allowed) else 0
 
         return out
@@ -265,7 +292,6 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
             pass
 
     # Pass-through if your normalizer already computed these in correct shapes
-    # (Only include if present; solver_cli.py supports them) :contentReference[oaicite:2]{index=2}
     if isinstance(payload.get("nurse_skills"), dict):
         solve_req["nurse_skills"] = payload["nurse_skills"]
     if isinstance(payload.get("required_skills"), dict):
@@ -276,6 +302,32 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
         solve_req["min_total_shifts_per_nurse"] = payload["min_total_shifts_per_nurse"]
     if isinstance(payload.get("max_total_shifts_per_nurse"), dict):
         solve_req["max_total_shifts_per_nurse"] = payload["max_total_shifts_per_nurse"]
+
+    # Derive max_total_shifts_per_nurse from nurses[].regularShiftsPerPeriod + maxOvertimeShifts
+    # if not already set. Allows per-nurse overtime caps (e.g. NURSE_001 max_overtime=0).
+    if "max_total_shifts_per_nurse" not in solve_req:
+        nurse_list = payload.get("nurses") or []
+        max_total = {}
+        for n in nurse_list:
+            if not isinstance(n, dict):
+                continue
+            code = n.get("code")
+            if not code:
+                continue
+            reg = n.get("regularShiftsPerPeriod")
+            ot = n.get("maxOvertimeShifts")
+            if reg is not None and ot is not None:
+                try:
+                    max_total[str(code)] = int(reg) + int(ot)
+                except Exception:
+                    pass
+        if max_total:
+            solve_req["max_total_shifts_per_nurse"] = max_total
+
+    # Pass ignore_availability_in_emergency from constraint profile
+    constraints = payload.get("constraints") or {}
+    ignore_avail_emergency = constraints.get("ignoreAvailabilityInEmergency", False)
+    solve_req["ignore_availability_in_emergency"] = bool(ignore_avail_emergency)
 
     # If availability/preferences became None (unknown format), remove key entirely
     # (None is allowed by SolveRequest, but removing keeps payload smaller)

@@ -1,5 +1,5 @@
 // src/core/unit-config/constraint-profiles/constraint-profiles.controller.ts
-import { Body, Controller, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { ConstraintProfilesService } from './constraint-profiles.service';
 import { CreateConstraintProfileDto } from './dto/create-constraint-profile.dto';
@@ -9,6 +9,16 @@ import { UpdateConstraintProfileDto } from './dto/update-constraint-profile.dto'
 @Controller()
 export class ConstraintProfilesController {
   constructor(private readonly service: ConstraintProfilesService) {}
+
+  @Get('/units/:unitId/constraint-profiles')
+  list(@Param('unitId') unitId: string) {
+    return this.service.listByUnit(unitId);
+  }
+
+  @Get('/units/:unitId/profiles')
+  listProfiles(@Param('unitId') unitId: string) {
+    return this.service.listByUnit(unitId);
+  }
 
   @Post('/units/:unitId/constraint-profiles')
   create(@Param('unitId') unitId: string, @Body() dto: CreateConstraintProfileDto) {

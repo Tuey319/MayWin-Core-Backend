@@ -51,6 +51,12 @@ export class UnitsController {
     return this.svc.deactivate(this.ctx(req), unitId);
   }
 
+  // DELETE /units/:unitId
+  @Delete('/units/:unitId')
+  delete(@Req() req: Request, @Param('unitId') unitId: string) {
+    return this.svc.delete(this.ctx(req), unitId);
+  }
+
   // GET /units/:unitId/members
   @Get('/units/:unitId/members')
   listMembers(@Req() req: Request, @Param('unitId') unitId: string) {

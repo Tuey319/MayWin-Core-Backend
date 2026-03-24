@@ -74,6 +74,10 @@ export class UpdateConstraintProfileDto {
   @IsBoolean()
   forbidMorningToNightSameDay?: boolean;
 
+  @IsOptional()
+  @IsBoolean()
+  forbidEveningToNight?: boolean;
+
   // ── coverage / emergency toggles ──────────────────────────────────────────
 
   @IsOptional()

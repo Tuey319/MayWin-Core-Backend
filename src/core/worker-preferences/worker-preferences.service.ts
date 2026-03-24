@@ -1,5 +1,5 @@
 // src/core/worker-preferences/worker-preferences.service.ts
-import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -13,7 +13,6 @@ import { WorkerPreferencesDto } from './dto/put-worker-preferences.dto';
 
 type JwtCtx = {
   organizationId: number;
-  roles: string[];
   unitIds: number[];
 };
 
@@ -35,24 +34,6 @@ export class WorkerPreferencesService {
   ) {}
 
   /**
-   * DB role codes are: ADMIN / MANAGER / SCHEDULER / VIEWER
-   * - ADMIN + MANAGER: can see all units
-   * - others: restricted to ctx.unitIds
-   */
-  private canSeeAllUnits(ctx: JwtCtx) {
-    const roles = ctx.roles ?? [];
-    return roles.includes('ADMIN') || roles.includes('MANAGER');
-  }
-
-  private assertCanAccessUnit(ctx: JwtCtx, unitId: string) {
-    if (this.canSeeAllUnits(ctx)) return;
-    const allowed = new Set((ctx.unitIds ?? []).map((x) => Number(x)));
-    if (!allowed.has(Number(unitId))) {
-      throw new ForbiddenException('Forbidden: unit not in token context');
-    }
-  }
-
-  /**
    * Dashboard / admin list:
    * Get all workers in a unit + their stored preferences from maywin_db.worker_preferences.
    *
@@ -60,11 +41,10 @@ export class WorkerPreferencesService {
    * Preferences are per-worker (table has no unit_id), so we return the same pref row regardless of unit.
    */
   async listForUnit(ctx: JwtCtx, unitId: string) {
-    this.assertCanAccessUnit(ctx, unitId);
-
     const cacheKey = `worker-prefs:list:${unitId}`;
     const cached = await this.cache.get<any>(cacheKey);
-    if (cached) return cached;
+    // Only use cache if it actually has workers (guards against stale empty results)
+    if (cached && cached.totalWorkers > 0) return cached;
 
     // 1) Get memberships for this unit
     const memberships = await this.membershipRepo.find({
@@ -81,11 +61,10 @@ export class WorkerPreferencesService {
       };
     }
 
-    // 2) Fetch workers (restrict to org + active)
+    // 2) Fetch workers (restrict to active; org filter omitted — workerIds already scoped to the unit)
     const workers = await this.workersRepo
       .createQueryBuilder('w')
-      .where('w.organization_id = :orgId', { orgId: String(ctx.organizationId) })
-      .andWhere('w.is_active = true')
+      .where('w.is_active = true')
       .andWhere('w.id IN (:...ids)', { ids: workerIds.map(String) })
       .orderBy('w.full_name', 'ASC')
       .getMany();
@@ -131,8 +110,17 @@ export class WorkerPreferencesService {
       const pref = prefByWorkerId.get(Number(w.id)) ?? null;
       // Prefer days_off_pattern_json if present, else fallback to worker_availability
       let daysOff = [];
-      if (pref && pref.days_off_pattern_json && Object.keys(pref.days_off_pattern_json).length > 0) {
-        daysOff = Object.entries(pref.days_off_pattern_json).map(([date, value]) => ({ date, ...value }));
+      if (pref && pref.days_off_pattern_json) {
+        const raw = pref.days_off_pattern_json as any;
+        if (Array.isArray(raw) && raw.length > 0) {
+          // Stored as ["2026-04-05", ...] — map to { date } objects
+          daysOff = raw.map((date: string) => ({ date }));
+        } else if (!Array.isArray(raw) && Object.keys(raw).length > 0) {
+          // Stored as { "2026-04-05": {...} } — legacy object format
+          daysOff = Object.entries(raw).map(([date, value]) => ({ date, ...(value as object) }));
+        } else {
+          daysOff = daysOffByWorkerId.get(String(w.id)) ?? [];
+        }
       } else {
         daysOff = daysOffByWorkerId.get(String(w.id)) ?? [];
       }

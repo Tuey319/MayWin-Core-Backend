@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, In, IsNull, Repository } from 'typeorm';
 
+import { Schedule } from '@/database/entities/scheduling/schedule.entity';
 import { ScheduleJob } from '@/database/entities/orchestration/schedule-job.entity';
 import { CoverageRule } from '@/database/entities/scheduling/coverage-rule.entity';
 import { ConstraintProfile } from '@/database/entities/scheduling/constraint-profile.entity';
@@ -20,6 +21,9 @@ type SolverPreferences = Record<string, Record<string, Record<string, number>>>;
 @Injectable()
 export class NormalizerService {
   constructor(
+    @InjectRepository(Schedule)
+    private readonly schedulesRepo: Repository<Schedule>,
+
     @InjectRepository(ScheduleJob)
     private readonly jobsRepo: Repository<ScheduleJob>,
 
@@ -267,8 +271,10 @@ export class NormalizerService {
 
       // 2) Apply explicit per-day/per-shift penalties if provided (patternJson)
       const explicit = this.normalizePatternPenalties(patternJson);
+      const daysSet = new Set(days);
       if (explicit) {
         for (const d of Object.keys(explicit)) {
+          if (!daysSet.has(d)) continue; // skip keys outside the schedule horizon
           const byShift = explicit[d];
           if (!byShift || typeof byShift !== 'object') continue;
           out[nurseCode][d] = out[nurseCode][d] ?? {};
@@ -416,7 +422,24 @@ export class NormalizerService {
   }
 
   private async resolveConstraintProfile(job: ScheduleJob): Promise<Record<string, any>> {
-    const cpId = job.attributes?.constraintProfileId ?? job.attributes?.constraint_profile_id ?? null;
+    const scheduleId = job.attributes?.scheduleId ?? job.attributes?.schedule_id ?? null;
+
+    let scheduleConstraintProfileId: string | null = null;
+    if (scheduleId) {
+      const schedule = await this.schedulesRepo.findOne({
+        where: { id: String(scheduleId) as any } as any,
+      });
+      scheduleConstraintProfileId = schedule?.constraint_profile_id ?? null;
+      console.log(`[NormalizerService] Schedule ${scheduleId} has constraint_profile_id: ${scheduleConstraintProfileId}`);
+    }
+
+    const cpId =
+      job.attributes?.constraintProfileId ??
+      job.attributes?.constraint_profile_id ??
+      scheduleConstraintProfileId ??
+      null;
+
+    console.log(`[NormalizerService] Resolved constraint profile ID: ${cpId}`);
 
     let cp: ConstraintProfile | null = null;
 
@@ -424,6 +447,9 @@ export class NormalizerService {
       cp = await this.constraintRepo.findOne({
         where: { id: String(cpId) as any, unit_id: job.unit_id as any } as any,
       });
+      if (!cp) {
+        console.log(`[NormalizerService] WARNING: Constraint profile ${cpId} not found for unit ${job.unit_id}, falling back to latest active`);
+      }
     }
 
     if (!cp) {
@@ -431,7 +457,10 @@ export class NormalizerService {
         where: { unit_id: job.unit_id as any, is_active: true as any } as any,
         order: { created_at: 'DESC' as any },
       });
+      console.log(`[NormalizerService] Fell back to latest active profile: ${cp?.id}`);
     }
+
+    console.log(`[NormalizerService] Using constraint profile ${cp?.id} with forbid_evening_to_night=${cp?.forbid_evening_to_night}`);
 
     return {
       constraintProfileId: cp?.id ?? null,
@@ -450,6 +479,7 @@ export class NormalizerService {
       // shift-sequence toggles (solver v3)
       forbidNightToMorning: cp?.forbid_night_to_morning ?? true,
       forbidMorningToNightSameDay: cp?.forbid_morning_to_night_same_day ?? false,
+      forbidEveningToNight: cp?.forbid_evening_to_night ?? true,
 
       // coverage / emergency toggles (solver v3)
       guaranteeFullCoverage: cp?.guarantee_full_coverage ?? true,

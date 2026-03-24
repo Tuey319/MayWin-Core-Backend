@@ -54,6 +54,14 @@ class SolveRequest(BaseModel):
     random_seed: Optional[int] = None
     enable_cp_sat_log: bool = False
 
+    # Emergency / override flags
+    ignore_availability_in_emergency: bool = False
+
+    # Constraint profile flags (shift-sequence toggles) — received from normalizer
+    forbid_evening_to_night: bool = Field(default=True, description="Forbid EVENING (16:00-24:00) → NIGHT (00:00-08:00) on consecutive days")
+    forbid_night_to_morning: bool = Field(default=True, description="Forbid NIGHT → MORNING on consecutive days")
+    forbid_morning_to_night_same_day: bool = Field(default=False, description="Forbid MORNING → NIGHT on the same day")
+
     @model_validator(mode="after")
     def check_consistency(self):
         # basic demand shape
@@ -208,8 +216,10 @@ def backfill_missing_with_overtime(
     nurse_skills: Dict[str, List[str]],
     night_label: Optional[str],
     morning_label: Optional[str],  # kept for completeness; we forbid NM anyway
+    evening_label: Optional[str],
     weights: Weights,
     base_overtime_from_model: Dict[str, int],
+    ignore_availability_in_emergency: bool = False,
 ) -> Tuple[List[Assignment], List[UnderstaffItem], Dict[str, int], Dict[Tuple[str, str], int]]:
     """
     Fill remaining missing coverage using ONLY real nurses by assigning overtime.
@@ -234,18 +244,20 @@ def backfill_missing_with_overtime(
     def has_skill(n: str, skill: str) -> bool:
         return skill in (nurse_skills.get(n, []) or [])
 
-    # Night→Morning detection (forbid)
+    # Night→Morning / Evening→Night detection (forbid both)
     def would_create_nm(n: str, d: str, s: str) -> bool:
-        if not (night_label and morning_label):
-            return False
         idx = days.index(d)
-        if s == "Morning" and morning_label:
-            # if assigning Morning on day d, check Night on day d-1
-            if idx > 0 and assigned_map.get((n, days[idx - 1], night_label), 0) == 1:
+        # Night→Morning: assigning Morning after Night
+        if night_label and morning_label:
+            if s == morning_label and idx > 0 and assigned_map.get((n, days[idx - 1], night_label), 0) == 1:
                 return True
-        if s == night_label:
-            # if assigning Night on day d, check Morning on day d+1
-            if idx < len(days) - 1 and assigned_map.get((n, days[idx + 1], morning_label), 0) == 1:
+            if s == night_label and idx < len(days) - 1 and assigned_map.get((n, days[idx + 1], morning_label), 0) == 1:
+                return True
+        # Evening→Night: assigning Night after Evening (0h rest)
+        if evening_label and night_label:
+            if s == night_label and idx > 0 and assigned_map.get((n, days[idx - 1], evening_label), 0) == 1:
+                return True
+            if s == evening_label and idx < len(days) - 1 and assigned_map.get((n, days[idx + 1], night_label), 0) == 1:
                 return True
         return False
 
@@ -287,13 +299,16 @@ def backfill_missing_with_overtime(
                 # L0: avail=1, <=1/day, no weekly night over
                 # L1: allow second shift same day (<=2/day), no weekly night over
                 # L2: allow weekly night over (>2/week), still no NM
-                # L3: (last resort) ignore availability, still no NM
+                # L3: (last resort) ignore availability — only when ignore_availability_in_emergency=True
                 levels = [
                     {"allow_same_day_second": False, "allow_weekly_night_over": False, "ignore_avail": False},
                     {"allow_same_day_second": True,  "allow_weekly_night_over": False, "ignore_avail": False},
                     {"allow_same_day_second": True,  "allow_weekly_night_over": True,  "ignore_avail": False},
-                    {"allow_same_day_second": True,  "allow_weekly_night_over": True,  "ignore_avail": True},
                 ]
+                if ignore_availability_in_emergency:
+                    levels.append(
+                        {"allow_same_day_second": True, "allow_weekly_night_over": True, "ignore_avail": True}
+                    )
 
                 chosen = None
                 cand_meta = None
@@ -394,6 +409,9 @@ def solve(req: SolveRequest) -> SolveResponse:
     week_idx = get_week_index_map(days, req.week_index_by_day)
     night_label = find_shift_name(shifts, "night")
     morning_label = find_shift_name(shifts, "morning")
+    evening_label = find_shift_name(shifts, "evening")
+    print(f"[SOLVER] Detected shifts: morning={morning_label}, evening={evening_label}, night={night_label}", file=sys.stderr)
+    print(f"[SOLVER] All shifts available: {shifts}", file=sys.stderr)
 
     # Preindex weeks
     weeks: Dict[int, List[str]] = {}
@@ -432,10 +450,23 @@ def solve(req: SolveRequest) -> SolveResponse:
         model.Add(total >= per_nurse_min[n])
 
     # 5) No Night→Morning next day (HARD)
-    if night_label and morning_label:
+    if night_label and morning_label and req.forbid_night_to_morning:
         for n in nurses:
             for i in range(len(days) - 1):
                 model.Add(x[(n, days[i], night_label)] + x[(n, days[i + 1], morning_label)] <= 1)
+
+    # 5b) No Evening→Night next day (HARD) — Evening 16:00-24:00 then Night 00:00-08:00 = 0h rest
+    print(f"[STRICT SOLVER] evening_label={evening_label}  night_label={night_label}  forbid_evening_to_night={req.forbid_evening_to_night}", file=sys.stderr)
+    if evening_label and night_label and req.forbid_evening_to_night:
+        print(f"[STRICT SOLVER] Adding evening→night constraint (forbid EN on consecutive days)", file=sys.stderr)
+        for n in nurses:
+            for i in range(len(days) - 1):
+                model.Add(x[(n, days[i], evening_label)] + x[(n, days[i + 1], night_label)] <= 1)
+    else:
+        if not req.forbid_evening_to_night:
+            print(f"[STRICT SOLVER] Skipping evening→night constraint because forbid_evening_to_night=False", file=sys.stderr)
+        elif not (evening_label and night_label):
+            print(f"[STRICT SOLVER] WARNING: Skipping constraint because evening_label or night_label is None", file=sys.stderr)
 
     # 6) ≤ 2 Nights per week (HARD)
     if night_label:
@@ -526,8 +557,10 @@ def solve(req: SolveRequest) -> SolveResponse:
             nurse_skills=nurse_skills or {},
             night_label=night_label,
             morning_label=morning_label,
+            evening_label=evening_label,
             weights=weights,
             base_overtime_from_model=base_overtime,
+            ignore_availability_in_emergency=req.ignore_availability_in_emergency,
         )
         assignments = assignments2
         understaffed = understaffed2
@@ -628,10 +661,16 @@ def solve(req: SolveRequest) -> SolveResponse:
         r_min_slack[n] = slack
 
     # Night→Morning HARD in RELAXED
-    if night_label and morning_label:
+    if night_label and morning_label and req.forbid_night_to_morning:
         for n in nurses:
             for i in range(len(days) - 1):
                 r_model.Add(rx[(n, days[i], night_label)] + rx[(n, days[i + 1], morning_label)] <= 1)
+
+    # Evening→Night HARD in RELAXED
+    if evening_label and night_label and req.forbid_evening_to_night:
+        for n in nurses:
+            for i in range(len(days) - 1):
+                r_model.Add(rx[(n, days[i], evening_label)] + rx[(n, days[i + 1], night_label)] <= 1)
 
     # Soft weekly night cap (≤2) and days-off
     wn_over: List[cp_model.IntVar] = []
@@ -752,8 +791,10 @@ def solve(req: SolveRequest) -> SolveResponse:
             nurse_skills=nurse_skills or {},
             night_label=night_label,
             morning_label=morning_label,
+            evening_label=evening_label,
             weights=weights,
             base_overtime_from_model=base_overtime,
+            ignore_availability_in_emergency=req.ignore_availability_in_emergency,
         )
         assignments = assignments2
         understaffed = understaffed2
@@ -830,10 +871,11 @@ def solve(req: SolveRequest) -> SolveResponse:
         return bool((availability.get(n, {}) or {}).get(d, {}).get(s, 1))
 
     assignments: List[Assignment] = []
+    assigned_map_h: Dict[tuple, int] = {}
     used = {(n, d): False for n in nurses for d in days}
     load = {n: 0 for n in nurses}
 
-    for d in days:
+    for d_idx, d in enumerate(days):
         for s in shifts:
             req_needed = demand[d][s]
             senior_need = int((required_skills.get(d, {}).get(s, {}) or {}).get("Senior", 0))
@@ -845,18 +887,35 @@ def solve(req: SolveRequest) -> SolveResponse:
             for n in seniors:
                 if len(chosen) >= senior_need:
                     break
-                if is_avail(n, d, s) and not used[(n, d)]:
-                    chosen.append(n); used[(n, d)] = True; load[n] += 1
+                if not is_avail(n, d, s) or used[(n, d)]:
+                    continue
+                # forbid Evening→Night across day boundary
+                if (evening_label and night_label and s == night_label and d_idx > 0
+                        and assigned_map_h.get((n, days[d_idx - 1], evening_label), 0) == 1):
+                    continue
+                # forbid Night→Morning across day boundary
+                if (night_label and morning_label and s == morning_label and d_idx > 0
+                        and assigned_map_h.get((n, days[d_idx - 1], night_label), 0) == 1):
+                    continue
+                chosen.append(n); used[(n, d)] = True; load[n] += 1
             # fill remaining
             for n in regulars:
                 if len(chosen) >= req_needed:
                     break
-                if n in chosen:
+                if n in chosen or not is_avail(n, d, s) or used[(n, d)]:
                     continue
-                if is_avail(n, d, s) and not used[(n, d)]:
-                    chosen.append(n); used[(n, d)] = True; load[n] += 1
+                # forbid Evening→Night across day boundary
+                if (evening_label and night_label and s == night_label and d_idx > 0
+                        and assigned_map_h.get((n, days[d_idx - 1], evening_label), 0) == 1):
+                    continue
+                # forbid Night→Morning across day boundary
+                if (night_label and morning_label and s == morning_label and d_idx > 0
+                        and assigned_map_h.get((n, days[d_idx - 1], night_label), 0) == 1):
+                    continue
+                chosen.append(n); used[(n, d)] = True; load[n] += 1
             for n in chosen:
                 assignments.append(Assignment(day=d, shift=s, nurse=n))
+                assigned_map_h[(n, d, s)] = 1
 
     # compute understaffed from heuristic
     count = Counter((a.day, a.shift) for a in assignments)
@@ -882,8 +941,10 @@ def solve(req: SolveRequest) -> SolveResponse:
         nurse_skills=nurse_skills or {},
         night_label=night_label,
         morning_label=morning_label,
+        evening_label=evening_label,
         weights=weights,
         base_overtime_from_model=base_overtime,
+        ignore_availability_in_emergency=req.ignore_availability_in_emergency,
     )
 
     # final stats

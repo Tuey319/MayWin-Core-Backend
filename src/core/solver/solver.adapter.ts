@@ -241,9 +241,20 @@ export class SolverAdapter {
       if (!availability[nurse][date]) availability[nurse][date] = {};
 
       // 0 = unavailable, 1 = available (default)
+      // PREFERRED only marks the named shift as explicitly available — it does NOT block
+      // other shifts on the same day. To enforce "shift X only", add UNAVAILABLE rows
+      // for all other shifts on that day in worker_availability.
       if (type === 'UNAVAILABLE' || type === 'BLOCKED' || type === 'DAY_OFF') {
-        availability[nurse][date][sc] = 0;
+        if (sc.toUpperCase() === 'ALL') {
+          // shift_code='ALL' means block every shift on this day
+          for (const shiftCode of shifts) {
+            availability[nurse][date][shiftCode] = 0;
+          }
+        } else {
+          availability[nurse][date][sc] = 0;
+        }
       } else {
+        // PREFERRED, AVAILABLE, or any other type → available
         availability[nurse][date][sc] = 1;
       }
     }
@@ -332,6 +343,7 @@ export class SolverAdapter {
       min_rest_hours_between_shifts: cp.minRestHoursBetweenShifts ?? null,
       forbid_night_to_morning: cp.forbidNightToMorning ?? true,
       forbid_morning_to_night_same_day: cp.forbidMorningToNightSameDay ?? false,
+      forbid_evening_to_night: cp.forbidEveningToNight ?? true,
       allow_second_shift_same_day_in_emergency: cp.allowSecondShiftSameDayInEmergency ?? true,
       ignore_availability_in_emergency: cp.ignoreAvailabilityInEmergency ?? false,
       allow_night_cap_override_in_emergency: cp.allowNightCapOverrideInEmergency ?? true,
@@ -370,18 +382,22 @@ export class SolverAdapter {
     const numSearchWorkers = cp.numSearchWorkers ?? 8;
 
     // ── assemble final request ────────────────────────────────────────────────
+    // The AWS lambda SolveRequest expects constraint flags as TOP-LEVEL fields,
+    // not nested under a "rules" object.
     const req: Record<string, any> = {
       nurses,
       shifts,
       days,
       demand,
       availability,
-      rules,
       weights,
-      goal_priority: goalPriority,
-      fairness_weights: fairnessWeights,
       time_limit_sec: timeLimitSec,
       num_search_workers: numSearchWorkers,
+      // Shift-sequence toggles — top-level fields consumed by the lambda solver
+      forbid_evening_to_night: cp.forbidEveningToNight ?? true,
+      forbid_night_to_morning: cp.forbidNightToMorning ?? true,
+      forbid_morning_to_night_same_day: cp.forbidMorningToNightSameDay ?? false,
+      ignore_availability_in_emergency: cp.ignoreAvailabilityInEmergency ?? false,
     };
 
     if (preferences) req.preferences = preferences;
