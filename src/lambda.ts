@@ -286,7 +286,7 @@ function extractSolverResultLayer(solverFile: any) {
 
 function normalizeAssignment(
   a: any,
-): { nurseCode: string; date: string; shiftCode: string } | null {
+): { nurseCode: string; date: string; shiftCode: string; shiftOrder: number; isOvertime: boolean } | null {
   const nurseCode =
     a?.nurseCode ?? a?.workerCode ?? a?.nurse ?? a?.worker ?? null;
 
@@ -300,10 +300,15 @@ function normalizeAssignment(
   // normalize to YYYY-MM-DD if it contains time
   const d = String(date).includes("T") ? String(date).split("T")[0] : String(date);
 
+  const shiftOrder = Number(a?.shiftOrder ?? a?.shift_order ?? 1);
+  const isOvertime = Boolean(a?.isOvertime ?? a?.is_overtime ?? false);
+
   return {
     nurseCode: String(nurseCode),
     date: d,
     shiftCode: String(shiftCode),
+    shiftOrder: Number.isFinite(shiftOrder) && shiftOrder >= 1 ? shiftOrder : 1,
+    isOvertime,
   };
 }
 
@@ -668,7 +673,7 @@ export const handler = async (event: AnyObj, _context: Context) => {
         const cleaned = (assignments as any[])
           .map(normalizeAssignment)
           .filter(
-            (x): x is { nurseCode: string; date: string; shiftCode: string } =>
+            (x): x is { nurseCode: string; date: string; shiftCode: string; shiftOrder: number; isOvertime: boolean } =>
               !!x,
           );
 
@@ -726,11 +731,13 @@ export const handler = async (event: AnyObj, _context: Context) => {
           worker_id: codeToWorkerId.get(x.nurseCode)!,
           date: x.date,
           shift_code: x.shiftCode,
+          shift_order: x.shiftOrder,
+          is_overtime: x.isOvertime,
         }));
 
         const dedupe = new Map<string, (typeof rowsToUpsertRaw)[number]>();
         for (const r of rowsToUpsertRaw) {
-          const key = `${r.schedule_id}__${r.worker_id}__${r.date}`;
+          const key = `${r.schedule_id}__${r.worker_id}__${r.date}__${r.shift_order}`;
           dedupe.set(key, r); // last one wins
         }
         const rowsToUpsert = Array.from(dedupe.values());
@@ -755,6 +762,8 @@ export const handler = async (event: AnyObj, _context: Context) => {
             worker_id: row.worker_id,
             date: row.date,
             shift_code: row.shift_code,
+            shift_order: row.shift_order ?? 1,
+            is_overtime: row.is_overtime ?? false,
             source: 'SOLVER',
             attributes: {},
           }));
@@ -763,17 +772,19 @@ export const handler = async (event: AnyObj, _context: Context) => {
             await trx.query(
               `
     insert into maywin_db.schedule_assignments
-      (schedule_id, schedule_run_id, worker_id, date, shift_code, source, attributes)
+      (schedule_id, schedule_run_id, worker_id, date, shift_code, shift_order, is_overtime, source, attributes)
     select
       x.schedule_id::bigint,
       x.schedule_run_id::bigint,
       x.worker_id::bigint,
       x.date::date,
       x.shift_code::text,
+      (x.shift_order)::int,
+      (x.is_overtime)::boolean,
       x.source::text,
       coalesce(x.attributes, '{}'::jsonb)
     from jsonb_to_recordset($1::jsonb)
-      as x(schedule_id text, schedule_run_id text, worker_id text, date text, shift_code text, source text, attributes jsonb)
+      as x(schedule_id text, schedule_run_id text, worker_id text, date text, shift_code text, shift_order int, is_overtime boolean, source text, attributes jsonb)
     `,
               [JSON.stringify(rowsToInsert)],
             );

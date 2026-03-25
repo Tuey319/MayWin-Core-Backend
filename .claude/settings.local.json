@@ -1,13 +1,24 @@
 {
   "permissions": {
     "allow": [
-      "Bash(aws s3:*)",
-      "Bash(python -m json.tool --no-ensure-ascii)",
+      "Bash(fc /b \"c:\\\\Users\\\\tueyc\\\\CMKL\\\\Year 2\\\\URD-202 MayWin\\\\MayWin-Core-Backend\\\\src\\\\aws\\\\solver_lambda\\\\solver_cli.py\" \"c:\\\\Users\\\\tueyc\\\\CMKL\\\\Year 2\\\\URD-202 MayWin\\\\MayWin-Core-Backend\\\\src\\\\core\\\\solver\\\\solver_cli.py\")",
+      "Bash(aws sts:*)",
+      "Bash(npm run:*)",
+      "Bash(node -e \":*)",
       "Bash(aws ecr:*)",
       "Bash(docker login:*)",
       "Bash(docker buildx:*)",
-      "Bash(__NEW_LINE_7f34d7bf20460960__ curl:*)",
-      "Bash(__NEW_LINE_fd843112e0328208__ curl:*)"
+      "Bash(aws lambda:*)",
+      "Bash(python3:*)",
+      "Bash(docker build:*)",
+      "Bash(docker tag:*)",
+      "Bash(docker push:*)",
+      "Bash(DOCKER_BUILDKIT=0 docker build -t maywin-solver-plan-a-strict:docker .)",
+      "Bash(DOCKER_BUILDKIT=0 docker build -f Dockerfile.lambda -t maywin-control-layer:docker .)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjUsIm9yZ2FuaXphdGlvbklkIjoxLCJyb2xlcyI6WyJBRE1JTiJdLCJ1bml0SWRzIjpbXSwiaWF0IjoxNzc0NDMwMzE3LCJleHAiOjE3NzQ0NTkxMTd9._v31CtsnQtHtBBMkhLaMLeBgEVvEXsA9Z1rXkePb7p4\" BASE=\"https://rf5wup7oy5ng7h5soteik7ajpe0iunpn.lambda-url.ap-southeast-1.on.aws/api/v1/core\" __NEW_LINE_9f05c9e66563f9f9__ curl -s \"$BASE/schedules/10\" -H \"Authorization: Bearer $TOKEN\")",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjUsIm9yZ2FuaXphdGlvbklkIjoxLCJyb2xlcyI6WyJBRE1JTiJdLCJ1bml0SWRzIjpbXSwiaWF0IjoxNzc0NDMwMzE3LCJleHAiOjE3NzQ0NTkxMTd9._v31CtsnQtHtBBMkhLaMLeBgEVvEXsA9Z1rXkePb7p4\" BASE=\"https://rf5wup7oy5ng7h5soteik7ajpe0iunpn.lambda-url.ap-southeast-1.on.aws/api/v1/core\" __NEW_LINE_5604ba080f1ad78f__ curl -s \"$BASE/schedules/10\" -H \"Authorization: Bearer $TOKEN\")",
+      "Bash(curl -s -X POST \"https://rf5wup7oy5ng7h5soteik7ajpe0iunpn.lambda-url.ap-southeast-1.on.aws/api/v1/core/jobs\" -H \"Content-Type: application/json\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzNTI4YTEyYy1lOWJhLTQ3ZWEtOTgwNC0xMjEzZWIzZGQ0MjEiLCJ1c2VybmFtZSI6ImFkbWluQG1heXdpbi5jb20iLCJyb2xlIjoiQURNSU4iLCJvcmdhbml6YXRpb25JZCI6IjYxYjliMjkxLTdlNmItNGZlNy04YTgzLTZlOWI4OGVlMzA0ZiIsImlhdCI6MTc0MjkwNzI1NiwiZXhwIjoxNzQzNTEyMDU2fQ.qdAVzOvQEhv6Rze7ZGn8y7P3YA_v3YjcMtOVWr1_v31\" -d '{\"\"type\"\":\"\"GENERATE_SCHEDULE\"\",\"\"unitId\"\":5,\"\"payload\"\":{\"\"month\"\":4,\"\"year\"\":2026}}')",
+      "Bash(curl -s -X POST \"https://rf5wup7oy5ng7h5soteik7ajpe0iunpn.lambda-url.ap-southeast-1.on.aws/api/v1/core/scheduling/run-solver\" -H \"Content-Type: application/json\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzNTI4YTEyYy1lOWJhLTQ3ZWEtOTgwNC0xMjEzZWIzZGQ0MjEiLCJ1c2VybmFtZSI6ImFkbWluQG1heXdpbi5jb20iLCJyb2xlIjoiQURNSU4iLCJvcmdhbml6YXRpb25JZCI6IjYxYjliMjkxLTdlNmItNGZlNy04YTgzLTZlOWI4OGVlMzA0ZiIsImlhdCI6MTc0MjkwNzI1NiwiZXhwIjoxNzQzNTEyMDU2fQ.qdAVzOvQEhv6Rze7ZGn8y7P3YA_v3YjcMtOVWr1_v31\" -d '{\"\"unitId\"\":5,\"\"month\"\":4,\"\"year\"\":2026}')"
     ]
   }
 }

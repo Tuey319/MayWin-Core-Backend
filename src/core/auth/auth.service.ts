@@ -2,6 +2,8 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -20,6 +22,8 @@ import { MailService } from '@/core/mail/mail.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
@@ -114,6 +118,23 @@ export class AuthService {
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) throw new UnauthorizedException('Invalid credentials');
 
+    // OTP bypass: set AUTH_DISABLE_OTP=true to skip 2FA and return JWT directly
+    if ((process.env.AUTH_DISABLE_OTP ?? '').toLowerCase() === 'true') {
+      const { unitIds, roles } = await this.buildContext(user.id);
+      const accessToken = this.signFull(user, roles, unitIds);
+      return {
+        accessToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          fullName: user.full_name,
+          organizationId: Number(user.organization_id),
+          roles,
+          unitIds,
+        },
+      };
+    }
+
     // Generate + persist OTP (invalidate any existing unused ones)
     await this.otpRepo.delete({ user_id: user.id, used_at: IsNull() });
 
@@ -133,8 +154,21 @@ export class AuthService {
     try {
       await this.mailService.sendOtp(user.email, user.full_name, otp);
     } catch (err: any) {
-      // In dev without SMTP, log the OTP to console so you can still test
-      console.warn(`[AUTH] Could not send OTP email. DEV fallback OTP for ${user.email}: ${otp}`);
+      const isProduction = (process.env.NODE_ENV ?? '').toLowerCase() === 'production';
+      const allowDevFallback = (
+        process.env.AUTH_ALLOW_OTP_LOG_FALLBACK ?? (!isProduction).toString()
+      ).toLowerCase() === 'true';
+
+      if (!allowDevFallback) {
+        this.logger.error(`[AUTH] Failed to deliver OTP to ${user.email}`);
+        throw new ServiceUnavailableException(
+          'Unable to send verification code right now. Please try again later.',
+        );
+      }
+
+      this.logger.warn(
+        `[AUTH] Could not send OTP email. DEV fallback OTP for ${user.email}: ${otp}`,
+      );
     }
 
     return {
