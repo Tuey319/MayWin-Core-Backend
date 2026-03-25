@@ -398,6 +398,7 @@ export class SolverAdapter {
       forbid_night_to_morning: cp.forbidNightToMorning ?? true,
       forbid_morning_to_night_same_day: cp.forbidMorningToNightSameDay ?? false,
       ignore_availability_in_emergency: cp.ignoreAvailabilityInEmergency ?? false,
+      max_nights_per_week: cp.maxNightsPerWeek ?? 2,
     };
 
     if (preferences) req.preferences = preferences;

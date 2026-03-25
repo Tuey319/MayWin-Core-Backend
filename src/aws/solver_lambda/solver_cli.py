@@ -1,5 +1,6 @@
 # src/core/aws/solver_lambda/solver_cli.py
 from __future__ import annotations
+import sys
 from typing import Dict, List, Optional, Any, Tuple
 from fastapi import FastAPI
 from pydantic import BaseModel, Field, model_validator
@@ -38,6 +39,8 @@ class SolveRequest(BaseModel):
     min_total_shifts_per_nurse: Optional[Dict[str, int]] = None
     max_total_shifts_per_nurse: Optional[Dict[str, int]] = None
     max_shifts_per_nurse: Optional[Dict[str, int]] = None  # legacy alias used as fallback for max_total_shifts
+    regular_shifts_per_nurse: Optional[Dict[str, int]] = None
+    max_overtime_per_nurse: Optional[Dict[str, int]] = None
 
     # Optionals
     availability: Optional[Dict[str, Dict[str, Dict[str, int]]]] = None  # 1/0 availability by nurse→day→shift
@@ -61,6 +64,8 @@ class SolveRequest(BaseModel):
     forbid_evening_to_night: bool = Field(default=True, description="Forbid EVENING (16:00-24:00) → NIGHT (00:00-08:00) on consecutive days")
     forbid_night_to_morning: bool = Field(default=True, description="Forbid NIGHT → MORNING on consecutive days")
     forbid_morning_to_night_same_day: bool = Field(default=False, description="Forbid MORNING → NIGHT on the same day")
+    max_shifts_per_day: int = Field(default=2, ge=1, description="Hard cap on shifts a nurse can work on a single calendar day (1 = no double shifts)")
+    max_nights_per_week: int = Field(default=2, ge=1, description="Hard cap on night shifts a nurse can work in a single week")
 
     @model_validator(mode="after")
     def check_consistency(self):
@@ -88,6 +93,8 @@ class Assignment(BaseModel):
     day: str
     shift: str
     nurse: str
+    shift_order: int = Field(default=1, description="1=first shift, 2=second shift (OT), etc.")
+    is_overtime: bool = Field(default=False, description="True if this shift counts as overtime")
 
 
 class UnderstaffItem(BaseModel):
@@ -168,6 +175,65 @@ def find_shift_name(shifts: List[str], target: str) -> Optional[str]:
     return None
 
 
+def is_valid_double_shift(shift1: str, shift2: str, morning_label: Optional[str], evening_label: Optional[str]) -> bool:
+    """Check if two shifts can be assigned to the same nurse on the same day. Only Morning+Evening allowed."""
+    if not (morning_label and evening_label):
+        return False
+    s1_is_morning = shift_eq(shift1, morning_label)
+    s1_is_evening = shift_eq(shift1, evening_label)
+    s2_is_morning = shift_eq(shift2, morning_label)
+    s2_is_evening = shift_eq(shift2, evening_label)
+    # Valid only if one is morning and one is evening
+    return (s1_is_morning and s2_is_evening) or (s1_is_evening and s2_is_morning)
+
+
+def apply_assignment_flags(
+    assignments: List[Assignment],
+    nurses: List[str],
+    days: List[str],
+    shifts: List[str],
+    per_nurse_regular: Dict[str, int],
+    morning_label: Optional[str],
+    evening_label: Optional[str],
+) -> List[Assignment]:
+    """Normalize shift_order per nurse/day and set is_overtime based on monthly regular threshold."""
+    if not assignments:
+        return assignments
+
+    day_idx = {d: i for i, d in enumerate(days)}
+    shift_idx = {s: i for i, s in enumerate(shifts)}
+
+    def shift_sort_key(shift_code: str):
+        if morning_label and shift_eq(shift_code, morning_label):
+            return 0
+        if evening_label and shift_eq(shift_code, evening_label):
+            return 1
+        return 2 + shift_idx.get(shift_code, 999)
+
+    by_nurse_day: Dict[Tuple[str, str], List[Assignment]] = defaultdict(list)
+    for a in assignments:
+        by_nurse_day[(a.nurse, a.day)].append(a)
+
+    for (n, d), arr in by_nurse_day.items():
+        arr.sort(key=lambda item: shift_sort_key(item.shift))
+        for order, item in enumerate(arr, start=1):
+            item.shift_order = order
+
+    by_nurse: Dict[str, List[Assignment]] = defaultdict(list)
+    for a in assignments:
+        by_nurse[a.nurse].append(a)
+
+    for n in nurses:
+        nurse_list = by_nurse.get(n, [])
+        nurse_list.sort(key=lambda item: (day_idx.get(item.day, 999), item.shift_order, shift_sort_key(item.shift)))
+        regular_limit = int(per_nurse_regular.get(n, 0))
+        for idx, item in enumerate(nurse_list, start=1):
+            beyond_regular = idx > regular_limit
+            item.is_overtime = bool(item.shift_order > 1 or beyond_regular)
+
+    return assignments
+
+
 # ---------- Satisfaction + Post-fill helpers ----------
 def compute_satisfaction_for_nurse(
     nurse: str,
@@ -219,7 +285,10 @@ def backfill_missing_with_overtime(
     evening_label: Optional[str],
     weights: Weights,
     base_overtime_from_model: Dict[str, int],
+    per_nurse_max_ot: Optional[Dict[str, int]] = None,
+    per_nurse_max_working_days: Optional[Dict[str, int]] = None,
     ignore_availability_in_emergency: bool = False,
+    max_shifts_per_day: int = 2,
 ) -> Tuple[List[Assignment], List[UnderstaffItem], Dict[str, int], Dict[Tuple[str, str], int]]:
     """
     Fill remaining missing coverage using ONLY real nurses by assigning overtime.
@@ -281,6 +350,7 @@ def backfill_missing_with_overtime(
 
     seniors = {n for n in nurses if has_skill(n, "Senior")}
 
+    max_ot_cap: Dict[str, int] = per_nurse_max_ot or {}
     overtime_map = defaultdict(int, **{k: int(v) for k, v in base_overtime_from_model.items()})
     extra_same_day = defaultdict(int)  # (nurse, day) -> count of extra shifts added by post-fill
 
@@ -297,17 +367,21 @@ def backfill_missing_with_overtime(
 
                 # Escalation WITHOUT Night→Morning ever:
                 # L0: avail=1, <=1/day, no weekly night over
-                # L1: allow second shift same day (<=2/day), no weekly night over
-                # L2: allow weekly night over (>2/week), still no NM
+                # L1: allow second shift same day (<=2/day), no weekly night over  [skipped when max_shifts_per_day=1]
+                # L2: allow weekly night over (>2/week), still no NM               [skipped when max_shifts_per_day=1]
                 # L3: (last resort) ignore availability — only when ignore_availability_in_emergency=True
+                allow_double = max_shifts_per_day >= 2
                 levels = [
-                    {"allow_same_day_second": False, "allow_weekly_night_over": False, "ignore_avail": False},
-                    {"allow_same_day_second": True,  "allow_weekly_night_over": False, "ignore_avail": False},
-                    {"allow_same_day_second": True,  "allow_weekly_night_over": True,  "ignore_avail": False},
+                    {"allow_same_day_second": False,        "allow_weekly_night_over": False, "ignore_avail": False},
                 ]
+                if allow_double:
+                    levels.append({"allow_same_day_second": True, "allow_weekly_night_over": False, "ignore_avail": False})
+                    levels.append({"allow_same_day_second": True, "allow_weekly_night_over": True,  "ignore_avail": False})
+                else:
+                    levels.append({"allow_same_day_second": False, "allow_weekly_night_over": True, "ignore_avail": False})
                 if ignore_availability_in_emergency:
                     levels.append(
-                        {"allow_same_day_second": True, "allow_weekly_night_over": True, "ignore_avail": True}
+                        {"allow_same_day_second": allow_double, "allow_weekly_night_over": True, "ignore_avail": True}
                     )
 
                 chosen = None
@@ -320,12 +394,29 @@ def backfill_missing_with_overtime(
                             continue
                         if not lvl["ignore_avail"] and not is_avail(n, d, s):
                             continue
+                        # Hard cap: never exceed per-nurse max OT
+                        if n in max_ot_cap and overtime_map[n] >= max_ot_cap[n]:
+                            continue
+                        # Never assign the same shift code twice to the same nurse on the same day
+                        if assigned_map.get((n, d, s), 0) == 1:
+                            continue
 
                         day_load = load_by_day.get((n, d), 0)
+                        # Monthly working-day cap: if this shift would start a new working day,
+                        # block it if the nurse is already at their max working days.
+                        if day_load == 0 and per_nurse_max_working_days and n in per_nurse_max_working_days:
+                            days_used = sum(1 for d2 in days if load_by_day.get((n, d2), 0) > 0)
+                            if days_used >= per_nurse_max_working_days[n]:
+                                continue
                         if day_load >= 2:
                             continue
                         if day_load >= 1 and not lvl["allow_same_day_second"]:
                             continue
+                        # If nurse already has a shift today, only Morning+Evening is a valid pair
+                        if day_load >= 1 and morning_label and evening_label:
+                            existing_shifts = [sh for sh in shifts if assigned_map.get((n, d, sh), 0) == 1]
+                            if not is_valid_double_shift(s, existing_shifts[0] if existing_shifts else s, morning_label, evening_label):
+                                continue
 
                         # forbid Night→Morning always
                         if would_create_nm(n, d, s):
@@ -370,8 +461,11 @@ def backfill_missing_with_overtime(
                     # Could not fill further even at last level (very rare)
                     break
 
-                # Commit assignment
-                assignments.append(Assignment(day=d, shift=s, nurse=chosen))
+                # Commit assignment with shift_order and is_overtime tracking
+                current_shifts_today = load_by_day.get((chosen, d), 0)
+                shift_order = current_shifts_today + 1  # 1 if first, 2 if second
+                is_overtime = (shift_order > 1)  # 2nd shift onwards is OT
+                assignments.append(Assignment(day=d, shift=s, nurse=chosen, shift_order=shift_order, is_overtime=is_overtime))
                 assigned_map[(chosen, d, s)] = 1
                 load_total[chosen] += 1
                 if load_by_day.get((chosen, d), 0) >= 1:
@@ -401,10 +495,36 @@ def solve(req: SolveRequest) -> SolveResponse:
 
     default_upper = len(days)
     per_nurse_min = {n: int((req.min_total_shifts_per_nurse or {}).get(n, 0)) for n in nurses}
-    per_nurse_max = {
-        n: int((req.max_total_shifts_per_nurse or {}).get(n, (req.max_shifts_per_nurse or {}).get(n, default_upper)))
-        for n in nurses
-    }
+
+    regular_map = req.regular_shifts_per_nurse or {}
+    max_ot_map = req.max_overtime_per_nurse or {}
+    max_total_map = req.max_total_shifts_per_nurse or {}
+    max_shifts_alias = req.max_shifts_per_nurse or {}
+
+    per_nurse_regular: Dict[str, int] = {}
+    per_nurse_max_ot: Dict[str, int] = {}
+
+    for n in nurses:
+        explicit_max_total = max_total_map.get(n, max_shifts_alias.get(n, None))
+
+        if n in regular_map:
+            reg = int(regular_map.get(n, 0))
+        elif explicit_max_total is not None and n in max_ot_map:
+            reg = max(0, int(explicit_max_total) - int(max_ot_map.get(n, 0)))
+        elif explicit_max_total is not None:
+            reg = int(explicit_max_total)
+        else:
+            reg = default_upper
+
+        if n in max_ot_map:
+            max_ot = max(0, int(max_ot_map.get(n, 0)))
+        elif explicit_max_total is not None:
+            max_ot = max(0, int(explicit_max_total) - reg)
+        else:
+            max_ot = max(0, default_upper - reg)
+
+        per_nurse_regular[n] = reg
+        per_nurse_max_ot[n] = max_ot
 
     week_idx = get_week_index_map(days, req.week_index_by_day)
     night_label = find_shift_name(shifts, "night")
@@ -412,6 +532,8 @@ def solve(req: SolveRequest) -> SolveResponse:
     evening_label = find_shift_name(shifts, "evening")
     print(f"[SOLVER] Detected shifts: morning={morning_label}, evening={evening_label}, night={night_label}", file=sys.stderr)
     print(f"[SOLVER] All shifts available: {shifts}", file=sys.stderr)
+    print(f"[SOLVER] max_shifts_per_day={req.max_shifts_per_day} | time_limit_sec={req.time_limit_sec} | relaxed_time_limit_sec={req.relaxed_time_limit_sec}", file=sys.stderr)
+    print(f"[SOLVER] nurses={len(nurses)} | days={len(days)} | total_demand={sum(req.demand[d][s] for d in days for s in shifts)}", file=sys.stderr)
 
     # Preindex weeks
     weeks: Dict[int, List[str]] = {}
@@ -422,17 +544,48 @@ def solve(req: SolveRequest) -> SolveResponse:
     model = cp_model.CpModel()
     x = {(n, d, s): model.NewBoolVar(f"x_{n}_{d}_{s}") for n in nurses for d in days for s in shifts}
     under = {(d, s): model.NewIntVar(0, len(nurses), f"under_{d}_{s}") for d in days for s in shifts}
-    over = {n: model.NewIntVar(0, len(days), f"over_{n}") for n in nurses}
+    over = {
+        n: model.NewIntVar(0, max(0, per_nurse_max_ot[n]), f"over_{n}")
+        for n in nurses
+    }
 
     # 1) Coverage (with understaff slack)
     for d in days:
         for s in shifts:
             model.Add(sum(x[(n, d, s)] for n in nurses) + under[(d, s)] == demand[d][s])
 
-    # 2) ≤ 1 shift/day per nurse
+    # Strict mode should not leave coverage gaps: understaff slack fixed to zero.
+    for d in days:
+        for s in shifts:
+            model.Add(under[(d, s)] == 0)
+
+    # 2) ≤ max_shifts_per_day per nurse (1 = no double shifts; 2 = Morning+Evening OT double allowed)
     for n in nurses:
         for d in days:
-            model.Add(sum(x[(n, d, s)] for s in shifts) <= 1)
+            model.Add(sum(x[(n, d, s)] for s in shifts) <= req.max_shifts_per_day)
+
+    # 2a) Working-day indicator (day counts as worked if >=1 shift)
+    worked_day = {(n, d): model.NewBoolVar(f"worked_{n}_{d}") for n in nurses for d in days}
+    for n in nurses:
+        for d in days:
+            day_total = sum(x[(n, d, s)] for s in shifts)
+            model.Add(day_total >= worked_day[(n, d)])
+            model.Add(day_total <= req.max_shifts_per_day * worked_day[(n, d)])
+
+    # 2b) If 2 shifts on same day, must be Morning+Evening (not Morning+Night, Evening+Night, etc.)
+    #     Only relevant when max_shifts_per_day >= 2.
+    if req.max_shifts_per_day >= 2 and morning_label and evening_label:
+        for n in nurses:
+            for d in days:
+                # If both Morning and Evening assigned, sum will be 2. Any other 2-shift combo forbidden.
+                # Constraint: if total > 1, must be exactly {Morning, Evening}
+                # Easier: forbid all other 2-shift combos
+                shifts_list = shifts
+                for i, s1 in enumerate(shifts_list):
+                    for s2 in shifts_list[i+1:]:
+                        # If s1, s2 are NOT a valid double (not Morning+Evening), forbid both together
+                        if not is_valid_double_shift(s1, s2, morning_label, evening_label):
+                            model.Add(x[(n, d, s1)] + x[(n, d, s2)] <= 1)
 
     # 3) Availability
     for n in nurses:
@@ -442,12 +595,19 @@ def solve(req: SolveRequest) -> SolveResponse:
                     model.Add(x[(n, d, s)] == 0)
 
     # 4) Monthly min/max w/ overtime slack
+    # per_nurse_min is SOFT (slack variable + penalty) so that nurses with tight
+    # availability + weekly-days-off constraints don't make the strict model infeasible.
+    # (e.g. a morning-only nurse capped to 17 days by the weekly cap cannot reach min=18)
     total_assigned = {}
+    min_shortfall = {}
     for n in nurses:
         total = sum(x[(n, d, s)] for d in days for s in shifts)
         total_assigned[n] = total
-        model.Add(total - over[n] <= per_nurse_max[n])
-        model.Add(total >= per_nurse_min[n])
+        model.Add(total - over[n] <= per_nurse_regular[n])
+        model.Add(over[n] <= per_nurse_max_ot[n])
+        shortfall = model.NewIntVar(0, max(0, per_nurse_min[n]), f"min_shortfall_{n}")
+        model.Add(total + shortfall >= per_nurse_min[n])
+        min_shortfall[n] = shortfall
 
     # 5) No Night→Morning next day (HARD)
     if night_label and morning_label and req.forbid_night_to_morning:
@@ -468,19 +628,32 @@ def solve(req: SolveRequest) -> SolveResponse:
         elif not (evening_label and night_label):
             print(f"[STRICT SOLVER] WARNING: Skipping constraint because evening_label or night_label is None", file=sys.stderr)
 
-    # 6) ≤ 2 Nights per week (HARD)
+    # 6) ≤ max_nights_per_week Nights per week (HARD)
     if night_label:
         for n in nurses:
             for w, dlist in weeks.items():
-                model.Add(sum(x[(n, d, night_label)] for d in dlist) <= 2)
+                model.Add(sum(x[(n, d, night_label)] for d in dlist) <= req.max_nights_per_week)
 
-    # 7) ≥ 2 days off per week (HARD)
+    # 7) ≥ 2 days off per week for full weeks; ≥ 1 day off for partial weeks (HARD)
+    # For partial weeks at period start/end (< 7 days), requiring 2 days off is
+    # too strict and makes the CP-SAT infeasible for high-demand schedules.
+    # E.g., April W14 (5 days) cap=3 means 8 nurses × 3 = 24 slots vs demand 30.
     for n in nurses:
         for w, dlist in weeks.items():
-            cap = max(0, len(dlist) - 2)  # at most 5 working days/week
-            model.Add(sum(sum(x[(n, d, s)] for s in shifts) for d in dlist) <= cap)
+            if len(dlist) >= 7:
+                cap = max(0, len(dlist) - 2)  # full week: ≥ 2 days off
+            else:
+                cap = max(0, len(dlist) - 1)  # partial week: ≥ 1 day off
+            model.Add(sum(worked_day[(n, d)] for d in dlist) <= cap)
 
-    # 8) Senior requirement (HARD)
+    # 8) Monthly working-days: upper bound only in strict model.
+    # Upper bound: OT must come from double shifts, not extra days.
+    # No lower bound: gives solver flexibility to distribute working days optimally
+    # so all 180 demand slots (including edge-case nights) can be covered.
+    for n in nurses:
+        model.Add(sum(worked_day[(n, d)] for d in days) <= per_nurse_regular[n])
+
+    # 9) Senior requirement (HARD)
     for d in days:
         for s in shifts:
             need_senior = int((required_skills.get(d, {}).get(s, {}) or {}).get("Senior", 0))
@@ -495,6 +668,7 @@ def solve(req: SolveRequest) -> SolveResponse:
             terms.append(weights.understaff_penalty * under[(d, s)])
     for n in nurses:
         terms.append(weights.overtime_penalty * over[n])
+        terms.append(weights.understaff_penalty * min_shortfall[n])
     for n in nurses:
         for d in days:
             for s in shifts:
@@ -515,11 +689,29 @@ def solve(req: SolveRequest) -> SolveResponse:
     def pack_strict(code):
         assignments, understaffed, stats = [], [], []
         assigned_map = {(n, d, s): int(solver.Value(x[(n, d, s)])) for n in nurses for d in days for s in shifts}
+        
+        # Build assignments with shift_order and is_overtime tracking
         for d in days:
-            for s in shifts:
-                for n in nurses:
-                    if assigned_map[(n, d, s)] == 1:
-                        assignments.append(Assignment(day=d, shift=s, nurse=n))
+            for n in nurses:
+                # Get all shifts assigned to this nurse on this day
+                assigned_shifts_today = [s for s in shifts if assigned_map[(n, d, s)] == 1]
+                
+                if len(assigned_shifts_today) == 0:
+                    continue
+                elif len(assigned_shifts_today) == 1:
+                    # Single shift: shift_order=1, not OT
+                    s = assigned_shifts_today[0]
+                    assignments.append(Assignment(day=d, shift=s, nurse=n, shift_order=1, is_overtime=False))
+                else:
+                    # Double shift: must be Morning+Evening
+                    # Order: Morning first (shift_order=1), Evening second (shift_order=2, is_overtime=True)
+                    assigned_shifts_today.sort(key=lambda s: (
+                        0 if shift_eq(s, morning_label) else (1 if shift_eq(s, evening_label) else 2)
+                    ))
+                    for order, s in enumerate(assigned_shifts_today, start=1):
+                        is_ot = (order > 1)  # 2nd shift onwards is OT
+                        assignments.append(Assignment(day=d, shift=s, nurse=n, shift_order=order, is_overtime=is_ot))
+        
         for d in days:
             for s in shifts:
                 miss = solver.Value(under[(d, s)])
@@ -560,10 +752,24 @@ def solve(req: SolveRequest) -> SolveResponse:
             evening_label=evening_label,
             weights=weights,
             base_overtime_from_model=base_overtime,
+            per_nurse_max_ot=per_nurse_max_ot,
+            per_nurse_max_working_days=per_nurse_regular,
             ignore_availability_in_emergency=req.ignore_availability_in_emergency,
+            max_shifts_per_day=req.max_shifts_per_day,
         )
         assignments = assignments2
         understaffed = understaffed2
+
+        # Normalize shift_order and overtime flags from final monthly totals.
+        assignments = apply_assignment_flags(
+            assignments=assignments,
+            nurses=nurses,
+            days=days,
+            shifts=shifts,
+            per_nurse_regular=per_nurse_regular,
+            morning_label=morning_label,
+            evening_label=evening_label,
+        )
 
         # Recompute stats & satisfaction using post-fill results
         assigned_map2 = {(a.nurse, a.day, a.shift): 1 for a in assignments}
@@ -634,20 +840,48 @@ def solve(req: SolveRequest) -> SolveResponse:
     r_model = cp_model.CpModel()
     rx = {(n, d, s): r_model.NewBoolVar(f"rx_{n}_{d}_{s}") for n in nurses for d in days for s in shifts}
     r_under = {(d, s): r_model.NewIntVar(0, len(nurses), f"r_under_{d}_{s}") for d in days for s in shifts}
-    r_over = {n: r_model.NewIntVar(0, len(days), f"r_over_{n}") for n in nurses}
+    r_over = {
+        n: r_model.NewIntVar(0, max(0, per_nurse_max_ot[n]), f"r_over_{n}")
+        for n in nurses
+    }
 
     # coverage
     for d in days:
         for s in shifts:
             r_model.Add(sum(rx[(n, d, s)] for n in nurses) + r_under[(d, s)] == demand[d][s])
 
-    # ≤1 shift/day and availability stay hard
+    # ≤ max_shifts_per_day and availability stay hard
     for n in nurses:
         for d in days:
-            r_model.Add(sum(rx[(n, d, s)] for s in shifts) <= 1)
+            r_model.Add(sum(rx[(n, d, s)] for s in shifts) <= req.max_shifts_per_day)
             for s in shifts:
                 if not is_available(availability, n, d, s):
                     r_model.Add(rx[(n, d, s)] == 0)
+
+    # In RELAXED too, only Morning+Evening is allowed as a same-day double.
+    # Only relevant when max_shifts_per_day >= 2.
+    if req.max_shifts_per_day >= 2 and morning_label and evening_label:
+        for n in nurses:
+            for d in days:
+                shifts_list = shifts
+                for i, s1 in enumerate(shifts_list):
+                    for s2 in shifts_list[i + 1 :]:
+                        if not is_valid_double_shift(s1, s2, morning_label, evening_label):
+                            r_model.Add(rx[(n, d, s1)] + rx[(n, d, s2)] <= 1)
+
+    # Working-day indicator in relaxed model (count days, not shifts)
+    r_worked_day = {(n, d): r_model.NewBoolVar(f"r_worked_{n}_{d}") for n in nurses for d in days}
+    for n in nurses:
+        for d in days:
+            day_total = sum(rx[(n, d, s)] for s in shifts)
+            r_model.Add(day_total >= r_worked_day[(n, d)])
+            r_model.Add(day_total <= req.max_shifts_per_day * r_worked_day[(n, d)])
+
+    # 8) Monthly working-days: upper bound only in relaxed model.
+    # Lower bound removed so post-fill can assign nurses to new days to cover any
+    # residual gaps (e.g. hard-to-fill nights) without hitting the 18-day cap.
+    for n in nurses:
+        r_model.Add(sum(r_worked_day[(n, d)] for d in days) <= per_nurse_regular[n])
 
     # monthly max soft via overtime; min-total soft via slack
     r_total_assigned = {}
@@ -655,7 +889,8 @@ def solve(req: SolveRequest) -> SolveResponse:
     for n in nurses:
         total = sum(rx[(n, d, s)] for d in days for s in shifts)
         r_total_assigned[n] = total
-        r_model.Add(total - r_over[n] <= per_nurse_max[n])
+        r_model.Add(total - r_over[n] <= per_nurse_regular[n])
+        r_model.Add(r_over[n] <= per_nurse_max_ot[n])
         slack = r_model.NewIntVar(0, max(0, per_nurse_min[n]), f"r_min_slack_{n}")
         r_model.Add(total + slack >= per_nurse_min[n])
         r_min_slack[n] = slack
@@ -679,14 +914,14 @@ def solve(req: SolveRequest) -> SolveResponse:
             for w, dlist in weeks.items():
                 nights_this = sum(rx[(n, d, night_label)] for d in dlist)
                 extra_nights = r_model.NewIntVar(0, len(dlist), f"wn_over_{n}_{w}")
-                r_model.Add(nights_this - 2 <= extra_nights)
+                r_model.Add(nights_this - req.max_nights_per_week <= extra_nights)
                 wn_over.append(extra_nights)
 
     wd_over: List[cp_model.IntVar] = []
     for n in nurses:
         for w, dlist in weeks.items():
             cap = max(0, len(dlist) - 2)
-            shifts_this_week = sum(sum(rx[(n, d, s)] for s in shifts) for d in dlist)
+            shifts_this_week = sum(r_worked_day[(n, d)] for d in dlist)
             extra_work = r_model.NewIntVar(0, len(dlist), f"wd_over_{n}_{w}")
             r_model.Add(shifts_this_week - cap <= extra_work)
             wd_over.append(extra_work)
@@ -719,7 +954,7 @@ def solve(req: SolveRequest) -> SolveResponse:
             r_terms.append(weights.understaff_penalty * r_under[(d, s)])
     for n in nurses:
         r_terms.append(weights.overtime_penalty * r_over[n])
-        r_terms.append(weights.overtime_penalty * r_min_slack[n])
+        r_terms.append(weights.understaff_penalty * r_min_slack[n])
     for n in nurses:
         for d in days:
             for s in shifts:
@@ -750,10 +985,13 @@ def solve(req: SolveRequest) -> SolveResponse:
         assignments, understaffed, stats = [], [], []
         assigned_map = {(n, d, s): int(r_solver.Value(rx[(n, d, s)])) for n in nurses for d in days for s in shifts}
         for d in days:
-            for s in shifts:
-                for n in nurses:
-                    if assigned_map[(n, d, s)] == 1:
-                        assignments.append(Assignment(day=d, shift=s, nurse=n))
+            for n in nurses:
+                assigned_shifts_today = [s for s in shifts if assigned_map[(n, d, s)] == 1]
+                if len(assigned_shifts_today) == 0:
+                    continue
+                assigned_shifts_today.sort(key=lambda s: (0 if shift_eq(s, morning_label) else (1 if shift_eq(s, evening_label) else 2)))
+                for order, s in enumerate(assigned_shifts_today, start=1):
+                    assignments.append(Assignment(day=d, shift=s, nurse=n, shift_order=order, is_overtime=(order > 1)))
         for d in days:
             for s in shifts:
                 miss = r_solver.Value(r_under[(d, s)])
@@ -794,10 +1032,23 @@ def solve(req: SolveRequest) -> SolveResponse:
             evening_label=evening_label,
             weights=weights,
             base_overtime_from_model=base_overtime,
+            per_nurse_max_ot=per_nurse_max_ot,
+            per_nurse_max_working_days=per_nurse_regular,
             ignore_availability_in_emergency=req.ignore_availability_in_emergency,
+            max_shifts_per_day=req.max_shifts_per_day,
         )
         assignments = assignments2
         understaffed = understaffed2
+
+        assignments = apply_assignment_flags(
+            assignments=assignments,
+            nurses=nurses,
+            days=days,
+            shifts=shifts,
+            per_nurse_regular=per_nurse_regular,
+            morning_label=morning_label,
+            evening_label=evening_label,
+        )
 
         # Recompute stats & satisfaction from final schedule
         assigned_map2 = {(a.nurse, a.day, a.shift): 1 for a in assignments}
@@ -944,7 +1195,19 @@ def solve(req: SolveRequest) -> SolveResponse:
         evening_label=evening_label,
         weights=weights,
         base_overtime_from_model=base_overtime,
+        per_nurse_max_ot=per_nurse_max_ot,
         ignore_availability_in_emergency=req.ignore_availability_in_emergency,
+        max_shifts_per_day=req.max_shifts_per_day,
+    )
+
+    assignments = apply_assignment_flags(
+        assignments=assignments,
+        nurses=nurses,
+        days=days,
+        shifts=shifts,
+        per_nurse_regular=per_nurse_regular,
+        morning_label=morning_label,
+        evening_label=evening_label,
     )
 
     # final stats

@@ -239,7 +239,7 @@ export class JobsRunnerService {
 
     const outRelaxed = await this.safeSolve(jobId, payload, {
       plan: 'A_RELAXED',
-      timeLimitSeconds: 20,
+      timeLimitSeconds: 60,
     });
 
     if (this.isSolveGood(outRelaxed)) {
@@ -446,11 +446,41 @@ export class JobsRunnerService {
           workerId: String(workerId),
           date,
           shiftCode,
+          shiftOrder: Number(a.shiftOrder ?? a.shift_order ?? 1),
+          isOvertime: Boolean(a.isOvertime ?? a.is_overtime ?? false),
           source: 'SOLVER',
           attributes: a.attributes ?? {},
         };
       })
       .filter(Boolean);
+
+    const rawNurseStats: any[] =
+      (solverOutput as any).nurse_stats ??
+      (solverOutput as any).output?.nurse_stats ??
+      [];
+
+    const nurseStats = rawNurseStats
+      .map((s) => {
+        const nurseCodeRaw = s?.nurse ?? s?.nurseCode ?? s?.nurse_code ?? null;
+        const nurseCode = nurseCodeRaw != null ? String(nurseCodeRaw) : null;
+        const mappedWorkerId = nurseCode ? nurseCodeToWorkerId[nurseCode] : null;
+        const workerId = s?.workerId ?? s?.worker_id ?? mappedWorkerId ?? null;
+
+        return {
+          workerId: workerId != null ? String(workerId) : null,
+          nurseCode,
+          assignedShifts: Number(s?.assigned_shifts ?? s?.assignedShifts ?? 0),
+          overtime: Number(s?.overtime ?? 0),
+          nights: Number(s?.nights ?? s?.night_shifts ?? s?.nightShifts ?? 0),
+          satisfaction: Number(s?.satisfaction ?? 0),
+        };
+      })
+      .filter((s) => s.workerId || s.nurseCode);
+
+    const totalOvertime = nurseStats.reduce(
+      (sum, s) => sum + (Number.isFinite(s.overtime) ? s.overtime : 0),
+      0,
+    );
 
     const feasible =
       typeof (solverOutput as any).feasible === 'boolean'
@@ -464,8 +494,11 @@ export class JobsRunnerService {
         assignmentCount: assignments.length,
         feasible,
         status: (solverOutput as any).status ?? null,
+        nurseCount: nurseStats.length,
+        totalOvertime,
       },
       assignments,
+      nurseStats,
     };
 
     fresh.attributes = {

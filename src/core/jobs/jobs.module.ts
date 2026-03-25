@@ -7,6 +7,7 @@ import { ScheduleAssignment } from '@/database/entities/scheduling/schedule-assi
 import { ScheduleRun } from '@/database/entities/scheduling/schedule-run.entity';
 import { ScheduleJob } from '@/database/entities/orchestration/schedule-job.entity';
 import { ScheduleArtifact } from '@/database/entities/orchestration/schedule-artifact.entity';
+import { Worker } from '@/database/entities/workers/worker.entity';
 
 import { JobsController } from './jobs.controller';
 import { JobsService } from './jobs.service';
@@ -14,18 +15,21 @@ import { JobsRunnerService } from './jobs-runner.service';
 
 import { NormalizerModule } from '@/core/normalizer/normalizer.module';
 import { SolverModule } from '@/core/solver/solver.module';
+import { BucketsModule } from '@/database/buckets/buckets.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      Schedule,           
+      Schedule,
       ScheduleAssignment,
       ScheduleRun,
       ScheduleJob,
       ScheduleArtifact,
+      Worker,
     ]),
     NormalizerModule,
     SolverModule,
+    BucketsModule,
   ],
   controllers: [JobsController],
   providers: [JobsService, JobsRunnerService],

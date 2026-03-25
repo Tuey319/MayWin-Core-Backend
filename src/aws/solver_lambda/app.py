@@ -302,12 +302,16 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
         solve_req["min_total_shifts_per_nurse"] = payload["min_total_shifts_per_nurse"]
     if isinstance(payload.get("max_total_shifts_per_nurse"), dict):
         solve_req["max_total_shifts_per_nurse"] = payload["max_total_shifts_per_nurse"]
+    if isinstance(payload.get("regular_shifts_per_nurse"), dict):
+        solve_req["regular_shifts_per_nurse"] = payload["regular_shifts_per_nurse"]
+    if isinstance(payload.get("max_overtime_per_nurse"), dict):
+        solve_req["max_overtime_per_nurse"] = payload["max_overtime_per_nurse"]
 
-    # Derive max_total_shifts_per_nurse from nurses[].regularShiftsPerPeriod + maxOvertimeShifts
-    # if not already set. Allows per-nurse overtime caps (e.g. NURSE_001 max_overtime=0).
-    if "max_total_shifts_per_nurse" not in solve_req:
+    # Derive per-nurse regular/overtime maps from nurses[] if missing.
+    if "regular_shifts_per_nurse" not in solve_req or "max_overtime_per_nurse" not in solve_req:
         nurse_list = payload.get("nurses") or []
-        max_total = {}
+        derived_regular = {}
+        derived_max_ot = {}
         for n in nurse_list:
             if not isinstance(n, dict):
                 continue
@@ -316,18 +320,94 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
                 continue
             reg = n.get("regularShiftsPerPeriod")
             ot = n.get("maxOvertimeShifts")
-            if reg is not None and ot is not None:
+
+            if reg is not None:
                 try:
-                    max_total[str(code)] = int(reg) + int(ot)
+                    derived_regular[str(code)] = int(reg)
+                except Exception:
+                    pass
+            if ot is not None:
+                try:
+                    derived_max_ot[str(code)] = int(ot)
+                except Exception:
+                    pass
+
+        if "regular_shifts_per_nurse" not in solve_req and derived_regular:
+            solve_req["regular_shifts_per_nurse"] = derived_regular
+        if "max_overtime_per_nurse" not in solve_req and derived_max_ot:
+            solve_req["max_overtime_per_nurse"] = derived_max_ot
+
+    # Derive max_total_shifts_per_nurse.
+    # Use reg + ot + 2 as the cap to ensure full 180-slot coverage is always feasible
+    # (reg=18, ot=5 → max=23 is exactly 1 short of 180 with 8 nurses, so we add headroom).
+    if "max_total_shifts_per_nurse" not in solve_req:
+        nurse_list = payload.get("nurses") or []
+        max_total = {}
+
+        regular_map = solve_req.get("regular_shifts_per_nurse") or {}
+        max_ot_map = solve_req.get("max_overtime_per_nurse") or {}
+
+        for code in nurse_codes:
+            reg = regular_map.get(code)
+            ot = max_ot_map.get(code)
+            if reg is None or ot is None:
+                continue
+            try:
+                max_total[str(code)] = int(reg) + int(ot) + 2
+            except Exception:
+                pass
+
+        # Fallback to direct nurse field derivation if maps were incomplete
+        for n in nurse_list:
+            if not isinstance(n, dict):
+                continue
+            code = n.get("code")
+            if not code:
+                continue
+            reg = n.get("regularShiftsPerPeriod")
+            ot = n.get("maxOvertimeShifts")
+            if reg is not None and ot is not None and str(code) not in max_total:
+                try:
+                    max_total[str(code)] = int(reg) + int(ot) + 2
                 except Exception:
                     pass
         if max_total:
             solve_req["max_total_shifts_per_nurse"] = max_total
 
-    # Pass ignore_availability_in_emergency from constraint profile
+    # Derive min_total_shifts_per_nurse from minShiftsPerPeriod or regularShiftsPerPeriod
+    if "min_total_shifts_per_nurse" not in solve_req:
+        nurse_list = payload.get("nurses") or []
+        min_total = {}
+        for n in nurse_list:
+            if not isinstance(n, dict):
+                continue
+            code = n.get("code")
+            if not code:
+                continue
+            min_sp = n.get("minShiftsPerPeriod") or n.get("regularShiftsPerPeriod")
+            if min_sp is not None:
+                try:
+                    min_total[str(code)] = int(min_sp)
+                except Exception:
+                    pass
+        if min_total:
+            solve_req["min_total_shifts_per_nurse"] = min_total
+
+    # Pass constraint profile fields to solver
     constraints = payload.get("constraints") or {}
     ignore_avail_emergency = constraints.get("ignoreAvailabilityInEmergency", False)
     solve_req["ignore_availability_in_emergency"] = bool(ignore_avail_emergency)
+
+    # max_shifts_per_day: 1 = no doubles, 2 = allow doubles (default 1)
+    max_spd = constraints.get("maxShiftsPerDay")
+    if max_spd is not None:
+        try:
+            solve_req["max_shifts_per_day"] = int(max_spd)
+        except Exception:
+            pass
+
+    # Force full 2-nurse coverage per shift — understaff must outweigh any OT cost
+    solve_req["weights"] = {"understaff_penalty": 50000, "overtime_penalty": 0}
 
     # If availability/preferences became None (unknown format), remove key entirely
     # (None is allowed by SolveRequest, but removing keeps payload smaller)

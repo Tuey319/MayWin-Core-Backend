@@ -1,24 +1,36 @@
 // src/core/jobs/jobs.service.ts
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 import { Schedule } from '@/database/entities/scheduling/schedule.entity';
 import { ScheduleAssignment } from '@/database/entities/scheduling/schedule-assignment.entity';
 import { ScheduleRun } from '@/database/entities/scheduling/schedule-run.entity';
 import { ScheduleJob, ScheduleJobStatus } from '@/database/entities/orchestration/schedule-job.entity';
-import { ScheduleArtifact } from '@/database/entities/orchestration/schedule-artifact.entity';
+import { ScheduleArtifact, ScheduleArtifactType } from '@/database/entities/orchestration/schedule-artifact.entity';
+import { Worker } from '@/database/entities/workers/worker.entity';
+import { S3ArtifactsService } from '@/database/buckets/s3-artifacts.service';
 
 import { CreateJobDto } from './dto/create-job.dto';
 import { JobsRunnerService } from './jobs-runner.service';
 
-type PreviewAssignment = { workerId: string; date: string; shiftCode: string };
+type PreviewAssignment = {
+  workerId: string;
+  date: string;
+  shiftCode: string;
+  shiftOrder?: number;
+  isOvertime?: boolean;
+  source?: string;
+  attributes?: Record<string, any>;
+};
 type NewAssignmentRow = {
   schedule_id: string;
   schedule_run_id: string;
   worker_id: string;
   date: string;
   shift_code: string;
+  shift_order: number;
+  is_overtime: boolean;
   source: string;
   attributes: Record<string, any>;
 };
@@ -30,8 +42,16 @@ export class JobsService {
     @InjectRepository(ScheduleAssignment) private readonly assignmentsRepo: Repository<ScheduleAssignment>,
     @InjectRepository(ScheduleJob) private readonly jobsRepo: Repository<ScheduleJob>,
     @InjectRepository(ScheduleArtifact) private readonly artifactsRepo: Repository<ScheduleArtifact>,
+    @InjectRepository(Worker) private readonly workersRepo: Repository<Worker>,
     private readonly runner: JobsRunnerService,
+    private readonly s3Artifacts: S3ArtifactsService,
   ) {}
+
+  private assignmentKey(workerId: string, date: string, shiftOrder?: number, shiftCode?: string) {
+    const orderPart = Number.isFinite(shiftOrder) ? String(Number(shiftOrder)) : '';
+    const shiftPart = (shiftCode ?? '').toUpperCase();
+    return `${workerId}__${date}__${orderPart || shiftPart}`;
+  }
 
   async createJob(
     scheduleId: string,
@@ -150,7 +170,209 @@ export class JobsService {
     const job = await this.jobsRepo.findOne({ where: { id: jobId } });
     if (!job) throw new NotFoundException('Job not found');
 
-    return job.attributes?.preview ?? { summary: {}, assignments: [] };
+    // PRIORITY 1: Always try to rebuild from artifact first (has authoritative solver nurse_stats)
+    const rebuilt = await this.rebuildPreviewFromArtifacts(jobId);
+    if (rebuilt && (rebuilt.assignments?.length > 0 || rebuilt.nurseStats?.length > 0)) {
+      // Cache the artifact version in job attributes (update if different)
+      if (!job.attributes?.preview || job.attributes.preview.summary?.note !== rebuilt.summary?.note) {
+        job.attributes = {
+          ...(job.attributes ?? {}),
+          preview: rebuilt,
+        };
+        await this.jobsRepo.save(job);
+      }
+      return rebuilt;
+    }
+
+    // PRIORITY 2: Return existing preview if it was saved (only if artifact rebuild failed)
+    const existingPreview = job.attributes?.preview;
+    if (
+      existingPreview &&
+      (
+        (Array.isArray(existingPreview.assignments) && existingPreview.assignments.length > 0) ||
+        (Array.isArray(existingPreview.nurseStats) && existingPreview.nurseStats.length > 0)
+      )
+    ) {
+      return existingPreview;
+    }
+
+    // PRIORITY 3: Final fallback - reconstruct from applied DB assignments
+    const fromAppliedAssignments = await this.buildPreviewFromAppliedAssignments(job);
+    if (!fromAppliedAssignments) return existingPreview ?? { summary: {}, assignments: [] };
+
+    job.attributes = {
+      ...(job.attributes ?? {}),
+      preview: fromAppliedAssignments,
+    };
+    await this.jobsRepo.save(job);
+    return fromAppliedAssignments;
+  }
+
+  private async buildPreviewFromAppliedAssignments(job: ScheduleJob) {
+    const scheduleId = String(job.attributes?.scheduleId ?? '');
+    if (!scheduleId) return null;
+
+    const schedule = await this.schedulesRepo.findOne({ where: { id: scheduleId } });
+    if (!schedule || !schedule.current_run_id) return null;
+
+    const rows = await this.assignmentsRepo.find({
+      where: {
+        schedule_id: scheduleId,
+        schedule_run_id: schedule.current_run_id,
+        source: 'SOLVER',
+      },
+      order: { date: 'ASC' as any, id: 'ASC' as any },
+    });
+
+    if (rows.length === 0) return null;
+
+    const workerIds = Array.from(new Set(rows.map((r) => String(r.worker_id))));
+    const workers = workerIds.length
+      ? await this.workersRepo.find({ where: { id: In(workerIds as any) } as any })
+      : [];
+    const workerById = new Map(workers.map((w) => [String(w.id), w]));
+
+    const assignments = rows.map((r) => ({
+      workerId: String(r.worker_id),
+      date: String(r.date),
+      shiftCode: String(r.shift_code),
+      shiftOrder: Number(r.shift_order ?? 1),
+      isOvertime: Boolean(r.is_overtime ?? false),
+      source: 'SOLVER',
+      attributes: r.attributes ?? {},
+    }));
+
+    const counters = new Map<string, { assigned: number; nights: number }>();
+    for (const row of rows) {
+      const workerId = String(row.worker_id);
+      const curr = counters.get(workerId) ?? { assigned: 0, nights: 0 };
+      curr.assigned += 1;
+      if (String(row.shift_code).toUpperCase() === 'NIGHT') curr.nights += 1;
+      counters.set(workerId, curr);
+    }
+
+    const nurseStats = Array.from(counters.entries()).map(([workerId, c]) => {
+      const worker = workerById.get(workerId);
+      const regular = Number(worker?.regular_shifts_per_period ?? 0);
+      const overtime = Math.max(0, c.assigned - regular);
+      return {
+        workerId,
+        nurseCode: worker?.worker_code ?? null,
+        assignedShifts: c.assigned,
+        overtime,
+        nights: c.nights,
+        satisfaction: 0,
+      };
+    });
+
+    const totalOvertime = nurseStats.reduce((sum, s) => sum + s.overtime, 0);
+
+    return {
+      scheduleId,
+      summary: {
+        note: 'Preview reconstructed from applied schedule assignments',
+        assignmentCount: assignments.length,
+        feasible: assignments.length > 0,
+        status: 'APPLIED',
+        nurseCount: nurseStats.length,
+        totalOvertime,
+      },
+      assignments,
+      nurseStats,
+    };
+  }
+
+  private async rebuildPreviewFromArtifacts(jobId: string) {
+    const solverArtifact = await this.artifactsRepo.findOne({
+      where: {
+        job_id: jobId,
+        type: ScheduleArtifactType.SOLVER_OUTPUT,
+      },
+      order: { created_at: 'DESC' },
+    });
+
+    if (!solverArtifact) return null;
+
+    const solverObj = await this.readArtifactJson(solverArtifact);
+    if (!solverObj || typeof solverObj !== 'object') return null;
+
+    // The artifact may have nested structure: either direct result OR wrapped in output
+    const output =
+      (solverObj as any).result ??
+      (solverObj as any).output ??
+      solverObj;
+
+    // If output itself has a result field, drill down one more level
+    const actualResult =
+      (output as any).result ?? output;
+
+    const rawAssignments: any[] = Array.isArray((actualResult as any).assignments)
+      ? (actualResult as any).assignments
+      : [];
+
+    const rawStats: any[] = Array.isArray((actualResult as any).nurse_stats)
+      ? (actualResult as any).nurse_stats
+      : [];
+
+    const nurseStats = rawStats.map((s) => ({
+      workerId: s?.workerId != null ? String(s.workerId) : (s?.worker_id != null ? String(s.worker_id) : null),
+      nurseCode: s?.nurse != null ? String(s.nurse) : (s?.nurseCode != null ? String(s.nurseCode) : null),
+      assignedShifts: Number(s?.assigned_shifts ?? s?.assignedShifts ?? 0),
+      overtime: Number(s?.overtime ?? 0),
+      nights: Number(s?.nights ?? s?.night_shifts ?? s?.nightShifts ?? 0),
+      satisfaction: Number(s?.satisfaction ?? 0),
+    }));
+
+    const totalOvertime = nurseStats.reduce(
+      (sum, s) => sum + (Number.isFinite(s.overtime) ? s.overtime : 0),
+      0,
+    );
+
+    const assignments = rawAssignments.map((a) => ({
+      workerId: a?.workerId != null ? String(a.workerId) : (a?.worker_id != null ? String(a.worker_id) : null),
+      nurseCode: a?.nurse != null ? String(a.nurse) : (a?.nurseCode != null ? String(a.nurseCode) : null),
+      date: String(a?.date ?? a?.day ?? ''),
+      shiftCode: String(a?.shiftCode ?? a?.shift_code ?? a?.shift ?? ''),
+      shiftOrder: Number(a?.shiftOrder ?? a?.shift_order ?? 1),
+      isOvertime: Boolean(a?.isOvertime ?? a?.is_overtime ?? false),
+      source: 'SOLVER',
+      attributes: a?.attributes ?? {},
+    }));
+
+    const feasible =
+      typeof (actualResult as any).feasible === 'boolean'
+        ? (actualResult as any).feasible
+        : Array.isArray((actualResult as any).assignments) && (actualResult as any).assignments.length > 0;
+
+    return {
+      summary: {
+        note: 'Preview reconstructed from solver output artifact',
+        assignmentCount: assignments.length,
+        feasible,
+        status: (actualResult as any).status ?? null,
+        nurseCount: nurseStats.length,
+        totalOvertime,
+      },
+      assignments,
+      nurseStats,
+    };
+  }
+
+  private async readArtifactJson(artifact: ScheduleArtifact): Promise<Record<string, any> | null> {
+    if (artifact.storage_provider === 'db') {
+      return (artifact.metadata ?? {}) as Record<string, any>;
+    }
+
+    if (!artifact.bucket || !artifact.object_key) return null;
+    try {
+      const json = await this.s3Artifacts.getJson({
+        bucket: artifact.bucket,
+        key: artifact.object_key,
+      });
+      return (json ?? null) as Record<string, any> | null;
+    } catch {
+      return null;
+    }
   }
 
   async apply(jobId: string, overwriteManualChanges: boolean) {
@@ -171,21 +393,25 @@ export class JobsService {
 
     const solverByKey = new Map<string, PreviewAssignment>();
     for (const pa of previewAssignments) {
-      const key = `${pa.workerId}__${pa.date}`;
+      const key = this.assignmentKey(pa.workerId, pa.date, pa.shiftOrder, pa.shiftCode);
       solverByKey.set(key, pa);
     }
 
     const assignmentsByKey = new Map<string, NewAssignmentRow>();
     for (const pa of solverByKey.values()) {
-      const key = `${pa.workerId}__${pa.date}`;
+      const shiftOrder = Number(pa.shiftOrder ?? 1);
+      const isOvertime = Boolean(pa.isOvertime ?? (shiftOrder > 1));
+      const key = this.assignmentKey(pa.workerId, pa.date, shiftOrder, pa.shiftCode);
       assignmentsByKey.set(key, {
         schedule_id: schedule.id,
         schedule_run_id: '',
         worker_id: pa.workerId,
         date: pa.date,
         shift_code: pa.shiftCode,
-        source: 'SOLVER',
-        attributes: {},
+        shift_order: shiftOrder,
+        is_overtime: isOvertime,
+        source: pa.source ?? 'SOLVER',
+        attributes: pa.attributes ?? {},
       });
     }
 
@@ -197,7 +423,7 @@ export class JobsService {
       });
 
       for (const ma of manualAssignments) {
-        const key = `${ma.worker_id}__${ma.date}`;
+        const key = this.assignmentKey(String(ma.worker_id), String(ma.date), Number(ma.shift_order ?? 1), String(ma.shift_code));
         const hasSolver = solverByKey.has(key);
 
         if (hasSolver && overwriteManualChanges) {
@@ -214,6 +440,8 @@ export class JobsService {
           worker_id: ma.worker_id,
           date: ma.date,
           shift_code: ma.shift_code,
+          shift_order: Number(ma.shift_order ?? 1),
+          is_overtime: Boolean(ma.is_overtime ?? false),
           source: 'MANUAL',
           attributes: ma.attributes ?? {},
         });

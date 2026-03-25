@@ -2,7 +2,7 @@
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, Unique, UpdateDateColumn } from 'typeorm';
 
 @Entity({ schema: 'maywin_db', name: 'schedule_assignments' })
-@Unique('sa_run_uniq', ['schedule_run_id', 'worker_id', 'date'])
+@Unique('sa_run_uniq', ['schedule_run_id', 'worker_id', 'date', 'shift_order'])
 export class ScheduleAssignment {
   @PrimaryGeneratedColumn('increment', { type: 'bigint' })
   id: string;
@@ -21,6 +21,12 @@ export class ScheduleAssignment {
 
   @Column({ type: 'text' })
   shift_code: string;
+
+  @Column({ type: 'int', default: 1 })
+  shift_order: number;
+
+  @Column({ type: 'boolean', default: false })
+  is_overtime: boolean;
 
   @Column({ type: 'text', default: 'SOLVER' })
   source: string;
