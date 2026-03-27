@@ -46,6 +46,12 @@ export class JobsController {
     return this.jobs.listArtifacts(jobId);
   }
 
+  // Purpose: Return the normalized payload sent into the solver flow for this job.
+  @Get('/jobs/:jobId/solver-payload')
+  getSolverPayload(@Param('jobId') jobId: string) {
+    return this.jobs.getSolverPayload(jobId);
+  }
+
   // Purpose: Preview solver results (read-only).
   @Get('/jobs/:jobId/preview')
   preview(@Param('jobId') jobId: string) {

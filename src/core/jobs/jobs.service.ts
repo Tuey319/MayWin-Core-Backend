@@ -166,6 +166,48 @@ export class JobsService {
     };
   }
 
+  async getSolverPayload(jobId: string) {
+    const job = await this.jobsRepo.findOne({ where: { id: jobId } });
+    if (!job) throw new NotFoundException('Job not found');
+
+    const normalizedArtifact = await this.artifactsRepo.findOne({
+      where: {
+        job_id: jobId,
+        type: ScheduleArtifactType.NORMALIZED_INPUT,
+      },
+      order: { created_at: 'DESC' },
+    });
+
+    if (!normalizedArtifact) {
+      throw new NotFoundException('No normalized solver payload artifact found for this job');
+    }
+
+    const normalizedObj = await this.readArtifactJson(normalizedArtifact);
+    if (!normalizedObj || typeof normalizedObj !== 'object') {
+      throw new NotFoundException('Normalized solver payload artifact is missing or unreadable');
+    }
+
+    const payload = (normalizedObj as any).payload ?? normalizedObj;
+
+    return {
+      jobId,
+      scheduleId: job.attributes?.scheduleId ?? null,
+      artifact: {
+        id: normalizedArtifact.id,
+        type: normalizedArtifact.type,
+        storage: {
+          provider: normalizedArtifact.storage_provider,
+          bucket: normalizedArtifact.bucket,
+          objectKey: normalizedArtifact.object_key,
+          contentType: normalizedArtifact.content_type,
+        },
+        metadata: normalizedArtifact.metadata,
+        createdAt: normalizedArtifact.created_at.toISOString(),
+      },
+      payload,
+    };
+  }
+
   async preview(jobId: string) {
     const job = await this.jobsRepo.findOne({ where: { id: jobId } });
     if (!job) throw new NotFoundException('Job not found');

@@ -1459,6 +1459,69 @@ Poll job status and phase. Also available as `GET /schedule-jobs/:jobId`.
 
 ---
 
+### `GET /jobs/:jobId/solver-payload`
+
+Returns the normalized solver input payload for a given job. This is useful for debugging why certain shifts are not assigned, analyzing coverage gaps, and understanding the exact constraints sent to the solver.
+
+**Response — 200 OK**
+```json
+{
+  "jobId": "job-uuid",
+  "scheduleId": "42",
+  "artifact": {
+    "id": "art-uuid",
+    "type": "NORMALIZED_INPUT",
+    "storage": {
+      "bucket": "maywin-artifacts-...",
+      "key": "core/job-uuid/normalized-input.json",
+      "provider": "s3"
+    },
+    "hash": "sha256:...",
+    "sizeBytes": 123456,
+    "createdAt": "2026-03-01T00:00:00.000Z"
+  },
+  "payload": {
+    "meta": { "scheduleId": "42", "unitId": 5, "... ": "..." },
+    "nurses": [
+      {
+        "workerCode": "001",
+        "regularShiftsPerPeriod": 18,
+        "maxOvertimeShifts": 5,
+        "nightsPerWeek": 2,
+        "daysOffPerWeek": 2
+      }
+    ],
+    "availabilityRestrictions": [
+      {
+        "workerCode": "001",
+        "date": "2026-03-01",
+        "shiftCode": "NIGHT",
+        "type": "UNAVAILABLE"
+      }
+    ],
+    "preferenceWeights": [ { "workerCode": "...", "shifts": [...], "... ": "..." } ],
+    "coverageRules": [ { "dayType": "WEEKDAY", "shifts": [...], "... ": "..." } ],
+    "constraints": {
+      "forbidNightToMorning": true,
+      "forbidEveningToNight": true,
+      "maxShiftsPerDay": 2,
+      "allowSecondShiftSameDayInEmergency": true
+    }
+  }
+}
+```
+
+**When to use:**
+- Diagnose why a shift is not filled (check availabilityRestrictions for that worker/date/shift)
+- Verify constraint settings are correct for the unit's solving strategy
+- Inspect nurse workload distribution (regularShiftsPerPeriod, maxOvertimeShifts) before rerunning a job
+- Debug sequence constraint violations (forbidNightToMorning, forbidEveningToNight)
+- Analyze preference penalties applied to each worker
+
+**Errors:** `404` if job or normalized artifact not found. `500` if S3 read fails.
+
+---
+
 ### `GET /jobs/:jobId/artifacts`
 
 Lists artifacts stored for a job.
