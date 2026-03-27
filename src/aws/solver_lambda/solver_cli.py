@@ -65,6 +65,7 @@ class SolveRequest(BaseModel):
     forbid_night_to_morning: bool = Field(default=True, description="Forbid NIGHT → MORNING on consecutive days")
     forbid_morning_to_night_same_day: bool = Field(default=False, description="Forbid MORNING → NIGHT on the same day")
     max_shifts_per_day: int = Field(default=2, ge=1, description="Hard cap on shifts a nurse can work on a single calendar day (1 = no double shifts)")
+    min_days_off_per_week: int = Field(default=2, ge=0, description="Minimum required off days per week bucket")
     max_nights_per_week: int = Field(default=2, ge=1, description="Hard cap on night shifts a nurse can work in a single week")
 
     @model_validator(mode="after")
@@ -634,16 +635,15 @@ def solve(req: SolveRequest) -> SolveResponse:
             for w, dlist in weeks.items():
                 model.Add(sum(x[(n, d, night_label)] for d in dlist) <= req.max_nights_per_week)
 
-    # 7) ≥ 2 days off per week for full weeks; ≥ 1 day off for partial weeks (HARD)
-    # For partial weeks at period start/end (< 7 days), requiring 2 days off is
-    # too strict and makes the CP-SAT infeasible for high-demand schedules.
-    # E.g., April W14 (5 days) cap=3 means 8 nurses × 3 = 24 slots vs demand 30.
+    # 7) Weekly days-off (HARD), driven by request constraint profile.
+    # For partial weeks (< 7 days), relax required off-days to at most 1 by default
+    # to preserve legacy behavior for min_days_off_per_week=2 while still honoring 0.
     for n in nurses:
         for w, dlist in weeks.items():
-            if len(dlist) >= 7:
-                cap = max(0, len(dlist) - 2)  # full week: ≥ 2 days off
-            else:
-                cap = max(0, len(dlist) - 1)  # partial week: ≥ 1 day off
+            required_off = req.min_days_off_per_week
+            if len(dlist) < 7 and required_off > 0:
+                required_off = min(required_off, 1)
+            cap = max(0, len(dlist) - required_off)
             model.Add(sum(worked_day[(n, d)] for d in dlist) <= cap)
 
     # 8) Monthly working-days: upper bound only in strict model.

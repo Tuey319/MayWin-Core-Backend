@@ -88,6 +88,21 @@ src/
 
 ---
 
+## 2.1 Key Files (Jobs & Solver Subsystem)
+
+When debugging scheduling issues or undercoverage, focus on:
+
+| File | Purpose |
+|---|---|
+| `src/core/jobs/jobs.controller.ts` | Job CRUD endpoints + new `GET /jobs/:jobId/solver-payload` |
+| `src/core/jobs/jobs.service.ts` | Job lifecycle, artifact retrieval, payload normalization |
+| `src/core/normalizer/normalizer.service.ts` | Builds NormalizedInputV1 from DB (the input sent to solver) |
+| `src/core/solver/solver.adapter.ts` | Converts normalized input → Python solver CLI, parses output |
+| `src/core/solver/solver_cli.py` | Python OR-Tools solver entry point |
+| `src/core/orchestrator/orchestrator.service.ts` | AWS Step Functions or local runner orchestration |
+
+---
+
 ## 3. How to Run Locally
 
 ```bash
@@ -121,6 +136,37 @@ JWT_SECRET=your-secret-key
 AUTH_DISABLE_OTP=true          # Set true for local dev (skips 2FA email)
 ORCHESTRATION_MODE=LOCAL_RUNNER
 ```
+
+---
+
+## 3.1 Debugging Schedule Undercoverage
+
+If a schedule job produces fewer assignments than expected:
+
+1. **Get the normalized payload:**
+   ```bash
+   GET /api/v1/core/jobs/{jobId}/solver-payload
+   ```
+
+2. **Inspect the payload:**
+   - Check `availabilityRestrictions`: Are workers blocked for the missing shifts?
+   - Check `coverageRules`: Are demand values correct?
+   - Check `nurses[].regularShiftsPerPeriod`, `maxOvertimeShifts`: Are caps too tight?
+   - Check `constraints.forbidNightToMorning`, `forbidEveningToNight`: Are sequence rules overconstrained?
+
+3. **Fix data issues in DB (SQL):**
+   ```sql
+   -- Example: Remove unavailability block for a worker on a specific date/shift
+   DELETE FROM maywin_db.worker_availability
+   WHERE worker_id = '123' AND date = '2026-03-31' AND shift_code = 'NIGHT'
+     AND type::text IN ('UNAVAILABLE', 'DAY_OFF');
+
+   -- Example: Increase a worker's max overtime shifts
+   UPDATE maywin_db.constraint_profile
+   SET max_overtime_shifts = 8 WHERE id = 1;
+   ```
+
+4. **Rerun the job** and check if coverage improves.
 
 ---
 

@@ -143,7 +143,7 @@ CREATE TABLE IF NOT EXISTS maywin_db.organizations (
 -- Physical locations (hospitals, clinics) within an organization.
 CREATE TABLE IF NOT EXISTS maywin_db.sites (
   id              bigserial   PRIMARY KEY,
-  organization_id bigint      NOT NULL REFERENCES maywin_db.organizations(id),
+  organization_id bigint      NOT NULL REFERENCES maywin_db.organizations(id) ON DELETE CASCADE,
   name            text        NOT NULL,
   code            text        NOT NULL,
   address         text,
@@ -158,8 +158,8 @@ CREATE TABLE IF NOT EXISTS maywin_db.sites (
 -- Clinical units / departments (e.g. ICU, Ward A) within a site.
 CREATE TABLE IF NOT EXISTS maywin_db.units (
   id              bigserial   PRIMARY KEY,
-  organization_id bigint      NOT NULL REFERENCES maywin_db.organizations(id),
-  site_id         bigint      REFERENCES maywin_db.sites(id),
+  organization_id bigint      NOT NULL REFERENCES maywin_db.organizations(id) ON DELETE CASCADE,
+  site_id         bigint      REFERENCES maywin_db.sites(id) ON DELETE SET NULL,
   name            text        NOT NULL,
   code            text        NOT NULL,
   description     text,
@@ -188,7 +188,7 @@ CREATE TABLE IF NOT EXISTS maywin_db.roles (
 -- Web-app accounts. One per email address, scoped to one organization.
 CREATE TABLE IF NOT EXISTS maywin_db.users (
   id              bigserial   PRIMARY KEY,
-  organization_id bigint      NOT NULL REFERENCES maywin_db.organizations(id),
+  organization_id bigint      NOT NULL REFERENCES maywin_db.organizations(id) ON DELETE CASCADE,
   email           text        NOT NULL UNIQUE,
   password_hash   text        NOT NULL,
   full_name       text        NOT NULL,
@@ -241,8 +241,8 @@ CREATE INDEX IF NOT EXISTS ix_auth_otps_user_id ON maywin_db.auth_otps (user_id)
 -- A nurse or other staff member. Can be linked to a web user account.
 CREATE TABLE IF NOT EXISTS maywin_db.workers (
   id                      bigserial                    PRIMARY KEY,
-  organization_id         bigint                       NOT NULL REFERENCES maywin_db.organizations(id),
-  primary_unit_id         bigint                       REFERENCES maywin_db.units(id),
+  organization_id         bigint                       NOT NULL REFERENCES maywin_db.organizations(id) ON DELETE CASCADE,
+  primary_unit_id         bigint                       REFERENCES maywin_db.units(id) ON DELETE SET NULL,
   full_name               text                         NOT NULL,
   worker_code             text,
   employment_type         maywin_db.employment_type,
@@ -253,7 +253,7 @@ CREATE TABLE IF NOT EXISTS maywin_db.workers (
   regular_shifts_per_period int,                       -- target regular (non-overtime) shifts per period
   min_shifts_per_period   int,                         -- minimum guaranteed shifts per period
   -- integrations
-  linked_user_id          bigint                       REFERENCES maywin_db.users(id),
+  linked_user_id          bigint                       REFERENCES maywin_db.users(id) ON DELETE SET NULL,
   line_id                 text                         UNIQUE,
   -- meta
   is_active               boolean                      NOT NULL DEFAULT true,
@@ -282,7 +282,7 @@ CREATE TABLE IF NOT EXISTS maywin_db.worker_unit_memberships (
 CREATE TABLE IF NOT EXISTS maywin_db.worker_availability (
   id         bigserial                    PRIMARY KEY,
   worker_id  bigint                       NOT NULL REFERENCES maywin_db.workers(id) ON DELETE CASCADE,
-  unit_id    bigint                       NOT NULL REFERENCES maywin_db.units(id),
+  unit_id    bigint                       NOT NULL REFERENCES maywin_db.units(id) ON DELETE CASCADE,
   date       date                         NOT NULL,
   shift_code text                         NOT NULL,
   type       maywin_db.availability_type  NOT NULL,
@@ -315,11 +315,11 @@ CREATE TABLE IF NOT EXISTS maywin_db.worker_preferences (
 -- Audit log of inbound/outbound LINE messages between nurses and the system.
 CREATE TABLE IF NOT EXISTS maywin_db.worker_messages (
   id               uuid                         PRIMARY KEY DEFAULT uuid_generate_v4(),
-  organization_id  bigint                       NOT NULL REFERENCES maywin_db.organizations(id),
-  unit_id          bigint                       REFERENCES maywin_db.units(id),
-  worker_id        bigint                       NOT NULL REFERENCES maywin_db.workers(id),
-  sender_user_id   bigint                       REFERENCES maywin_db.users(id),
-  sender_worker_id bigint                       REFERENCES maywin_db.workers(id),
+  organization_id  bigint                       NOT NULL REFERENCES maywin_db.organizations(id) ON DELETE CASCADE,
+  unit_id          bigint                       REFERENCES maywin_db.units(id) ON DELETE SET NULL,
+  worker_id        bigint                       NOT NULL REFERENCES maywin_db.workers(id) ON DELETE CASCADE,
+  sender_user_id   bigint                       REFERENCES maywin_db.users(id) ON DELETE SET NULL,
+  sender_worker_id bigint                       REFERENCES maywin_db.workers(id) ON DELETE SET NULL,
   direction        maywin_db.message_direction  NOT NULL,
   status           maywin_db.message_status     NOT NULL,
   subject          text,
@@ -343,8 +343,8 @@ CREATE TABLE IF NOT EXISTS maywin_db.chatbot_conversations (
   id              uuid                           PRIMARY KEY DEFAULT uuid_generate_v4(),
   line_user_id    text                           NOT NULL UNIQUE,
   worker_id       bigint                         REFERENCES maywin_db.workers(id),
-  organization_id bigint                         REFERENCES maywin_db.organizations(id),
-  unit_id         bigint                         REFERENCES maywin_db.units(id),
+  organization_id bigint                         REFERENCES maywin_db.organizations(id) ON DELETE SET NULL,
+  unit_id         bigint                         REFERENCES maywin_db.units(id) ON DELETE SET NULL,
   state           maywin_db.conversation_state   NOT NULL DEFAULT 'IDLE',
   pending_data    jsonb,
   attributes      jsonb                          NOT NULL DEFAULT '{}'::jsonb,
@@ -377,8 +377,8 @@ CREATE INDEX IF NOT EXISTS ix_line_link_tokens_worker_id ON maywin_db.line_link_
 -- Defines the shift codes used by a unit (Morning, Evening, Night …).
 CREATE TABLE IF NOT EXISTS maywin_db.shift_templates (
   id              bigserial   PRIMARY KEY,
-  organization_id bigint      NOT NULL REFERENCES maywin_db.organizations(id),
-  unit_id         bigint      REFERENCES maywin_db.units(id),  -- NULL = org-wide default
+  organization_id bigint      NOT NULL REFERENCES maywin_db.organizations(id) ON DELETE CASCADE,
+  unit_id         bigint      REFERENCES maywin_db.units(id) ON DELETE SET NULL,  -- NULL = org-wide default
   code            text        NOT NULL,
   name            text        NOT NULL,
   start_time      time        NOT NULL,   -- e.g. 07:00
@@ -413,7 +413,7 @@ CREATE INDEX IF NOT EXISTS ix_coverage_rules_unit ON maywin_db.coverage_rules (u
 CREATE TABLE IF NOT EXISTS maywin_db.constraint_profiles (
   id              bigserial   PRIMARY KEY,
   unit_id         bigint      REFERENCES maywin_db.units(id) ON DELETE CASCADE,  -- nullable: org-level profiles have no unit
-  org_id          bigint      REFERENCES maywin_db.organizations(id),              -- set for org-level profiles
+  org_id          bigint      REFERENCES maywin_db.organizations(id) ON DELETE SET NULL,  -- set for org-level profiles
   name            text        NOT NULL,
   description     text,                                                            -- UI display field
   assigned_to     text,                                                            -- department label (UI display)
@@ -486,8 +486,8 @@ CREATE INDEX IF NOT EXISTS ix_constraint_profiles_org  ON maywin_db.constraint_p
 -- A published (or draft) nurse schedule for a unit over a date range.
 CREATE TABLE IF NOT EXISTS maywin_db.schedules (
   id                   bigserial                    PRIMARY KEY,
-  organization_id      bigint                       NOT NULL REFERENCES maywin_db.organizations(id),
-  unit_id              bigint                       REFERENCES maywin_db.units(id),           -- nullable: org-level containers have no unit
+  organization_id      bigint                       NOT NULL REFERENCES maywin_db.organizations(id) ON DELETE CASCADE,
+  unit_id              bigint                       REFERENCES maywin_db.units(id) ON DELETE SET NULL,  -- nullable: org-level containers have no unit
   job_id               uuid,                        -- FK to schedule_jobs (no constraint — job may be gone)
   name                 text                         NOT NULL DEFAULT 'Generated Schedule',
   start_date           date                         NOT NULL,
@@ -523,7 +523,7 @@ CREATE TABLE IF NOT EXISTS maywin_db.schedule_assignments (
   id               bigserial   PRIMARY KEY,
   schedule_id      bigint      NOT NULL REFERENCES maywin_db.schedules(id) ON DELETE CASCADE,
   schedule_run_id  bigint      NOT NULL REFERENCES maywin_db.schedule_runs(id) ON DELETE CASCADE,
-  worker_id        bigint      NOT NULL REFERENCES maywin_db.workers(id),
+  worker_id        bigint      NOT NULL REFERENCES maywin_db.workers(id) ON DELETE CASCADE,
   date             date        NOT NULL,
   shift_code       text        NOT NULL,
   source           text        NOT NULL DEFAULT 'SOLVER',  -- 'SOLVER' | 'MANUAL'
@@ -545,7 +545,7 @@ CREATE INDEX IF NOT EXISTS ix_schedule_assignments_date
 -- A request to run the solver for a unit over a horizon. Tracks pipeline state.
 CREATE TABLE IF NOT EXISTS maywin_db.schedule_jobs (
   id               uuid                              PRIMARY KEY DEFAULT uuid_generate_v4(),
-  organization_id  bigint                            NOT NULL REFERENCES maywin_db.organizations(id),
+  organization_id  bigint                            NOT NULL REFERENCES maywin_db.organizations(id) ON DELETE CASCADE,
   unit_id          bigint                            NOT NULL REFERENCES maywin_db.units(id),
   requested_by     bigint                            NOT NULL REFERENCES maywin_db.users(id),
   idempotency_key  text,

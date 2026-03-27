@@ -76,6 +76,20 @@ The solver is implemented in **Python** and invoked by the NestJS backend as a c
 
 ---
 
+## 2.1 Debugging Solver Inputs
+
+The new `GET /jobs/:jobId/solver-payload` endpoint exposes the exact NormalizedInputV1 sent to the solver. Use it to:
+
+- Verify workers, constraints, and availability are correctly normalized
+- Spot missing or incorrect coverage rules
+- Check why a specific shift is uncovered (inspect availabilityRestrictions for all nurses on that date/shift)
+- Validate preference penalties are applied correctly
+- Debug sequence constraint violations (forbidNightToMorning, forbidEveningToNight)
+
+This enables self-service diagnostics without S3 or internal tools access.
+
+---
+
 ## 3. End-to-End Flow
 
 ```

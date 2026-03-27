@@ -393,6 +393,8 @@ export class SolverAdapter {
       weights,
       time_limit_sec: timeLimitSec,
       num_search_workers: numSearchWorkers,
+      max_shifts_per_day: cp.maxShiftsPerDay ?? 1,
+      min_days_off_per_week: cp.minDaysOffPerWeek ?? 2,
       // Shift-sequence toggles — top-level fields consumed by the lambda solver
       forbid_evening_to_night: cp.forbidEveningToNight ?? true,
       forbid_night_to_morning: cp.forbidNightToMorning ?? true,

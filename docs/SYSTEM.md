@@ -63,6 +63,14 @@ PostgreSQL DB     Python Solver
 5. Service reads/writes PostgreSQL via TypeORM entities
 6. For scheduling: service enqueues a solver job → runner normalizes data → calls Python solver → stores results
 
+### Transparency & Debugging
+
+New endpoint for self-service debugging:
+- **`GET /jobs/:jobId/solver-payload`** — Returns the exact normalized input payload sent to the solver
+  - Enables diagnosis of undercoverage issues without AWS S3 or internal tools
+  - Shows all availability restrictions, coverage rules, and constraint parameters
+  - See [Jobs (Solver) — Debugging](#jobs--solver-section-in-apidocs) in API.md for full details
+
 ---
 
 ## 2. Domain Model & Business Logic
