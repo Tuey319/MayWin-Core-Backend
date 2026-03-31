@@ -1,5 +1,5 @@
 // src/core/auth/auth.controller.ts
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 
 import { AuthService } from './auth.service';
@@ -7,6 +7,7 @@ import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { PatchUsernameDto } from './dto/patch-username.dto';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 
 @Controller('auth')
@@ -51,5 +52,13 @@ export class AuthController {
   @Get('me')
   async me(@Req() req: Request) {
     return { user: (req as any).user };
+  }
+
+  // PATCH /auth/me/username
+  @UseGuards(JwtAuthGuard)
+  @Patch('me/username')
+  async patchUsername(@Req() req: Request, @Body() dto: PatchUsernameDto) {
+    const user = (req as any).user;
+    return this.authService.patchUsername(String(user.sub), dto.fullName);
   }
 }
