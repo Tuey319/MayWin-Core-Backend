@@ -660,9 +660,53 @@ def solve(req: SolveRequest) -> SolveResponse:
             if need_senior > 0:
                 eligible = [n for n in nurses if "Senior" in (nurse_skills.get(n, []) or [])]
                 model.Add(sum(x[(n, d, s)] for n in eligible) >= need_senior)
+    
+    # 10) Shift type limits (STRICT)
+    target_nurses = [n for n in nurses if n != "N1"]
+
+    for n in target_nurses:
+        model.Add(sum(x[(n, d, morning_label)] for d in days) <= 9)
+        model.Add(sum(x[(n, d, evening_label)] for d in days) <= 9)
+        model.Add(sum(x[(n, d, night_label)] for d in days) <= 9)
+
+
+    # 11) Equal distribution (SOFT-RELAXED ±1)
+
+    num_nurses = len(target_nurses)
+
+    total_morning = sum(demand[d][morning_label] for d in days)
+    total_afternoon = sum(demand[d][evening_label] for d in days)
+    total_night = sum(demand[d][night_label] for d in days)
+
+    avg_morning = total_morning // num_nurses
+    avg_afternoon = total_afternoon // num_nurses
+    avg_night = total_night // num_nurses
+
+    for n in target_nurses:
+        m = sum(x[(n, d, morning_label)] for d in days)
+        a = sum(x[(n, d, evening_label)] for d in days)
+        nt = sum(x[(n, d, night_label)] for d in days)
+
+        # relaxed bounds (IMPORTANT)
+        model.Add(m >= avg_morning - 1)
+        model.Add(m <= avg_morning + 1)
+
+        model.Add(a >= avg_afternoon - 1)
+        model.Add(a <= avg_afternoon + 1)
+
+        model.Add(nt >= avg_night - 1)
+        model.Add(nt <= avg_night + 1)
+
+
+    # 12) Overtime balancing (SOFT — NOT HARD CONSTRAINT)
+    overtime_terms = []
+    for n in nurses:
+        overtime_terms.append(over[n] * 5) 
+
 
     # Objective
     terms = []
+    terms.extend(overtime_terms)
     for d in days:
         for s in shifts:
             terms.append(weights.understaff_penalty * under[(d, s)])
