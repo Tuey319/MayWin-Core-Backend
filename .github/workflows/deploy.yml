@@ -1,0 +1,85 @@
+name: Deploy MayWin Backend
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'src/**'
+      - 'Dockerfile.lambda-http'
+      - '.github/workflows/deploy.yml'
+      - 'package.json'
+      - 'tsconfig.json'
+
+env:
+  AWS_REGION: ap-southeast-1
+  ECR_REPOSITORY: maywin-nest-lambda
+  LAMBDA_FUNCTION: maywin-core-api
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::556088722017:role/github-actions-role
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHub-Actions-MayWin-Deploy
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        run: |
+          docker buildx build \
+            -f Dockerfile.lambda-http \
+            --platform linux/amd64 \
+            --provenance=false \
+            --sbom=false \
+            -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }} \
+            -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:http-latest \
+            --push .
+
+      - name: Update Lambda function code
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ env.LAMBDA_FUNCTION }} \
+            --region ${{ env.AWS_REGION }} \
+            --image-uri ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:http-latest
+
+      - name: Wait for Lambda update
+        run: |
+          echo "Waiting for Lambda update..."
+          sleep 10
+
+      - name: Check Lambda deployment status
+        run: |
+          aws lambda get-function-configuration \
+            --function-name ${{ env.LAMBDA_FUNCTION }} \
+            --region ${{ env.AWS_REGION }} \
+            --query "{State:State,LastUpdateStatus:LastUpdateStatus}" \
+            --output table
+
+      - name: Verify Lambda function
+        run: |
+          STATUS=$(aws lambda get-function-configuration \
+            --function-name ${{ env.LAMBDA_FUNCTION }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'LastUpdateStatus' \
+            --output text)
+          
+          if [ "$STATUS" != "Successful" ]; then
+            echo "Lambda update failed or still in progress"
+            exit 1
+          fi
+          echo "Lambda update successful!"
