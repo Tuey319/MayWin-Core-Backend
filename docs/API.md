@@ -165,6 +165,30 @@ Returns the current user's JWT payload.
 
 ---
 
+### `PATCH /auth/me/username`
+
+**Protected.** Updates the current user's full name.
+
+**Request Body**
+```json
+{ "fullName": "Jane Doe" }
+```
+
+**Response — 200 OK**
+```json
+{
+  "user": {
+    "id": "42",
+    "email": "user@example.com",
+    "fullName": "Jane Doe"
+  }
+}
+```
+
+**Errors:** `400`, `401`
+
+---
+
 ## Health
 
 ### `GET /health`
@@ -1770,6 +1794,7 @@ The Next.js BFF proxies browser requests to this backend. Quick reference:
 | `POST` | `/api/auth/verify-otp` | `POST /auth/verify-otp` |
 | `POST` | `/api/auth/logout` | `POST /auth/logout` |
 | `GET` | `/api/auth/me` | `GET /auth/me` |
+| `PATCH` | `/api/auth/me/username` | `PATCH /auth/me/username` |
 | `GET` | `/api/schedule` | `GET /schedule?unitId=` |
 | `GET` | `/api/export` | `GET /nurses/export` |
 | `GET` | `/api/preferences` | `GET /units/:id/workers/preferences` |
