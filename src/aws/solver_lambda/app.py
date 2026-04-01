@@ -406,6 +406,31 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
         except Exception:
             pass
 
+    # Shift-sequence toggles
+    for src_key, dst_key, default in [
+        ("forbidEveningToNight",      "forbid_evening_to_night",          True),
+        ("forbidNightToMorning",       "forbid_night_to_morning",           True),
+        ("forbidMorningToNightSameDay","forbid_morning_to_night_same_day",  False),
+    ]:
+        val = constraints.get(src_key)
+        if val is not None:
+            solve_req[dst_key] = bool(val)
+
+    # Weekly limits
+    min_days_off = constraints.get("minDaysOffPerWeek")
+    if min_days_off is not None:
+        try:
+            solve_req["min_days_off_per_week"] = int(min_days_off)
+        except Exception:
+            pass
+
+    max_nights = constraints.get("maxNightsPerWeek")
+    if max_nights is not None:
+        try:
+            solve_req["max_nights_per_week"] = int(max_nights)
+        except Exception:
+            pass
+
     # Force full 2-nurse coverage per shift — understaff must outweigh any OT cost
     solve_req["weights"] = {"understaff_penalty": 50000, "overtime_penalty": 0}
 
