@@ -83,6 +83,8 @@ export class AuthService {
   private signFull(user: User, roles: string[], unitIds: number[]) {
     const payload: JwtPayload = {
       sub: Number(user.id),
+      email: user.email,
+      fullName: user.full_name,
       organizationId: Number(user.organization_id),
       roles,
       unitIds,
