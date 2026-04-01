@@ -5,6 +5,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   Req,
@@ -61,6 +62,20 @@ export class StaffController {
   @Delete('/staff/:id')
   remove(@Param('id') id: string, @Req() req: Request) {
     return this.staff.remove(id, this.actor(req), this.context(req).organizationId);
+  }
+
+  /**
+   * POST /staff/:id/link-user
+   * Link an existing user account to this worker.
+   * Body: { userId: number }
+   */
+  @Post('/staff/:id/link-user')
+  linkUser(
+    @Param('id') id: string,
+    @Body('userId', ParseIntPipe) userId: number,
+    @Req() req: Request,
+  ) {
+    return this.staff.linkUser(id, userId, this.context(req).organizationId, this.actor(req));
   }
 
   /**

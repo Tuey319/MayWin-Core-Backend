@@ -274,6 +274,40 @@ export class StaffService {
     return { ok: true };
   }
 
+  // ── Link User Account ─────────────────────────────────────────────────────
+
+  async linkUser(
+    workerId: string,
+    userId: number,
+    organizationId: number,
+    actor: { actorId: string; actorName: string },
+  ) {
+    this.validateId(workerId);
+    const worker = await this.workersRepo.findOne({
+      where: { id: workerId as any, organization_id: String(organizationId) as any },
+    });
+    if (!worker) throw new NotFoundException('Staff not found');
+
+    const user = await this.userRepo.findOne({
+      where: { id: String(userId) as any, organization_id: String(organizationId) as any },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    worker.linked_user_id = String(userId);
+    const saved = await this.workersRepo.save(worker);
+
+    await this.auditLogs.append({
+      actorId: actor.actorId,
+      actorName: actor.actorName,
+      action: 'LINK_USER',
+      targetType: 'staff',
+      targetId: saved.worker_code ?? workerId,
+      detail: `Linked user ${userId} to worker ${workerId} (${saved.full_name})`,
+    });
+
+    return { ok: true, staff: this.mapWorkerToStaff(saved) };
+  }
+
   // ── LINE Link Token ───────────────────────────────────────────────────────
 
   /**

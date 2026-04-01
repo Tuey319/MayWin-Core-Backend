@@ -3,7 +3,7 @@ import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, ILike, In, IsNull, Repository } from 'typeorm';
+import { Between, ILike, In, IsNull, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
 
 import { Worker } from '@/database/entities/workers/worker.entity';
 import { WorkerPreference } from '@/database/entities/workers/worker-preferences.entity';
@@ -671,19 +671,14 @@ export class WorkersService {
     const lastDay = new Date(year, mon, 0).getDate();
     const endDate = `${year}-${String(mon).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
-    // Find the most recent PUBLISHED schedule for the worker's unit covering this month
+    // Find the most recent PUBLISHED schedule for the worker's unit that overlaps this month
+    // (start_date <= endDate AND end_date >= startDate)
     const schedule = await this.schedulesRepo.findOne({
       where: {
         unit_id: worker.primary_unit_id as any,
         status: ScheduleStatus.PUBLISHED,
-        start_date: Between(startDate, endDate) as any,
-      },
-      order: { created_at: 'DESC' },
-    }) ?? await this.schedulesRepo.findOne({
-      where: {
-        unit_id: worker.primary_unit_id as any,
-        status: ScheduleStatus.PUBLISHED,
-        end_date: Between(startDate, endDate) as any,
+        start_date: LessThanOrEqual(endDate) as any,
+        end_date: MoreThanOrEqual(startDate) as any,
       },
       order: { created_at: 'DESC' },
     });
@@ -738,8 +733,8 @@ export class WorkersService {
           return {
             shiftCode: a.shift_code,
             shiftName: tpl?.name ?? a.shift_code,
-            startTime: tpl?.start_time ?? null,
-            endTime: tpl?.end_time ?? null,
+            startTime: tpl?.start_time ?? '',
+            endTime: tpl?.end_time ?? '',
             isOvertime: a.is_overtime,
           };
         }),
