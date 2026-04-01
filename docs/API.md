@@ -968,6 +968,21 @@ Soft-deactivates a staff member (`isActive = false`). Appends an audit log entry
 
 ---
 
+### `POST /staff/:id/link-user`
+
+Links an existing user account to this worker by setting `workers.linked_user_id`.
+
+**Request**
+```json
+{ "userId": 5 }
+```
+
+**Response — 200 OK** — `{ "ok": true, "staff": { ... } }`
+
+**Errors:** `400` (invalid id/userId), `404` (worker or user not found in organization)
+
+---
+
 ### `POST /staff/:id/link-token`
 
 Generates a one-time LINE invite token so the nurse can link their LINE account.
