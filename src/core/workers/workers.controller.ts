@@ -1,5 +1,6 @@
 // src/core/workers/workers.controller.ts
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
+import type { Request } from 'express';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { WorkersService } from './workers.service';
 
@@ -40,6 +41,23 @@ export class WorkersController {
         unit: targetUnitId,
       })),
     };
+  }
+
+  /**
+   * GET /workers/me/schedule?month=2026-04
+   * Returns the authenticated nurse's shift assignments for the given month.
+   */
+  @Get('/workers/me/schedule')
+  getMySchedule(
+    @Req() req: Request,
+    @Query('month') month?: string,
+  ) {
+    const user = (req as any).user;
+    const target = month ?? new Date().toISOString().slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(target)) {
+      throw new BadRequestException('month must be in YYYY-MM format');
+    }
+    return this.workers.getMySchedule(Number(user.sub), target);
   }
 
   /**

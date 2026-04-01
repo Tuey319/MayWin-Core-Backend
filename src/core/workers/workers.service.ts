@@ -3,7 +3,7 @@ import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, In, Repository } from 'typeorm';
+import { Between, ILike, In, IsNull, Repository } from 'typeorm';
 
 import { Worker } from '@/database/entities/workers/worker.entity';
 import { WorkerPreference } from '@/database/entities/workers/worker-preferences.entity';
@@ -14,6 +14,9 @@ import {
 import {
   ScheduleJob,
 } from '@/database/entities/orchestration/schedule-job.entity';
+import { Schedule, ScheduleStatus } from '@/database/entities/scheduling/schedule.entity';
+import { ScheduleAssignment } from '@/database/entities/scheduling/schedule-assignment.entity';
+import { ShiftTemplate } from '@/database/entities/scheduling/shift-template.entity';
 import { S3ArtifactsService } from '@/database/buckets/s3-artifacts.service';
 import { PutWorkerPreferencesDto } from './dto/put-preferences.dto';
 
@@ -27,6 +30,12 @@ export class WorkersService {
     @InjectRepository(ScheduleJob) private readonly jobsRepo: Repository<ScheduleJob>,
     @InjectRepository(ScheduleArtifact)
     private readonly artifactsRepo: Repository<ScheduleArtifact>,
+    @InjectRepository(Schedule)
+    private readonly schedulesRepo: Repository<Schedule>,
+    @InjectRepository(ScheduleAssignment)
+    private readonly assignmentsRepo: Repository<ScheduleAssignment>,
+    @InjectRepository(ShiftTemplate)
+    private readonly shiftTemplatesRepo: Repository<ShiftTemplate>,
     private readonly s3Artifacts: S3ArtifactsService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
@@ -647,5 +656,107 @@ export class WorkersService {
       values.reduce((acc, value) => acc + (value - mean) ** 2, 0) /
       values.length;
     return Number(Math.sqrt(variance).toFixed(6));
+  }
+
+  async getMySchedule(userId: number, month: string) {
+    // Resolve worker linked to this user account
+    const worker = await this.workersRepo.findOne({
+      where: { linked_user_id: String(userId) as any, is_active: true },
+    });
+    if (!worker) throw new NotFoundException('No worker profile linked to this account');
+
+    // Parse month (YYYY-MM) → date range
+    const [year, mon] = month.split('-').map(Number);
+    const startDate = `${year}-${String(mon).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, mon, 0).getDate();
+    const endDate = `${year}-${String(mon).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    // Find the most recent PUBLISHED schedule for the worker's unit covering this month
+    const schedule = await this.schedulesRepo.findOne({
+      where: {
+        unit_id: worker.primary_unit_id as any,
+        status: ScheduleStatus.PUBLISHED,
+        start_date: Between(startDate, endDate) as any,
+      },
+      order: { created_at: 'DESC' },
+    }) ?? await this.schedulesRepo.findOne({
+      where: {
+        unit_id: worker.primary_unit_id as any,
+        status: ScheduleStatus.PUBLISHED,
+        end_date: Between(startDate, endDate) as any,
+      },
+      order: { created_at: 'DESC' },
+    });
+
+    if (!schedule || !schedule.current_run_id) {
+      return {
+        worker: { id: Number(worker.id), fullName: worker.full_name, workerCode: worker.worker_code },
+        month,
+        schedule: null,
+        shiftTemplates: [],
+        days: [],
+      };
+    }
+
+    // Load assignments for this worker in this run
+    const assignments = await this.assignmentsRepo.find({
+      where: {
+        schedule_run_id: schedule.current_run_id as any,
+        worker_id: worker.id as any,
+        date: Between(startDate, endDate) as any,
+      },
+      order: { date: 'ASC', shift_order: 'ASC' },
+    });
+
+    // Load shift templates for the unit
+    const templates = await this.shiftTemplatesRepo.find({
+      where: [
+        { unit_id: worker.primary_unit_id as any, is_active: true },
+        { unit_id: IsNull(), is_active: true },
+      ],
+      order: { code: 'ASC' },
+    });
+
+    const shiftMap = new Map(templates.map((t) => [t.code, t]));
+
+    // Group assignments by date
+    const byDate = new Map<string, typeof assignments>();
+    for (const a of assignments) {
+      if (!byDate.has(a.date)) byDate.set(a.date, []);
+      byDate.get(a.date)!.push(a);
+    }
+
+    // Build day-by-day array for the full month
+    const days: Array<{ date: string; shifts: Array<{ shiftCode: string; shiftName: string; startTime: string; endTime: string; isOvertime: boolean }> }> = [];
+    for (let d = 1; d <= lastDay; d++) {
+      const dateStr = `${year}-${String(mon).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dayAssignments = byDate.get(dateStr) ?? [];
+      days.push({
+        date: dateStr,
+        shifts: dayAssignments.map((a) => {
+          const tpl = shiftMap.get(a.shift_code);
+          return {
+            shiftCode: a.shift_code,
+            shiftName: tpl?.name ?? a.shift_code,
+            startTime: tpl?.start_time ?? null,
+            endTime: tpl?.end_time ?? null,
+            isOvertime: a.is_overtime,
+          };
+        }),
+      });
+    }
+
+    return {
+      worker: { id: Number(worker.id), fullName: worker.full_name, workerCode: worker.worker_code },
+      month,
+      schedule: { id: Number(schedule.id), name: schedule.name, status: schedule.status },
+      shiftTemplates: templates.map((t) => ({
+        code: t.code,
+        name: t.name,
+        startTime: t.start_time,
+        endTime: t.end_time,
+      })),
+      days,
+    };
   }
 }

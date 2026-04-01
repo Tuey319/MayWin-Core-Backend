@@ -151,12 +151,14 @@ Returns the current user's JWT payload.
 ```json
 {
   "user": {
-    "id": "42",
+    "sub": 42,
     "email": "user@example.com",
     "fullName": "John Doe",
     "organizationId": 1,
     "roles": ["NURSE", "UNIT_MANAGER"],
-    "unitIds": [2, 3]
+    "unitIds": [2, 3],
+    "iat": 1743505320,
+    "exp": 1743533920
   }
 }
 ```
@@ -982,6 +984,45 @@ Generates a one-time LINE invite token so the nurse can link their LINE account.
 
 ## Workers
 
+### `GET /workers/me/schedule`
+
+**Protected.** Returns the authenticated nurse's shift assignments for a given month. The worker profile is resolved from the JWT (`sub` → `workers.linked_user_id`).
+
+**Query params**
+
+| Param | Type | Required | Notes |
+|---|---|---|---|
+| `month` | `string` | No | `YYYY-MM` format. Defaults to current month. |
+
+**Response — 200 OK**
+```json
+{
+  "worker": { "id": 3, "fullName": "Nurse Name", "workerCode": "N001" },
+  "month": "2026-04",
+  "schedule": { "id": 12, "name": "April 2026 Schedule", "status": "PUBLISHED" },
+  "shiftTemplates": [
+    { "code": "M", "name": "เช้า", "startTime": "07:00:00", "endTime": "15:00:00" },
+    { "code": "A", "name": "บ่าย", "startTime": "15:00:00", "endTime": "23:00:00" },
+    { "code": "N", "name": "ดึก", "startTime": "23:00:00", "endTime": "07:00:00" }
+  ],
+  "days": [
+    {
+      "date": "2026-04-01",
+      "shifts": [
+        { "shiftCode": "M", "shiftName": "เช้า", "startTime": "07:00:00", "endTime": "15:00:00", "isOvertime": false }
+      ]
+    },
+    { "date": "2026-04-02", "shifts": [] }
+  ]
+}
+```
+
+If no published schedule exists for the month, `schedule` is `null` and `days` is `[]`.
+
+**Errors:** `400` (invalid month format), `401`, `404` (no worker profile linked to account)
+
+---
+
 ### `GET /units/:unitId/workers`
 
 Lists workers assigned to a unit.
@@ -1795,6 +1836,7 @@ The Next.js BFF proxies browser requests to this backend. Quick reference:
 | `POST` | `/api/auth/logout` | `POST /auth/logout` |
 | `GET` | `/api/auth/me` | `GET /auth/me` |
 | `PATCH` | `/api/auth/me/username` | `PATCH /auth/me/username` |
+| `GET` | `/api/workers/me/schedule?month=` | `GET /workers/me/schedule` |
 | `GET` | `/api/schedule` | `GET /schedule?unitId=` |
 | `GET` | `/api/export` | `GET /nurses/export` |
 | `GET` | `/api/preferences` | `GET /units/:id/workers/preferences` |

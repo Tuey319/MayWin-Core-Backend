@@ -8,6 +8,9 @@ import { WorkerUnitMembership } from '@/database/entities/workers/worker-unit.en
 import { WorkerPreference } from '@/database/entities/workers/worker-preferences.entity';
 import { ScheduleJob } from '@/database/entities/orchestration/schedule-job.entity';
 import { ScheduleArtifact } from '@/database/entities/orchestration/schedule-artifact.entity';
+import { Schedule } from '@/database/entities/scheduling/schedule.entity';
+import { ScheduleAssignment } from '@/database/entities/scheduling/schedule-assignment.entity';
+import { ShiftTemplate } from '@/database/entities/scheduling/shift-template.entity';
 import { BucketsModule } from '@/database/buckets/buckets.module';
 
 import { WorkersController } from './workers.controller';
@@ -21,6 +24,9 @@ import { WorkersService } from './workers.service';
       WorkerPreference,
       ScheduleJob,
       ScheduleArtifact,
+      Schedule,
+      ScheduleAssignment,
+      ShiftTemplate,
     ]),
     BucketsModule,
   ],
