@@ -1,0 +1,17 @@
+# Copy this file to terraform.tfvars and fill in your values
+# DO NOT commit terraform.tfvars to Git
+
+aws_region              = "ap-southeast-1"
+environment             = "prod"
+project_name            = "maywin"
+aws_account_id          = "556088722017"
+ecr_repository_name     = "maywin-nest-lambda"
+lambda_role_name        = "maywin-lambda-execution-role"
+rds_instance_identifier = "maywin-restored"
+s3_artifact_bucket_name = "maywin-artifacts"
+
+lambda_function_names = [
+  "maywin-core-api",
+  "maywin-core-backend-control-layer",
+  "maywin-solver-plan-a-strict"
+]
