@@ -177,7 +177,7 @@ new_schedule AS (
     '2026-05-31',
     'DRAFT',
     (SELECT id FROM new_profile),
-    (SELECT id FROM maywin_db.users WHERE organization_id = u.organization_id ORDER BY id LIMIT 1),
+    1,
     '{
       "month": "2026-05",
       "status_reason": "DRAFT – pending nurse shift requests (submit before Apr 20)",
@@ -210,3 +210,73 @@ WHERE unit_id = 5 AND name = 'Ward 3A – May 2026';
 SELECT id, name, start_date, end_date, status, constraint_profile_id, attributes
 FROM maywin_db.schedules
 WHERE unit_id = 5 AND start_date = '2026-05-01';
+
+-- ============================================================
+-- PATCH — Fix solver output issues (run after solver completes)
+--
+-- Problems found in the solver run linked to schedule id=41:
+--   1. 4 assignments dated 2026-04-30 — outside the May schedule
+--      range (start_date = 2026-05-01). Cause: solver looked one
+--      day back to fill overnight transitions; these must be deleted.
+--   2. 3 days with no NIGHT coverage: May 11, May 18, May 19.
+--      Inserted manually (source='MANUAL') using nurses with no
+--      morning shift the following day (avoids night→morning violation).
+--
+-- Night assignments chosen:
+--   May 11 → workers 72, 76  (May 12 morning: 69, 73 — no conflict)
+--   May 18 → workers 69, 71  (May 19 morning: 75, 76 — no conflict)
+--   May 19 → workers 73, 74  (May 20 morning: 71, 72 — no conflict)
+-- ============================================================
+
+BEGIN;
+
+-- 1. Remove out-of-range April 30 assignments from the May schedule
+DELETE FROM maywin_db.schedule_assignments
+WHERE schedule_id = 41
+  AND date = '2026-04-30';
+
+-- 2. Insert missing NIGHT shifts
+--    schedule_run_id: latest run for schedule 41
+INSERT INTO maywin_db.schedule_assignments
+  (schedule_id, schedule_run_id, worker_id, date, shift_code, shift_order, is_overtime, source, attributes, created_at, updated_at)
+SELECT
+  41,
+  (SELECT id FROM maywin_db.schedule_runs WHERE schedule_id = 41 ORDER BY id DESC LIMIT 1),
+  w.worker_id,
+  w.shift_date,
+  'NIGHT',
+  1,
+  false,
+  'MANUAL',
+  '{}'::jsonb,
+  NOW(),
+  NOW()
+FROM (VALUES
+  (72::bigint, '2026-05-11'::date),
+  (76::bigint, '2026-05-11'::date),
+  (69::bigint, '2026-05-18'::date),
+  (71::bigint, '2026-05-18'::date),
+  (73::bigint, '2026-05-19'::date),
+  (74::bigint, '2026-05-19'::date)
+) AS w(worker_id, shift_date)
+ON CONFLICT ON CONSTRAINT sa_run_uniq DO NOTHING;
+
+COMMIT;
+
+-- ============================================================
+-- VERIFY — confirm April assignments are gone and nights covered
+-- ============================================================
+
+-- Should return 0 rows
+SELECT COUNT(*) AS apr30_leftover
+FROM maywin_db.schedule_assignments
+WHERE schedule_id = 41 AND date = '2026-04-30';
+
+-- Should show 2 rows for each date (shift_code = 'NIGHT')
+SELECT date, shift_code, COUNT(*) AS nurse_count
+FROM maywin_db.schedule_assignments
+WHERE schedule_id = 41
+  AND date IN ('2026-05-11', '2026-05-18', '2026-05-19')
+  AND shift_code = 'NIGHT'
+GROUP BY date, shift_code
+ORDER BY date;
