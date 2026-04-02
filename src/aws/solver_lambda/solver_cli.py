@@ -662,7 +662,16 @@ def solve(req: SolveRequest) -> SolveResponse:
                 model.Add(sum(x[(n, d, s)] for n in eligible) >= need_senior)
     
     # 10) Shift type limits (STRICT)
-    target_nurses = [n for n in nurses if n != "N1"]
+    # Detect "morning-only" nurses dynamically: any nurse with zero NIGHT availability
+    # across all schedule days. These nurses must be excluded from shift-balance
+    # constraints (they physically cannot do nights or evenings).
+    morning_only_nurses: set = set()
+    if night_label and availability:
+        for n in nurses:
+            if all(availability.get(n, {}).get(d, {}).get(night_label, 1) == 0 for d in days):
+                morning_only_nurses.add(n)
+
+    target_nurses = [n for n in nurses if n not in morning_only_nurses]
 
     for n in target_nurses:
         model.Add(sum(x[(n, d, morning_label)] for d in days) <= 9)
@@ -671,6 +680,8 @@ def solve(req: SolveRequest) -> SolveResponse:
 
 
     # 11) Equal distribution (SOFT-RELAXED ±1)
+    # Morning-only nurses are excluded. Their expected morning contribution is
+    # subtracted from total_morning so avg_morning is correct for the remaining nurses.
 
     num_nurses = len(target_nurses)
 
@@ -678,9 +689,21 @@ def solve(req: SolveRequest) -> SolveResponse:
     total_afternoon = sum(demand[d][evening_label] for d in days)
     total_night = sum(demand[d][night_label] for d in days)
 
-    avg_morning = total_morning // num_nurses
-    avg_afternoon = total_afternoon // num_nurses
-    avg_night = total_night // num_nurses
+    # Estimate morning slots that morning-only nurses will cover (their available days).
+    morning_only_contribution = 0
+    if morning_only_nurses and availability:
+        for n in morning_only_nurses:
+            morning_only_contribution += sum(
+                1 for d in days
+                if availability.get(n, {}).get(d, {}).get(morning_label, 1) == 1
+            )
+
+    avg_morning = max(0, total_morning - morning_only_contribution) // max(1, num_nurses)
+    avg_afternoon = total_afternoon // max(1, num_nurses)
+    avg_night = total_night // max(1, num_nurses)
+
+    print(f"[SOLVER] morning_only_nurses={morning_only_nurses} contribution={morning_only_contribution}", file=sys.stderr)
+    print(f"[SOLVER] avg_morning={avg_morning} avg_afternoon={avg_afternoon} avg_night={avg_night} (over {num_nurses} target nurses)", file=sys.stderr)
 
     for n in target_nurses:
         m = sum(x[(n, d, morning_label)] for d in days)

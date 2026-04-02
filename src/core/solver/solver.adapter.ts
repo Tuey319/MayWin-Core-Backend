@@ -38,7 +38,7 @@ export class SolverAdapter {
 
   private getCliPath(): string {
     const p =
-      process.env.SOLVER_CLI_PATH?.trim() || 'src/core/solver/solver_cli.py';
+      process.env.SOLVER_CLI_PATH?.trim() || 'src/aws/solver_lambda/solver_cli.py';
     return path.isAbsolute(p) ? p : path.resolve(process.cwd(), p);
   }
 
@@ -65,11 +65,6 @@ export class SolverAdapter {
       input?.nurses?.[0]?.code &&
       Array.isArray(input?.shifts) &&
       input?.shifts?.[0]?.code;
-
-    // Capture schedule start date so we can strip the ghost day from results later
-    const scheduleStartDate: string | null = looksLikeNormalizedInput
-      ? (String(input?.horizon?.startDate ?? input?.horizon?.days?.[0]?.date ?? '') || null)
-      : null;
 
     const pythonReq = looksLikeNormalizedInput
       ? this.toSolveRequest(input, timeLimitSeconds)
@@ -135,12 +130,7 @@ export class SolverAdapter {
       }
 
       const status: string | undefined = parsed?.status;
-      // Strip ghost-day assignments (day before schedule start) that the solver
-      // may emit as a side-effect of boundary context padding.
-      const rawAssignments = Array.isArray(parsed?.assignments) ? parsed.assignments : [];
-      const assignments = scheduleStartDate
-        ? rawAssignments.filter((a: any) => String(a.date ?? '') >= scheduleStartDate)
-        : rawAssignments;
+      const assignments = Array.isArray(parsed?.assignments) ? parsed.assignments : [];
       const nurseStats = Array.isArray(parsed?.nurse_stats) ? parsed.nurse_stats : [];
       const understaffed = Array.isArray(parsed?.understaffed) ? parsed.understaffed : [];
 
@@ -219,28 +209,8 @@ export class SolverAdapter {
       String(n.code),
     );
 
-    // ── ghost day: pad one day before schedule start ──────────────────────────
-    // The solver enforces forbid_evening_to_night and forbid_night_to_morning by
-    // looking at the previous day. Without a day before the schedule start, it
-    // cannot verify these constraints for day-1 NIGHT and conservatively skips it.
-    // We prepend a ghost day with demand=0 so the solver has the boundary context
-    // it needs. Ghost-day assignments are stripped from results in solveViaCli().
-    let ghostDate: string | null = null;
-    if (days.length > 0) {
-      const startDt = new Date(`${days[0]}T00:00:00.000Z`);
-      startDt.setUTCDate(startDt.getUTCDate() - 1);
-      ghostDate = startDt.toISOString().slice(0, 10);
-      days.unshift(ghostDate);
-    }
-
     // ── demand ────────────────────────────────────────────────────────────────
     const demand: Record<string, Record<string, number>> = {};
-
-    // Ghost day: demand = 0 for all shifts (no assignments needed, just context)
-    if (ghostDate) {
-      demand[ghostDate] = {};
-      for (const sc of shifts) demand[ghostDate][sc] = 0;
-    }
 
     for (const day of normalized?.horizon?.days ?? []) {
       const date = String(day.date);
@@ -258,7 +228,7 @@ export class SolverAdapter {
     const availability: Record<string, Record<string, Record<string, number>>> = {};
     for (const n of nurses) {
       availability[n] = {};
-      for (const d of days) availability[n][d] = {}; // ghost day included; defaults to available
+      for (const d of days) availability[n][d] = {};
     }
 
     for (const row of normalized?.availability ?? []) {

@@ -1,3 +1,4 @@
+// This service builds normalized input JSON for the solver based on DB data for a given ScheduleJob.
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, In, IsNull, Repository } from 'typeorm';
