@@ -129,6 +129,25 @@ export class SchedulesService {
     };
   }
 
+  async listAll() {
+    const rows = await this.schedulesRepo.find({ order: { created_at: 'DESC' } });
+    return {
+      schedules: rows.map((s) => ({
+        id: s.id,
+        organizationId: s.organization_id,
+        unitId: s.unit_id,
+        name: s.name,
+        startDate: s.start_date,
+        endDate: s.end_date,
+        status: s.status,
+        jobId: s.job_id,
+        constraintProfileId: s.constraint_profile_id,
+        createdAt: s.created_at.toISOString(),
+        publishedAt: s.published_at?.toISOString() ?? null,
+      })),
+    };
+  }
+
   async getCurrentSchedule(unitId: string, dateFrom?: string, dateTo?: string) {
     const cacheKey = `schedule:current:${unitId}:${dateFrom ?? ''}:${dateTo ?? ''}`;
     const cached = await this.cache.get<any>(cacheKey);
