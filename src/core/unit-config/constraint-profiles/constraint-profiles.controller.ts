@@ -10,6 +10,11 @@ import { UpdateConstraintProfileDto } from './dto/update-constraint-profile.dto'
 export class ConstraintProfilesController {
   constructor(private readonly service: ConstraintProfilesService) {}
 
+  @Get('/constraint-profiles')
+  listAll() {
+    return this.service.listAll();
+  }
+
   @Get('/units/:unitId/constraint-profiles')
   list(@Param('unitId') unitId: string) {
     return this.service.listByUnit(unitId);
