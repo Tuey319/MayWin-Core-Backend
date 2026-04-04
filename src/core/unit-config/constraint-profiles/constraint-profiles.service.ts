@@ -54,6 +54,11 @@ export class ConstraintProfilesService {
     return { profile: this.toApi(await this.repo.save(row)) };
   }
 
+  async listAll() {
+    const rows = await this.repo.find({ order: { created_at: 'ASC' as any } });
+    return { profiles: rows.map((r) => this.toApi(r)) };
+  }
+
   // ── Org-scoped ──────────────────────────────────────────────────────────────
 
   async listByOrg(orgId: string) {
