@@ -796,6 +796,12 @@ Constraint profiles control solver behavior. Each field maps directly to a solve
 }
 ```
 
+#### `GET /constraint-profiles`
+
+Lists **all** constraint profiles across every unit and organisation.
+
+**Response — 200 OK** — `{ "profiles": [ { ... } ] }`
+
 #### `GET /units/:unitId/constraint-profiles`
 
 Lists all constraint profiles for a unit. Also available as `GET /units/:unitId/profiles`.
@@ -1299,6 +1305,33 @@ Rejects a day-off request for a specific date. Removes from both `days_off_patte
 ---
 
 ## Schedules
+
+### `GET /schedules`
+
+Lists **all** schedules across every unit and organisation, ordered by most recently created.
+
+**Response — 200 OK**
+```json
+{
+  "schedules": [
+    {
+      "id": "42",
+      "organizationId": "1",
+      "unitId": "5",
+      "name": "March 2026",
+      "startDate": "2026-03-01",
+      "endDate": "2026-03-31",
+      "status": "PUBLISHED",
+      "jobId": null,
+      "constraintProfileId": "cp-uuid",
+      "createdAt": "2026-02-15T08:00:00.000Z",
+      "publishedAt": "2026-02-20T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+---
 
 ### `POST /units/:unitId/schedules`
 

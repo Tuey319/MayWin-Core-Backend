@@ -627,6 +627,7 @@ DELETE /units/:unitId/members/:userId
 
 ### Schedules & Jobs
 ```
+GET   /schedules
 POST  /units/:unitId/schedules
 GET   /units/:unitId/schedules/current
 GET   /units/:unitId/schedules/history
@@ -652,6 +653,13 @@ DELETE /units/:unitId/shift-templates/:id
 POST   /units/:unitId/coverage-rules
 PATCH  /units/:unitId/coverage-rules/:id
 
+GET    /constraint-profiles
+GET    /units/:unitId/constraint-profiles
+POST   /units/:unitId/constraint-profiles
+PATCH  /units/:unitId/constraint-profiles/:id
+POST   /units/:unitId/constraint-profiles/:id/activate
+
+GET    /organizations/:orgId/constraint-profiles
 POST   /organizations/:orgId/constraint-profiles
 PUT    /organizations/:orgId/constraint-profiles/:id
 DELETE /organizations/:orgId/constraint-profiles/:id
