@@ -13,9 +13,18 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1/core');
 
   // Increase payload limit for large profile pictures (Base64)
-  const { json, urlencoded } = require('express');
-  app.use(json({ limit: '10mb' }));
-  app.use(urlencoded({ limit: '10mb', extended: true }));
+  // Using the standard NestJS / Express approach
+  const express = require('express');
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+  // Layer 3 Diagnostic: Log incoming body size
+  app.use((req: any, res: any, next: any) => {
+    if (req.method === 'PATCH' && req.url.includes('profiles/me')) {
+      console.log(`[Backend] Incoming PATCH /profiles/me | Content-Length: ${req.headers['content-length']} bytes`);
+    }
+    next();
+  });
 
   // TODO: add validation pipe, CORS, logging, etc.
   await app.listen(process.env.PORT || 3000, '0.0.0.0');
