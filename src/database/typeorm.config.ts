@@ -12,9 +12,18 @@ function requireEnv(name: string): string {
 }
 
 export function typeOrmConfig(): TypeOrmModuleOptions {
+  const source = process.env.DB_SOURCE || 'restored';
+  let host = process.env.DB_HOST;
+
+  if (source === 'restored') {
+    host = process.env.DB_HOST_RESTORED || host;
+  } else if (source === 'old') {
+    host = process.env.DB_HOST_OLD || host;
+  }
+
   return {
     type: 'postgres',
-    host: requireEnv('DB_HOST'),
+    host: host ?? requireEnv('DB_HOST'),
     port: Number(requireEnv('DB_PORT')),
     username: requireEnv('DB_USER'),
     password: requireEnv('DB_PASSWORD'),
@@ -38,10 +47,19 @@ export function typeOrmConfig(): TypeOrmModuleOptions {
 }
 
 export function dataSourceOptions(): DataSourceOptions {
+  const source = process.env.DB_SOURCE || 'restored';
+  let host = process.env.DB_HOST;
+
+  if (source === 'restored') {
+    host = process.env.DB_HOST_RESTORED || host;
+  } else if (source === 'old') {
+    host = process.env.DB_HOST_OLD || host;
+  }
+
   return {
     type: 'postgres',
 
-    host: requireEnv('DB_HOST'),
+    host: host ?? requireEnv('DB_HOST'),
     port: Number(requireEnv('DB_PORT')),
     username: requireEnv('DB_USER'),
     password: requireEnv('DB_PASSWORD'),
