@@ -3,14 +3,22 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { StaffController } from '../src/core/staff/staff.controller';
 import { StaffService } from '../src/core/staff/staff.service';
 import { AuditLogsService } from '../src/core/audit-logs/audit-logs.service';
+import { MailService } from '../src/core/mail/mail.service';
 import { Worker, EmploymentType } from '../src/database/entities/workers/worker.entity';
+import { User } from '../src/database/entities/users/user.entity';
+import { UnitMembership } from '../src/database/entities/users/unit-membership.entity';
+import { LineLinkToken } from '../src/database/entities/workers/line-link-token.entity';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 describe('StaffController & StaffService', () => {
   let controller: StaffController;
   let service: StaffService;
   let mockWorkersRepo: any;
+  let mockUsersRepo: any;
+  let mockMembershipRepo: any;
+  let mockLineLinkTokenRepo: any;
   let mockAuditLogsService: any;
+  let mockMailService: any;
 
   beforeEach(async () => {
     mockWorkersRepo = {
@@ -18,10 +26,34 @@ describe('StaffController & StaffService', () => {
       findOne: jest.fn(),
       create: jest.fn(),
       save: jest.fn(),
+      remove: jest.fn(),
     };
 
     mockAuditLogsService = {
       append: jest.fn().mockResolvedValue({}),
+    };
+
+    mockUsersRepo = {
+      findOne: jest.fn(),
+      create: jest.fn(),
+      save: jest.fn(),
+    };
+
+    mockMembershipRepo = {
+      findOne: jest.fn(),
+      create: jest.fn(),
+      save: jest.fn(),
+    };
+
+    mockLineLinkTokenRepo = {
+      find: jest.fn(),
+      findOne: jest.fn(),
+      create: jest.fn(),
+      save: jest.fn(),
+    };
+
+    mockMailService = {
+      sendWelcome: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -33,8 +65,24 @@ describe('StaffController & StaffService', () => {
           useValue: mockWorkersRepo,
         },
         {
+          provide: getRepositoryToken(User),
+          useValue: mockUsersRepo,
+        },
+        {
+          provide: getRepositoryToken(UnitMembership),
+          useValue: mockMembershipRepo,
+        },
+        {
+          provide: getRepositoryToken(LineLinkToken),
+          useValue: mockLineLinkTokenRepo,
+        },
+        {
           provide: AuditLogsService,
           useValue: mockAuditLogsService,
+        },
+        {
+          provide: MailService,
+          useValue: mockMailService,
         },
       ],
     }).compile();
@@ -132,6 +180,12 @@ describe('StaffController & StaffService', () => {
       mockWorkersRepo.findOne.mockResolvedValue(null);
       mockWorkersRepo.create.mockReturnValue(savedWorker);
       mockWorkersRepo.save.mockResolvedValue(savedWorker);
+      mockUsersRepo.findOne.mockResolvedValue(null);
+      mockUsersRepo.create.mockImplementation((v: any) => ({ id: '201', ...v }));
+      mockUsersRepo.save.mockImplementation(async (v: any) => ({ id: '201', ...v }));
+      mockMembershipRepo.findOne.mockResolvedValue(null);
+      mockMembershipRepo.create.mockImplementation((v: any) => v);
+      mockMembershipRepo.save.mockResolvedValue({});
 
       const result = await service.create(
         dto,
@@ -251,7 +305,7 @@ describe('StaffController & StaffService', () => {
       const removed: Partial<Worker> = { ...existing, is_active: false };
 
       mockWorkersRepo.findOne.mockResolvedValue(existing);
-      mockWorkersRepo.save.mockResolvedValue(removed);
+      mockWorkersRepo.remove.mockResolvedValue(removed);
 
       const result = await service.remove(
         '1',
