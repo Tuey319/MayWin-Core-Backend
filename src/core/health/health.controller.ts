@@ -18,10 +18,11 @@ export class HealthController {
   @Get('info')
   info() {
     return {
-      deployedAt: process.env.DEPLOYED_AT || 'Not specified (Development)',
-      serverTime: new Date().toISOString(),
+      buildTime: '2026-04-07T12:51:00Z', // Injected at build/edit time
+      appStartTime: new Date().toISOString(),
       uptimeSeconds: process.uptime(),
       environment: process.env.NODE_ENV || 'development',
+      dbSource: process.env.DB_SOURCE || 'restored',
     };
   }
 }
