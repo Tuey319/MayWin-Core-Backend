@@ -16,8 +16,7 @@ const mockProfile = (overrides: Partial<ConstraintProfile> = {}): ConstraintProf
     description: 'Standard ICU shift rules',
     assigned_to: 'ICU',
     color: 'primary',
-    constraints_json: [{ key: 'maxConsecutiveShifts', enabled: true, type: 'number', value: 3 }],
-    goals_json: [{ key: 'fairWorkload', enabled: true, priority: 1 }],
+    forbid_evening_to_night: true,
     // solver fields (defaults)
     max_consecutive_work_days: null,
     max_consecutive_night_shifts: null,
@@ -81,7 +80,13 @@ describe('ConstraintProfilesService — org-level methods', () => {
 
   describe('listByOrg', () => {
     it('returns all profiles for an org', async () => {
-      repo.find!.mockResolvedValue([mockProfile()]);
+      const qb: any = {
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([mockProfile()]),
+      };
+      repo.createQueryBuilder!.mockReturnValue(qb);
       const result = await service.listByOrg('1');
       expect(result.profiles).toHaveLength(1);
       expect(result.profiles[0].id).toBe('p-1');
@@ -89,16 +94,28 @@ describe('ConstraintProfilesService — org-level methods', () => {
     });
 
     it('returns empty array when no profiles', async () => {
-      repo.find!.mockResolvedValue([]);
+      const qb: any = {
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([]),
+      };
+      repo.createQueryBuilder!.mockReturnValue(qb);
       const result = await service.listByOrg('1');
       expect(result.profiles).toHaveLength(0);
     });
 
-    it('includes constraints and goals arrays in response', async () => {
-      repo.find!.mockResolvedValue([mockProfile()]);
+    it('includes solver toggles in response', async () => {
+      const qb: any = {
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([mockProfile()]),
+      };
+      repo.createQueryBuilder!.mockReturnValue(qb);
       const { profiles } = await service.listByOrg('1');
-      expect(profiles[0].constraints).toHaveLength(1);
-      expect(profiles[0].goals).toHaveLength(1);
+      expect(profiles[0].goalMinimizeStaffCost).toBe(true);
+      expect(profiles[0].goalMaximizePreferenceSatisfaction).toBe(true);
     });
   });
 
@@ -115,8 +132,8 @@ describe('ConstraintProfilesService — org-level methods', () => {
         description: 'Standard ICU shift rules',
         assignedTo: 'ICU',
         color: 'primary',
-        constraints: [{ key: 'maxConsecutiveShifts', enabled: true }],
-        goals: [{ key: 'fairWorkload', enabled: true }],
+        maxConsecutiveWorkDays: 4,
+        goalBalanceWorkload: true,
       });
 
       expect(result.profile.id).toBe('p-1');
@@ -151,14 +168,14 @@ describe('ConstraintProfilesService — org-level methods', () => {
       await expect(service.updateForOrg('1', 'missing', { name: 'x' })).rejects.toThrow(NotFoundException);
     });
 
-    it('preserves constraints and goals when not provided', async () => {
+    it('preserves solver flags when not provided', async () => {
       const p = mockProfile();
       repo.findOne!.mockResolvedValue(p);
       repo.save!.mockResolvedValue(p);
 
       const result = await service.updateForOrg('1', 'p-1', { name: 'New Name' });
-      expect(result.profile.constraints).toHaveLength(1);
-      expect(result.profile.goals).toHaveLength(1);
+      expect(result.profile.goalMinimizeStaffCost).toBe(true);
+      expect(result.profile.goalMaximizePreferenceSatisfaction).toBe(true);
     });
   });
 

@@ -18,6 +18,7 @@ import { ScheduleJob } from '../src/database/entities/orchestration/schedule-job
 import { ScheduleArtifact } from '../src/database/entities/orchestration/schedule-artifact.entity';
 import { S3ArtifactsService } from '../src/database/buckets/s3-artifacts.service';
 import { BadRequestException } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 
 describe('Compatibility Routes', () => {
   describe('SchedulesController - GET /schedule alias', () => {
@@ -69,6 +70,10 @@ describe('Compatibility Routes', () => {
           {
             provide: getRepositoryToken(User),
             useValue: mockRepos.usersRepo,
+          },
+          {
+            provide: CACHE_MANAGER,
+            useValue: { get: jest.fn(), set: jest.fn(), del: jest.fn() },
           },
         ],
       }).compile();
@@ -147,6 +152,9 @@ describe('Compatibility Routes', () => {
         artifactsRepo: {
           find: jest.fn(),
         },
+        workersRepo: {
+          findOne: jest.fn(),
+        },
       };
 
       const mockJobsRunner = {
@@ -174,8 +182,16 @@ describe('Compatibility Routes', () => {
             useValue: mockRepos.artifactsRepo,
           },
           {
+            provide: getRepositoryToken(Worker),
+            useValue: mockRepos.workersRepo,
+          },
+          {
             provide: JobsRunnerService,
             useValue: mockJobsRunner,
+          },
+          {
+            provide: S3ArtifactsService,
+            useValue: { getJson: jest.fn(), putJson: jest.fn() },
           },
         ],
       }).compile();
@@ -242,6 +258,16 @@ describe('Compatibility Routes', () => {
         artifactsRepo: {
           createQueryBuilder: jest.fn(),
         },
+        schedulesRepo: {
+          findOne: jest.fn(),
+          manager: { query: jest.fn() },
+        },
+        assignmentsRepo: {
+          find: jest.fn(),
+        },
+        shiftTemplatesRepo: {
+          find: jest.fn(),
+        },
         s3Artifacts: {
           getJson: jest.fn(),
         },
@@ -285,8 +311,24 @@ describe('Compatibility Routes', () => {
             useValue: mockRepos.artifactsRepo,
           },
           {
+            provide: getRepositoryToken(Schedule),
+            useValue: mockRepos.schedulesRepo,
+          },
+          {
+            provide: getRepositoryToken(ScheduleAssignment),
+            useValue: mockRepos.assignmentsRepo,
+          },
+          {
+            provide: getRepositoryToken(ShiftTemplate),
+            useValue: mockRepos.shiftTemplatesRepo,
+          },
+          {
             provide: S3ArtifactsService,
             useValue: mockRepos.s3Artifacts,
+          },
+          {
+            provide: CACHE_MANAGER,
+            useValue: { get: jest.fn(), set: jest.fn(), del: jest.fn() },
           },
         ],
       }).compile();
