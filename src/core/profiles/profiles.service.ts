@@ -2,6 +2,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -21,6 +22,8 @@ type AvatarUpload = {
 
 @Injectable()
 export class ProfilesService {
+  private readonly logger = new Logger(ProfilesService.name);
+
   constructor(
     @InjectRepository(UserProfile)
     private readonly profileRepo: Repository<UserProfile>,
@@ -128,19 +131,20 @@ export class ProfilesService {
     const previousBucket = profile.avatar_bucket ?? profile.metadata?.avatarBucket ?? bucket;
     const previousMeta = profile.metadata ?? {};
 
-    const uploaded = await this.s3.putBuffer(keyParts, file.buffer, file.mimetype);
-
-    profile.avatar_data = uploaded.key;
-    profile.avatar_bucket = uploaded.bucket;
-    profile.avatar_key = uploaded.key;
-    profile.avatar_content_type = file.mimetype;
-    profile.avatar_updated_at = new Date();
-    profile.metadata = {
-      ...previousMeta,
-      avatarOriginalName: file.originalname ?? null,
-    };
-
+    let uploaded: { bucket: string; key: string } | undefined;
     try {
+      uploaded = await this.s3.putBuffer(keyParts, file.buffer, file.mimetype);
+
+      profile.avatar_data = uploaded.key;
+      profile.avatar_bucket = uploaded.bucket;
+      profile.avatar_key = uploaded.key;
+      profile.avatar_content_type = file.mimetype;
+      profile.avatar_updated_at = new Date();
+      profile.metadata = {
+        ...previousMeta,
+        avatarOriginalName: file.originalname ?? null,
+      };
+
       const saved = await this.profileRepo.save(profile);
 
       if (previousKey && previousKey !== uploaded.key) {
@@ -149,8 +153,14 @@ export class ProfilesService {
 
       return { profile: this.toApi(saved) };
     } catch (err) {
-      await this.s3.deleteObject(uploaded).catch(() => undefined);
-      throw err;
+      this.logger.error(
+        `Avatar upload failed for user ${userId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+
+      if (uploaded) {
+        await this.s3.deleteObject(uploaded).catch(() => undefined);
+      }
+      throw new ServiceUnavailableException('Unable to store avatar right now. Please try again.');
     }
   }
 

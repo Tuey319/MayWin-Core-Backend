@@ -196,7 +196,7 @@ Returns the current user's JWT payload.
 
 ### `GET /profiles/me`
 
-Returns the current user's profile record.
+Returns the current user's profile record. If the row does not exist yet, the backend creates an empty one first.
 
 **Response — 200 OK**
 ```json
@@ -204,12 +204,20 @@ Returns the current user's profile record.
   "id": "1",
   "userId": "42",
   "avatar_data": "profiles/avatars/42/1712530000000-acde1234.webp",
+  "avatar_bucket": "maywin-artifacts",
+  "avatar_key": "profiles/avatars/42/1712530000000-acde1234.webp",
+  "avatar_content_type": "image/webp",
+  "avatar_updated_at": "2026-04-08T10:00:00.000Z",
   "bio": "Night shift nurse",
   "phone_number": "+66xxxxxxxxx",
   "metadata": {
-    "avatarBucket": "maywin-artifacts",
-    "avatarContentType": "image/webp",
-    "avatarUpdatedAt": "2026-04-08T10:00:00.000Z"
+    "avatarOriginalName": "avatar.webp"
+  },
+  "avatar": {
+    "bucket": "maywin-artifacts",
+    "key": "profiles/avatars/42/1712530000000-acde1234.webp",
+    "contentType": "image/webp",
+    "url": "/api/v1/core/profiles/me/avatar"
   }
 }
 ```
@@ -228,7 +236,7 @@ Returns the current user's profile record.
 }
 ```
 
-**Response — 200 OK** — updated profile record.
+**Response — 200 OK** — updated profile record. Same shape as `GET /profiles/me`, with the updated text fields.
 
 ---
 
@@ -249,10 +257,14 @@ Returns the current user's profile record.
     "id": "1",
     "userId": "42",
     "avatar_data": "profiles/avatars/42/1712530000000-acde1234.webp",
+    "avatar_bucket": "maywin-artifacts",
+    "avatar_key": "profiles/avatars/42/1712530000000-acde1234.webp",
+    "avatar_content_type": "image/webp",
+    "avatar_updated_at": "2026-04-08T10:00:00.000Z",
+    "bio": "Night shift nurse",
+    "phone_number": "+66xxxxxxxxx",
     "metadata": {
-      "avatarBucket": "maywin-artifacts",
-      "avatarContentType": "image/webp",
-      "avatarUpdatedAt": "2026-04-08T10:00:00.000Z"
+      "avatarOriginalName": "avatar.webp"
     },
     "avatar": {
       "bucket": "maywin-artifacts",
@@ -292,11 +304,19 @@ Returns the current user's profile record.
     "id": "1",
     "userId": "42",
     "avatar_data": null,
+    "avatar_bucket": null,
+    "avatar_key": null,
+    "avatar_content_type": null,
+    "avatar_updated_at": null,
+    "bio": "Night shift nurse",
+    "phone_number": "+66xxxxxxxxx",
     "metadata": {
       "avatarBucket": null,
       "avatarContentType": null,
+      "avatarOriginalName": null,
       "avatarUpdatedAt": null
-    }
+    },
+    "avatar": null
   }
 }
 ```
@@ -2029,3 +2049,4 @@ The Next.js BFF proxies browser requests to this backend. Quick reference:
 | `DELETE` | `/api/hospital/profiles/:id` | `DELETE /organizations/:orgId/constraint-profiles/:id` |
 | `GET` | `/api/units/:unitId/members` | `GET /units/:unitId/members` |
 | `GET` | `/api/units/:unitId/profiles` | `GET /units/:unitId/profiles` |
+
