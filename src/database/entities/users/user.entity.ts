@@ -24,18 +24,6 @@ export class User {
   @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
   attributes: Record<string, any>;
 
-  @Column({ type: 'text', nullable: true })
-  avatar_bucket: string | null;
-
-  @Column({ type: 'text', nullable: true })
-  avatar_key: string | null;
-
-  @Column({ type: 'text', nullable: true })
-  avatar_content_type: string | null;
-
-  @Column({ type: 'timestamptz', nullable: true })
-  avatar_updated_at: Date | null;
-
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 

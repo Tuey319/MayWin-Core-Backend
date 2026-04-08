@@ -194,10 +194,6 @@ CREATE TABLE IF NOT EXISTS maywin_db.users (
   full_name       text        NOT NULL,
   is_active       boolean     NOT NULL DEFAULT true,
   attributes      jsonb       NOT NULL DEFAULT '{}'::jsonb,
-  avatar_bucket   text,
-  avatar_key      text,
-  avatar_content_type text,
-  avatar_updated_at timestamptz,
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
@@ -211,6 +207,23 @@ CREATE TABLE IF NOT EXISTS maywin_db.user_roles (
   role_id bigint NOT NULL REFERENCES maywin_db.roles(id) ON DELETE CASCADE,
   PRIMARY KEY (user_id, role_id)
 );
+
+CREATE TABLE IF NOT EXISTS maywin_db.user_profiles (
+  id                 bigserial   PRIMARY KEY,
+  user_id            bigint      NOT NULL UNIQUE REFERENCES maywin_db.users(id) ON DELETE CASCADE,
+  avatar_data        text,
+  avatar_bucket      text,
+  avatar_key         text,
+  avatar_content_type text,
+  avatar_updated_at  timestamptz,
+  bio                text,
+  phone_number       text,
+  metadata           jsonb       NOT NULL DEFAULT '{}'::jsonb,
+  created_at         timestamptz NOT NULL DEFAULT now(),
+  updated_at         timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ix_user_profiles_user_id ON maywin_db.user_profiles (user_id);
 
 -- unit_memberships
 -- Which users belong to which unit and in what capacity.
