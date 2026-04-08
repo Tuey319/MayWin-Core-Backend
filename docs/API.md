@@ -11,26 +11,27 @@ All endpoints require `Authorization: Bearer <accessToken>` unless marked **Publ
 ## Table of Contents
 
 1. [Auth](#auth)
-2. [Health](#health)
-3. [Organizations](#organizations)
-4. [Sites](#sites)
-5. [Units](#units)
-6. [Roles](#roles)
-7. [Unit Configuration](#unit-configuration)
+2. [Profiles](#profiles)
+3. [Health](#health)
+4. [Organizations](#organizations)
+5. [Sites](#sites)
+6. [Units](#units)
+7. [Roles](#roles)
+8. [Unit Configuration](#unit-configuration)
    - [Shift Templates](#shift-templates)
    - [Constraint Profiles](#constraint-profiles)
    - [Coverage Rules](#coverage-rules)
-8. [Staff](#staff)
-9. [Workers](#workers)
-10. [Worker Availability](#worker-availability)
-11. [Worker Preferences](#worker-preferences)
-12. [Schedules](#schedules)
-13. [Schedule Assignments](#schedule-assignments)
-14. [Jobs (Solver)](#jobs-solver)
-15. [Worker Messages](#worker-messages)
-16. [Orchestrator](#orchestrator)
-17. [Webhook (LINE)](#webhook-line)
-18. [Audit Logs](#audit-logs)
+9. [Staff](#staff)
+10. [Workers](#workers)
+11. [Worker Availability](#worker-availability)
+12. [Worker Preferences](#worker-preferences)
+13. [Schedules](#schedules)
+14. [Schedule Assignments](#schedule-assignments)
+15. [Jobs (Solver)](#jobs-solver)
+16. [Worker Messages](#worker-messages)
+17. [Orchestrator](#orchestrator)
+18. [Webhook (LINE)](#webhook-line)
+19. [Audit Logs](#audit-logs)
 
 ---
 
@@ -188,6 +189,119 @@ Returns the current user's JWT payload.
 ```
 
 **Errors:** `400`, `401`
+
+---
+
+## Profiles
+
+### `GET /profiles/me`
+
+Returns the current user's profile record.
+
+**Response — 200 OK**
+```json
+{
+  "id": "1",
+  "userId": "42",
+  "avatar_data": "profiles/avatars/42/1712530000000-acde1234.webp",
+  "bio": "Night shift nurse",
+  "phone_number": "+66xxxxxxxxx",
+  "metadata": {
+    "avatarBucket": "maywin-artifacts",
+    "avatarContentType": "image/webp",
+    "avatarUpdatedAt": "2026-04-08T10:00:00.000Z"
+  }
+}
+```
+
+---
+
+### `PATCH /profiles/me`
+
+**Protected.** Updates text profile fields such as bio and phone number.
+
+**Request Body**
+```json
+{
+  "bio": "Night shift nurse",
+  "phone_number": "+66xxxxxxxxx"
+}
+```
+
+**Response — 200 OK** — updated profile record.
+
+---
+
+### `POST /profiles/me/avatar`
+
+**Protected.** Uploads the authenticated user's profile image to S3 and stores the object key in the profile record.
+
+**Request**
+- `multipart/form-data`
+- File field name: `file`
+- Allowed types: `image/jpeg`, `image/png`, `image/webp`
+- Max size: 5 MB
+
+**Response — 200 OK**
+```json
+{
+  "profile": {
+    "id": "1",
+    "userId": "42",
+    "avatar_data": "profiles/avatars/42/1712530000000-acde1234.webp",
+    "metadata": {
+      "avatarBucket": "maywin-artifacts",
+      "avatarContentType": "image/webp",
+      "avatarUpdatedAt": "2026-04-08T10:00:00.000Z"
+    },
+    "avatar": {
+      "bucket": "maywin-artifacts",
+      "key": "profiles/avatars/42/1712530000000-acde1234.webp",
+      "contentType": "image/webp",
+      "url": "/api/v1/core/profiles/me/avatar"
+    }
+  }
+}
+```
+
+**Errors:** `400`, `401`, `503`
+
+---
+
+### `GET /profiles/me/avatar`
+
+**Protected.** Streams the current user's avatar image from S3.
+
+**Response — 200 OK**
+- `Content-Type`: image content type from profile metadata or S3 object metadata
+- `Cache-Control`: `private, max-age=300`
+- Body: binary image stream
+
+**Errors:** `401`, `404`
+
+---
+
+### `DELETE /profiles/me/avatar`
+
+**Protected.** Removes the current user's avatar from S3 and clears the profile pointer.
+
+**Response — 200 OK**
+```json
+{
+  "profile": {
+    "id": "1",
+    "userId": "42",
+    "avatar_data": null,
+    "metadata": {
+      "avatarBucket": null,
+      "avatarContentType": null,
+      "avatarUpdatedAt": null
+    }
+  }
+}
+```
+
+**Errors:** `401`, `404`
 
 ---
 
@@ -1884,6 +1998,11 @@ The Next.js BFF proxies browser requests to this backend. Quick reference:
 | `POST` | `/api/auth/logout` | `POST /auth/logout` |
 | `GET` | `/api/auth/me` | `GET /auth/me` |
 | `PATCH` | `/api/auth/me/username` | `PATCH /auth/me/username` |
+| `GET` | `/api/profiles/me` | `GET /profiles/me` |
+| `PATCH` | `/api/profiles/me` | `PATCH /profiles/me` |
+| `POST` | `/api/profiles/me/avatar` | `POST /profiles/me/avatar` |
+| `GET` | `/api/profiles/me/avatar` | `GET /profiles/me/avatar` |
+| `DELETE` | `/api/profiles/me/avatar` | `DELETE /profiles/me/avatar` |
 | `GET` | `/api/workers/me/schedule?month=` | `GET /workers/me/schedule` |
 | `GET` | `/api/schedule` | `GET /schedule?unitId=` |
 | `GET` | `/api/export` | `GET /nurses/export` |
