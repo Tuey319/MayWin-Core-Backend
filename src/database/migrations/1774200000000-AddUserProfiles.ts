@@ -1,6 +1,6 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class AddUserProfiles20260407 implements MigrationInterface {
+export class AddUserProfiles1774200000000 implements MigrationInterface {
     public async up(queryRunner: QueryRunner): Promise<void> {
         // Create the user_profiles table in the maywin_db schema
         await queryRunner.query(`
