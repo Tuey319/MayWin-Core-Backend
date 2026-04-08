@@ -37,6 +37,7 @@ export class ProfilesService {
 
   private avatarContentType(profile: UserProfile) {
     return (
+      profile.avatar_content_type ??
       profile.metadata?.avatarContentType ??
       profile.metadata?.avatar_content_type ??
       'application/octet-stream'
@@ -44,11 +45,11 @@ export class ProfilesService {
   }
 
   private avatarBucket(profile: UserProfile) {
-    return profile.metadata?.avatarBucket ?? this.ensureBucketConfigured();
+    return profile.avatar_bucket ?? profile.metadata?.avatarBucket ?? this.ensureBucketConfigured();
   }
 
   private avatarKey(profile: UserProfile): string | null {
-    return profile.avatar_data?.trim() || null;
+    return profile.avatar_key?.trim() || profile.avatar_data?.trim() || null;
   }
 
   private validateAvatar(file: AvatarUpload) {
@@ -71,6 +72,10 @@ export class ProfilesService {
       id: profile.id,
       userId: profile.user_id,
       avatar_data: profile.avatar_data,
+      avatar_bucket: profile.avatar_bucket,
+      avatar_key: profile.avatar_key,
+      avatar_content_type: profile.avatar_content_type,
+      avatar_updated_at: profile.avatar_updated_at,
       bio: profile.bio,
       phone_number: profile.phone_number,
       metadata: profile.metadata ?? {},
@@ -120,18 +125,19 @@ export class ProfilesService {
     const keyParts = ['profiles', 'avatars', userId, `${Date.now()}-${randomUUID()}.${ext}`];
 
     const previousKey = this.avatarKey(profile);
-    const previousBucket = profile.metadata?.avatarBucket ?? bucket;
+    const previousBucket = profile.avatar_bucket ?? profile.metadata?.avatarBucket ?? bucket;
     const previousMeta = profile.metadata ?? {};
 
     const uploaded = await this.s3.putBuffer(keyParts, file.buffer, file.mimetype);
 
     profile.avatar_data = uploaded.key;
+    profile.avatar_bucket = uploaded.bucket;
+    profile.avatar_key = uploaded.key;
+    profile.avatar_content_type = file.mimetype;
+    profile.avatar_updated_at = new Date();
     profile.metadata = {
       ...previousMeta,
-      avatarBucket: uploaded.bucket,
-      avatarContentType: file.mimetype,
       avatarOriginalName: file.originalname ?? null,
-      avatarUpdatedAt: new Date().toISOString(),
     };
 
     try {
@@ -176,6 +182,10 @@ export class ProfilesService {
     }
 
     profile.avatar_data = null;
+    profile.avatar_bucket = null;
+    profile.avatar_key = null;
+    profile.avatar_content_type = null;
+    profile.avatar_updated_at = null;
     profile.metadata = {
       ...(profile.metadata ?? {}),
       avatarBucket: null,

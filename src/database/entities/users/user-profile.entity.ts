@@ -18,6 +18,18 @@ export class UserProfile {
   avatar_data: string | null;
 
   @Column({ type: 'text', nullable: true })
+  avatar_bucket: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  avatar_key: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  avatar_content_type: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  avatar_updated_at: Date | null;
+
+  @Column({ type: 'text', nullable: true })
   bio: string | null;
 
   @Column({ type: 'text', nullable: true })

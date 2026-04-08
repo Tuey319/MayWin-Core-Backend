@@ -9,6 +9,7 @@ import { Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
 
 import { User } from '@/database/entities/users/user.entity';
+import { UserProfile } from '@/database/entities/users/user-profile.entity';
 import { S3ArtifactsService } from '@/database/buckets/s3-artifacts.service';
 
 type AvatarFile = {
@@ -37,6 +38,8 @@ export class ProfileService {
   constructor(
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectRepository(UserProfile)
+    private readonly profileRepo: Repository<UserProfile>,
     private readonly s3: S3ArtifactsService,
   ) {}
 
@@ -70,17 +73,23 @@ export class ProfileService {
     this.getExt(file.mimetype);
   }
 
-  private toAvatarMeta(user: User): AvatarMeta {
+  private toAvatarMeta(profile: UserProfile): AvatarMeta {
     return {
-      bucket: user.avatar_bucket ?? null,
-      key: user.avatar_key ?? null,
-      contentType: user.avatar_content_type ?? null,
-      updatedAt: user.avatar_updated_at ?? null,
-      url: user.avatar_key ? this.getAvatarUrl() : null,
+      bucket: profile.avatar_bucket ?? null,
+      key: profile.avatar_key ?? profile.avatar_data ?? null,
+      contentType: profile.avatar_content_type ?? null,
+      updatedAt: profile.avatar_updated_at ?? null,
+      url: (profile.avatar_key ?? profile.avatar_data) ? this.getAvatarUrl() : null,
     };
   }
 
   async getMe(userId: string) {
+    let profile = await this.profileRepo.findOne({ where: { user_id: userId } });
+    if (!profile) {
+      profile = this.profileRepo.create({ user_id: userId });
+      await this.profileRepo.save(profile);
+    }
+
     const user = await this.userRepo.findOne({ where: { id: userId as any, is_active: true } });
     if (!user) throw new NotFoundException('Account not found');
 
@@ -91,7 +100,7 @@ export class ProfileService {
         fullName: user.full_name,
         organizationId: Number(user.organization_id),
         attributes: user.attributes ?? {},
-        avatar: this.toAvatarMeta(user),
+        avatar: this.toAvatarMeta(profile),
         createdAt: user.created_at,
         updatedAt: user.updated_at,
       },
@@ -103,12 +112,18 @@ export class ProfileService {
     const ext = this.getExt(file.mimetype);
     const bucket = this.ensureBucketConfigured();
 
+    let profile = await this.profileRepo.findOne({ where: { user_id: userId } });
+    if (!profile) {
+      profile = this.profileRepo.create({ user_id: userId });
+      await this.profileRepo.save(profile);
+    }
+
     const user = await this.userRepo.findOne({ where: { id: userId as any, is_active: true } });
     if (!user) throw new NotFoundException('Account not found');
 
     const previous = {
-      bucket: user.avatar_bucket,
-      key: user.avatar_key,
+      bucket: profile.avatar_bucket,
+      key: profile.avatar_key ?? profile.avatar_data,
     };
 
     const keyParts = [
@@ -120,13 +135,14 @@ export class ProfileService {
 
     const uploaded = await this.s3.putBuffer(keyParts, file.buffer, file.mimetype);
 
-    user.avatar_bucket = uploaded.bucket;
-    user.avatar_key = uploaded.key;
-    user.avatar_content_type = file.mimetype;
-    user.avatar_updated_at = new Date();
+    profile.avatar_bucket = uploaded.bucket;
+    profile.avatar_key = uploaded.key;
+    profile.avatar_data = uploaded.key;
+    profile.avatar_content_type = file.mimetype;
+    profile.avatar_updated_at = new Date();
 
     try {
-      const saved = await this.userRepo.save(user);
+      const saved = await this.profileRepo.save(profile);
 
       if (
         previous.bucket &&
@@ -147,14 +163,15 @@ export class ProfileService {
   }
 
   async getMyAvatar(userId: string) {
-    const user = await this.userRepo.findOne({ where: { id: userId as any, is_active: true } });
-    if (!user || !user.avatar_bucket || !user.avatar_key) {
+    const profile = await this.profileRepo.findOne({ where: { user_id: userId } });
+    const key = profile?.avatar_key ?? profile?.avatar_data ?? null;
+    if (!profile || !profile.avatar_bucket || !key) {
       throw new NotFoundException('Avatar not found');
     }
 
     const res = await this.s3.getObject({
-      bucket: user.avatar_bucket,
-      key: user.avatar_key,
+      bucket: profile.avatar_bucket,
+      key,
     });
 
     if (!res.Body) {
@@ -163,24 +180,25 @@ export class ProfileService {
 
     return {
       body: res.Body,
-      contentType: res.ContentType ?? user.avatar_content_type ?? 'application/octet-stream',
+      contentType: res.ContentType ?? profile.avatar_content_type ?? 'application/octet-stream',
     };
   }
 
   async deleteMyAvatar(userId: string) {
-    const user = await this.userRepo.findOne({ where: { id: userId as any, is_active: true } });
-    if (!user) throw new NotFoundException('Account not found');
+    const profile = await this.profileRepo.findOne({ where: { user_id: userId } });
+    if (!profile) throw new NotFoundException('Account not found');
 
     const previous = {
-      bucket: user.avatar_bucket,
-      key: user.avatar_key,
+      bucket: profile.avatar_bucket,
+      key: profile.avatar_key ?? profile.avatar_data,
     };
 
-    user.avatar_bucket = null;
-    user.avatar_key = null;
-    user.avatar_content_type = null;
-    user.avatar_updated_at = null;
-    await this.userRepo.save(user);
+    profile.avatar_bucket = null;
+    profile.avatar_key = null;
+    profile.avatar_data = null;
+    profile.avatar_content_type = null;
+    profile.avatar_updated_at = null;
+    await this.profileRepo.save(profile);
 
     if (previous.bucket && previous.key) {
       await this.s3.deleteObject({ bucket: previous.bucket, key: previous.key }).catch(() => undefined);
