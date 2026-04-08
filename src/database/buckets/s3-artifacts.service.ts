@@ -12,8 +12,15 @@ import { Readable } from 'stream';
 @Injectable()
 export class S3ArtifactsService {
   private readonly s3 = new S3Client({ region: process.env.AWS_REGION });
-  private readonly bucket = process.env.MAYWIN_ARTIFACTS_BUCKET!;
+  private readonly bucket = process.env.MAYWIN_ARTIFACTS_BUCKET?.trim();
   private readonly prefix = (process.env.MAYWIN_ARTIFACTS_PREFIX ?? '').replace(/^\/*/, '').replace(/\/*$/, '');
+
+  private ensureBucket(): string {
+    if (!this.bucket) {
+      throw new Error('MAYWIN_ARTIFACTS_BUCKET is not configured');
+    }
+    return this.bucket;
+  }
 
   private keyOf(parts: string[]) {
     const base = this.prefix ? `${this.prefix}/` : '';
@@ -23,28 +30,30 @@ export class S3ArtifactsService {
   async putJson(keyParts: string[], data: any) {
     const key = this.keyOf(keyParts);
     const body = Buffer.from(JSON.stringify(data), 'utf8');
+    const bucket = this.ensureBucket();
 
     await this.s3.send(new PutObjectCommand({
-      Bucket: this.bucket,
+      Bucket: bucket,
       Key: key,
       Body: body,
       ContentType: 'application/json',
     }));
 
-    return { bucket: this.bucket, key };
+    return { bucket, key };
   }
 
   async putBuffer(keyParts: string[], body: Buffer | Uint8Array, contentType: string) {
     const key = this.keyOf(keyParts);
+    const bucket = this.ensureBucket();
 
     await this.s3.send(new PutObjectCommand({
-      Bucket: this.bucket,
+      Bucket: bucket,
       Key: key,
       Body: body,
       ContentType: contentType,
     }));
 
-    return { bucket: this.bucket, key };
+    return { bucket, key };
   }
 
   async getJson(ref: { bucket: string; key: string }) {
@@ -66,16 +75,17 @@ export class S3ArtifactsService {
 
   async putText(keyParts: string[], text: string, contentType = 'text/plain; charset=utf-8') {
     const key = this.keyOf(keyParts);
+    const bucket = this.ensureBucket();
     const body = Buffer.from(text, 'utf8');
 
     await this.s3.send(new PutObjectCommand({
-      Bucket: this.bucket,
+      Bucket: bucket,
       Key: key,
       Body: body,
       ContentType: contentType,
     }));
 
-    return { bucket: this.bucket, key };
+    return { bucket, key };
   }
 
   async deleteObject(ref: { bucket: string; key: string }) {
@@ -90,9 +100,10 @@ export class S3ArtifactsService {
    */
   async getText(keyParts: string[]): Promise<string | null> {
     const key = this.keyOf(keyParts);
+    const bucket = this.ensureBucket();
     try {
       const res = await this.s3.send(new GetObjectCommand({
-        Bucket: this.bucket,
+        Bucket: bucket,
         Key: key,
       }));
       return streamToString(res.Body as Readable);
