@@ -194,6 +194,10 @@ CREATE TABLE IF NOT EXISTS maywin_db.users (
   full_name       text        NOT NULL,
   is_active       boolean     NOT NULL DEFAULT true,
   attributes      jsonb       NOT NULL DEFAULT '{}'::jsonb,
+  avatar_bucket   text,
+  avatar_key      text,
+  avatar_content_type text,
+  avatar_updated_at timestamptz,
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
 );

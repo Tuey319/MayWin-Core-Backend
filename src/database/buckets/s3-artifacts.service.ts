@@ -4,6 +4,7 @@ import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
+  DeleteObjectCommand,
   NoSuchKey,
 } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
@@ -33,6 +34,19 @@ export class S3ArtifactsService {
     return { bucket: this.bucket, key };
   }
 
+  async putBuffer(keyParts: string[], body: Buffer | Uint8Array, contentType: string) {
+    const key = this.keyOf(keyParts);
+
+    await this.s3.send(new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    }));
+
+    return { bucket: this.bucket, key };
+  }
+
   async getJson(ref: { bucket: string; key: string }) {
     const res = await this.s3.send(new GetObjectCommand({
       Bucket: ref.bucket,
@@ -41,6 +55,13 @@ export class S3ArtifactsService {
 
     const text = await streamToString(res.Body as Readable);
     return JSON.parse(text);
+  }
+
+  async getObject(ref: { bucket: string; key: string }) {
+    return this.s3.send(new GetObjectCommand({
+      Bucket: ref.bucket,
+      Key: ref.key,
+    }));
   }
 
   async putText(keyParts: string[], text: string, contentType = 'text/plain; charset=utf-8') {
@@ -55,6 +76,13 @@ export class S3ArtifactsService {
     }));
 
     return { bucket: this.bucket, key };
+  }
+
+  async deleteObject(ref: { bucket: string; key: string }) {
+    await this.s3.send(new DeleteObjectCommand({
+      Bucket: ref.bucket,
+      Key: ref.key,
+    }));
   }
 
   /**
