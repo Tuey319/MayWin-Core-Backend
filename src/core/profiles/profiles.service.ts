@@ -153,8 +153,9 @@ export class ProfilesService {
 
       return { profile: this.toApi(saved) };
     } catch (err) {
+      const error = err as any;
       this.logger.error(
-        `Avatar upload failed for user ${userId}: ${err instanceof Error ? err.message : String(err)}`,
+        `Avatar upload failed for user ${userId}: ${error?.name ?? 'Error'} ${error?.code ?? ''} ${error?.message ?? String(err)}`.trim(),
       );
 
       if (uploaded) {
