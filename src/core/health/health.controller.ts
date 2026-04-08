@@ -13,4 +13,16 @@ export class HealthController {
       time: new Date().toISOString(),
     };
   }
+
+  // GET /core/info
+  @Get('info')
+  info() {
+    return {
+      buildTime: '2026-04-07T12:51:00Z', // Injected at build/edit time
+      appStartTime: new Date().toISOString(),
+      uptimeSeconds: process.uptime(),
+      environment: process.env.NODE_ENV || 'development',
+      dbSource: process.env.DB_SOURCE || 'restored',
+    };
+  }
 }

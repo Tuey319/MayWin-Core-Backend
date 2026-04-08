@@ -24,6 +24,7 @@ import { LineLinkToken } from './entities/workers/line-link-token.entity';
 
 // Users (additional)
 import { AuthOtp } from './entities/users/auth-otp.entity';
+import { UserProfile } from './entities/users/user-profile.entity';
 
 // Scheduling
 import { ShiftTemplate } from './entities/scheduling/shift-template.entity';
@@ -58,6 +59,7 @@ const ENTITIES = [
   LineLinkToken,
 
   AuthOtp,
+  UserProfile,
 
   ShiftTemplate,
   CoverageRule,
