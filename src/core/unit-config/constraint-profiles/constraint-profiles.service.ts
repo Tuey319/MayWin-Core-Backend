@@ -15,8 +15,6 @@ export class ConstraintProfilesService {
     private readonly repo: Repository<ConstraintProfile>,
   ) {}
 
-  // ── Unit-scoped ─────────────────────────────────────────────────────────────
-
   async create(unitId: string, dto: CreateConstraintProfileDto) {
     const row = this.repo.create(this.toPayload(dto, { unit_id: unitId, org_id: null }));
     return { profile: this.toApi(await this.repo.save(row)) };
@@ -59,8 +57,6 @@ export class ConstraintProfilesService {
     return { profiles: rows.map((r) => this.toApi(r)) };
   }
 
-  // ── Org-scoped ──────────────────────────────────────────────────────────────
-
   async listByOrg(orgId: string) {
     const rows = await this.repo
       .createQueryBuilder('cp')
@@ -90,12 +86,91 @@ export class ConstraintProfilesService {
     return { ok: true };
   }
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
+  private readAdvancedSolverOptions(source: Record<string, any> | null | undefined) {
+    const attrs = source ?? {};
+    const read = <T>(camelKey: string, snakeKey: string, fallback: T): T => {
+      const value = attrs[camelKey] ?? attrs[snakeKey];
+      return value === undefined ? fallback : (value as T);
+    };
+
+    return {
+      enableShiftTypeLimit: read('enableShiftTypeLimit', 'enable_shift_type_limit', true),
+      maxShiftPerType: read<Record<string, number>>(
+        'maxShiftPerType',
+        'max_shift_per_type',
+        { morning: 9, evening: 9, night: 9 },
+      ),
+      shiftTypeLimitExemptNurses: read<string[]>(
+        'shiftTypeLimitExemptNurses',
+        'shift_type_limit_exempt_nurses',
+        [],
+      ),
+      eveningAfterMorningCountsAsOvertime: read(
+        'eveningAfterMorningCountsAsOvertime',
+        'evening_after_morning_counts_as_overtime',
+        true,
+      ),
+      enableConsecutiveNightLimit: read(
+        'enableConsecutiveNightLimit',
+        'enable_consecutive_night_limit',
+        true,
+      ),
+      enableMinTotalDaysOff: read('enableMinTotalDaysOff', 'enable_min_total_days_off', true),
+      minTotalDaysOff: read('minTotalDaysOff', 'min_total_days_off', 11),
+    };
+  }
+
+  private writeAdvancedSolverOptions(
+    base: Record<string, any>,
+    dto: Partial<CreateConstraintProfileDto | UpdateConstraintProfileDto>,
+  ) {
+    const next = { ...base };
+    const set = (key: string, value: any) => {
+      if (value !== undefined) next[key] = value;
+    };
+
+    set('enableShiftTypeLimit', dto.enableShiftTypeLimit);
+    set('maxShiftPerType', dto.maxShiftPerType);
+    set('shiftTypeLimitExemptNurses', dto.shiftTypeLimitExemptNurses);
+    set('eveningAfterMorningCountsAsOvertime', dto.eveningAfterMorningCountsAsOvertime);
+    set('enableConsecutiveNightLimit', dto.enableConsecutiveNightLimit);
+    set('enableMinTotalDaysOff', dto.enableMinTotalDaysOff);
+    set('minTotalDaysOff', dto.minTotalDaysOff);
+
+    return next;
+  }
+
+  private hasAdvancedUpdate(dto: Partial<CreateConstraintProfileDto | UpdateConstraintProfileDto>) {
+    return (
+      dto.enableShiftTypeLimit !== undefined ||
+      dto.maxShiftPerType !== undefined ||
+      dto.shiftTypeLimitExemptNurses !== undefined ||
+      dto.eveningAfterMorningCountsAsOvertime !== undefined ||
+      dto.enableConsecutiveNightLimit !== undefined ||
+      dto.enableMinTotalDaysOff !== undefined ||
+      dto.minTotalDaysOff !== undefined
+    );
+  }
+
+  private buildAttributes(
+    dto: Partial<CreateConstraintProfileDto | UpdateConstraintProfileDto>,
+    existing: Record<string, any> | null | undefined = null,
+  ): Record<string, any> {
+    const base = { ...(existing ?? {}) };
+
+    if (dto.attributes !== undefined) {
+      Object.assign(base, dto.attributes ?? {});
+    }
+
+    return this.writeAdvancedSolverOptions(base, dto);
+  }
 
   private toPayload(
     dto: CreateConstraintProfileDto,
     scope: { unit_id: string | null; org_id: string | null },
   ): DeepPartial<ConstraintProfile> {
+    const attributes = this.buildAttributes(dto, {});
+
     return {
       ...scope,
       name: dto.name,
@@ -127,7 +202,7 @@ export class ConstraintProfilesService {
       goal_priority_json: dto.goalPriorityJson ?? null,
       num_search_workers: dto.numSearchWorkers ?? 8,
       time_limit_sec: dto.timeLimitSec ?? 20,
-      attributes: dto.attributes ?? {},
+      attributes,
       is_active: dto.isActive ?? true,
     };
   }
@@ -162,11 +237,15 @@ export class ConstraintProfilesService {
     if (dto.goalPriorityJson !== undefined) row.goal_priority_json = dto.goalPriorityJson ?? null;
     if (dto.numSearchWorkers !== undefined) row.num_search_workers = dto.numSearchWorkers;
     if (dto.timeLimitSec !== undefined) row.time_limit_sec = dto.timeLimitSec;
-    if (dto.attributes !== undefined) row.attributes = dto.attributes ?? {};
+    if (dto.attributes !== undefined || this.hasAdvancedUpdate(dto)) {
+      row.attributes = this.buildAttributes(dto, row.attributes ?? {});
+    }
     if (dto.isActive !== undefined) row.is_active = dto.isActive;
   }
 
   private toApi(c: ConstraintProfile) {
+    const advanced = this.readAdvancedSolverOptions(c.attributes ?? {});
+
     return {
       id: c.id,
       unitId: c.unit_id,
@@ -195,6 +274,13 @@ export class ConstraintProfilesService {
       goalBalanceWorkload: c.goal_balance_workload,
       goalBalanceNightWorkload: c.goal_balance_night_workload,
       goalReduceUndesirableShifts: c.goal_reduce_undesirable_shifts,
+      enableShiftTypeLimit: advanced.enableShiftTypeLimit,
+      maxShiftPerType: advanced.maxShiftPerType,
+      shiftTypeLimitExemptNurses: advanced.shiftTypeLimitExemptNurses,
+      eveningAfterMorningCountsAsOvertime: advanced.eveningAfterMorningCountsAsOvertime,
+      enableConsecutiveNightLimit: advanced.enableConsecutiveNightLimit,
+      enableMinTotalDaysOff: advanced.enableMinTotalDaysOff,
+      minTotalDaysOff: advanced.minTotalDaysOff,
       penaltyWeightJson: c.penalty_weight_json,
       fairnessWeightJson: c.fairness_weight_json,
       goalPriorityJson: c.goal_priority_json,
