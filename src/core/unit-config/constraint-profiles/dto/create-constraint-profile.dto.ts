@@ -1,5 +1,6 @@
 // src/core/unit-config/constraint-profiles/dto/create-constraint-profile.dto.ts
 import {
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -126,6 +127,35 @@ export class CreateConstraintProfileDto {
   @IsOptional()
   @IsBoolean()
   goalReduceUndesirableShifts?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  enableShiftTypeLimit?: boolean;
+
+  @IsOptional()
+  @IsObject()
+  maxShiftPerType?: Record<string, number> | null;
+
+  @IsOptional()
+  @IsArray()
+  shiftTypeLimitExemptNurses?: string[] | null;
+
+  @IsOptional()
+  @IsBoolean()
+  eveningAfterMorningCountsAsOvertime?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  enableConsecutiveNightLimit?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  enableMinTotalDaysOff?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  minTotalDaysOff?: number;
 
   // ── objective weights / fairness / goal priority ──────────────────────────
 

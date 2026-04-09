@@ -334,6 +334,7 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
         "shift_type_limit_exempt_nurses": cp.get("shiftTypeLimitExemptNurses") or [],
         "evening_after_morning_counts_as_overtime": cp.get("eveningAfterMorningCountsAsOvertime", True),
         "enable_consecutive_night_limit": cp.get("enableConsecutiveNightLimit", True),
+        "max_consecutive_shifts": cp.get("maxConsecutiveShifts"),
         "max_consecutive_night_shifts": cp.get("maxConsecutiveNightShifts", 3),
         "enable_min_total_days_off": cp.get("enableMinTotalDaysOff", True),
         "min_total_days_off": cp.get("minTotalDaysOff", 11),

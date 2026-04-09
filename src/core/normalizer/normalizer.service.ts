@@ -463,6 +463,12 @@ export class NormalizerService {
 
     console.log(`[NormalizerService] Using constraint profile ${cp?.id} with forbid_evening_to_night=${cp?.forbid_evening_to_night}`);
 
+    const cpAttrs = (cp?.attributes ?? {}) as Record<string, any>;
+    const readAttr = <T>(camelKey: string, snakeKey: string, fallback: T): T => {
+      const value = cpAttrs[camelKey] ?? cpAttrs[snakeKey];
+      return value === undefined ? fallback : (value as T);
+    };
+
     return {
       constraintProfileId: cp?.id ?? null,
       name: cp?.name ?? 'DEFAULT',
@@ -506,7 +512,32 @@ export class NormalizerService {
       numSearchWorkers: cp?.num_search_workers ?? 8,
       timeLimitSec: cp?.time_limit_sec ?? 20,
 
-      attributes: cp?.attributes ?? {},
+      // advanced solver knobs stored in attributes
+      enableShiftTypeLimit: readAttr('enableShiftTypeLimit', 'enable_shift_type_limit', true),
+      maxShiftPerType: readAttr<Record<string, number>>(
+        'maxShiftPerType',
+        'max_shift_per_type',
+        { morning: 9, evening: 9, night: 9 },
+      ),
+      shiftTypeLimitExemptNurses: readAttr<string[]>(
+        'shiftTypeLimitExemptNurses',
+        'shift_type_limit_exempt_nurses',
+        [],
+      ),
+      eveningAfterMorningCountsAsOvertime: readAttr(
+        'eveningAfterMorningCountsAsOvertime',
+        'evening_after_morning_counts_as_overtime',
+        true,
+      ),
+      enableConsecutiveNightLimit: readAttr(
+        'enableConsecutiveNightLimit',
+        'enable_consecutive_night_limit',
+        true,
+      ),
+      enableMinTotalDaysOff: readAttr('enableMinTotalDaysOff', 'enable_min_total_days_off', true),
+      minTotalDaysOff: readAttr('minTotalDaysOff', 'min_total_days_off', 11),
+
+      attributes: cpAttrs,
     };
   }
 

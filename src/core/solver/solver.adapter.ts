@@ -338,7 +338,7 @@ export class SolverAdapter {
       allow_emergency_overrides: cp.allowEmergencyOverrides ?? true,
       max_shifts_per_day: cp.maxShiftsPerDay ?? 1,
       max_consecutive_work_days: cp.maxConsecutiveWorkDays ?? null,
-      max_consecutive_shifts: cp.maxConsecutiveNightShifts ?? null,
+      max_consecutive_shifts: cp.maxConsecutiveShifts ?? undefined,
       min_days_off_per_week: cp.minDaysOffPerWeek ?? 2,
       max_nights_per_week: cp.maxNightsPerWeek ?? 2,
       min_rest_hours_between_shifts: cp.minRestHoursBetweenShifts ?? null,
@@ -354,6 +354,14 @@ export class SolverAdapter {
       goal_balance_workload: cp.goalBalanceWorkload ?? false,
       goal_balance_night_workload: cp.goalBalanceNightWorkload ?? false,
       goal_reduce_undesirable_shifts: cp.goalReduceUndesirableShifts ?? true,
+      enable_shift_type_limit: cp.enableShiftTypeLimit ?? true,
+      max_shift_per_type: cp.maxShiftPerType ?? { morning: 9, evening: 9, night: 9 },
+      shift_type_limit_exempt_nurses: cp.shiftTypeLimitExemptNurses ?? [],
+      evening_after_morning_counts_as_overtime: cp.eveningAfterMorningCountsAsOvertime ?? true,
+      enable_consecutive_night_limit: cp.enableConsecutiveNightLimit ?? true,
+      max_consecutive_night_shifts: cp.maxConsecutiveNightShifts ?? 3,
+      enable_min_total_days_off: cp.enableMinTotalDaysOff ?? true,
+      min_total_days_off: cp.minTotalDaysOff ?? 11,
     };
 
     const weights: Record<string, any> = {
