@@ -38,7 +38,7 @@ export class SolverAdapter {
 
   private getCliPath(): string {
     const p =
-      process.env.SOLVER_CLI_PATH?.trim() || 'src/aws/solver_lambda/solver_cli.py';
+      process.env.SOLVER_CLI_PATH?.trim() || 'src/core/solver/solver_cli.py';
     return path.isAbsolute(p) ? p : path.resolve(process.cwd(), p);
   }
 
@@ -364,6 +364,9 @@ export class SolverAdapter {
       emergency_override_penalty: penaltyWeightJson.emergency_override_penalty ?? 500,
       same_day_second_shift_penalty: penaltyWeightJson.same_day_second_shift_penalty ?? 150,
       weekly_night_over_penalty: penaltyWeightJson.weekly_night_over_penalty ?? 120,
+      evening_to_night_penalty: penaltyWeightJson.evening_to_night_penalty ?? 10000,
+      shift_type_balance_penalty: penaltyWeightJson.shift_type_balance_penalty ?? 100,
+      overtime_balance_penalty: penaltyWeightJson.overtime_balance_penalty ?? 1000,
     };
 
     const goalPriority: Record<string, any> = {
@@ -392,6 +395,9 @@ export class SolverAdapter {
       demand,
       availability,
       weights,
+      rules,
+      goal_priority: goalPriority,
+      fairness_weights: fairnessWeights,
       time_limit_sec: timeLimitSec,
       num_search_workers: numSearchWorkers,
       max_shifts_per_day: cp.maxShiftsPerDay ?? 1,

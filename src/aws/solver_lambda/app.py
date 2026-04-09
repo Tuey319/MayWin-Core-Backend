@@ -307,6 +307,50 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
     if isinstance(payload.get("max_overtime_per_nurse"), dict):
         solve_req["max_overtime_per_nurse"] = payload["max_overtime_per_nurse"]
 
+    cp = payload.get("constraints") or {}
+    solve_req["rules"] = {
+        "guarantee_full_coverage": cp.get("guaranteeFullCoverage", True),
+        "allow_emergency_overrides": cp.get("allowEmergencyOverrides", True),
+        "max_shifts_per_day": cp.get("maxShiftsPerDay", 1),
+        "max_consecutive_work_days": cp.get("maxConsecutiveWorkDays"),
+        "max_consecutive_shifts": cp.get("maxConsecutiveNightShifts"),
+        "min_days_off_per_week": cp.get("minDaysOffPerWeek", 2),
+        "max_nights_per_week": cp.get("maxNightsPerWeek", 2),
+        "min_rest_hours_between_shifts": cp.get("minRestHoursBetweenShifts"),
+        "forbid_night_to_morning": cp.get("forbidNightToMorning", True),
+        "forbid_morning_to_night_same_day": cp.get("forbidMorningToNightSameDay", False),
+        "forbid_evening_to_night": cp.get("forbidEveningToNight", True),
+        "allow_second_shift_same_day_in_emergency": cp.get("allowSecondShiftSameDayInEmergency", True),
+        "ignore_availability_in_emergency": cp.get("ignoreAvailabilityInEmergency", False),
+        "allow_night_cap_override_in_emergency": cp.get("allowNightCapOverrideInEmergency", True),
+        "allow_rest_rule_override_in_emergency": cp.get("allowRestRuleOverrideInEmergency", True),
+        "goal_minimize_staff_cost": cp.get("goalMinimizeStaffCost", True),
+        "goal_maximize_preference_satisfaction": cp.get("goalMaximizePreferenceSatisfaction", True),
+        "goal_balance_workload": cp.get("goalBalanceWorkload", False),
+        "goal_balance_night_workload": cp.get("goalBalanceNightWorkload", False),
+        "goal_reduce_undesirable_shifts": cp.get("goalReduceUndesirableShifts", True),
+        "enable_shift_type_limit": cp.get("enableShiftTypeLimit", True),
+        "max_shift_per_type": cp.get("maxShiftPerType") or {"morning": 9, "evening": 9, "night": 9},
+        "shift_type_limit_exempt_nurses": cp.get("shiftTypeLimitExemptNurses") or [],
+        "evening_after_morning_counts_as_overtime": cp.get("eveningAfterMorningCountsAsOvertime", True),
+        "enable_consecutive_night_limit": cp.get("enableConsecutiveNightLimit", True),
+        "max_consecutive_night_shifts": cp.get("maxConsecutiveNightShifts", 3),
+        "enable_min_total_days_off": cp.get("enableMinTotalDaysOff", True),
+        "min_total_days_off": cp.get("minTotalDaysOff", 11),
+    }
+    solve_req["goal_priority"] = cp.get("goalPriorityJson") or {
+        "coverage": 1,
+        "cost": 2,
+        "preference": 3,
+        "fairness": 4,
+    }
+    solve_req["fairness_weights"] = cp.get("fairnessWeightJson") or {
+        "workload_balance": 1,
+        "night_balance": 1,
+        "shift_type_balance": 1,
+    }
+    penalty_weights = cp.get("penaltyWeightJson") or {}
+
     # Derive per-nurse regular/overtime maps from nurses[] if missing.
     if "regular_shifts_per_nurse" not in solve_req or "max_overtime_per_nurse" not in solve_req:
         nurse_list = payload.get("nurses") or []
@@ -432,7 +476,18 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
             pass
 
     # Force full 2-nurse coverage per shift — understaff must outweigh any OT cost
-    solve_req["weights"] = {"understaff_penalty": 50000, "overtime_penalty": 0}
+    solve_req["weights"] = {
+        "understaff_penalty": penalty_weights.get("understaff_penalty", 50000),
+        "overtime_penalty": penalty_weights.get("overtime_penalty", 0),
+        "preference_penalty_multiplier": penalty_weights.get("preference_penalty_multiplier", 1),
+        "workload_balance_weight": penalty_weights.get("workload_balance_weight", 0),
+        "emergency_override_penalty": penalty_weights.get("emergency_override_penalty", 500),
+        "same_day_second_shift_penalty": penalty_weights.get("same_day_second_shift_penalty", 150),
+        "weekly_night_over_penalty": penalty_weights.get("weekly_night_over_penalty", 120),
+        "evening_to_night_penalty": penalty_weights.get("evening_to_night_penalty", 10000),
+        "shift_type_balance_penalty": penalty_weights.get("shift_type_balance_penalty", 100),
+        "overtime_balance_penalty": penalty_weights.get("overtime_balance_penalty", 1000),
+    }
 
     # If availability/preferences became None (unknown format), remove key entirely
     # (None is allowed by SolveRequest, but removing keeps payload smaller)
