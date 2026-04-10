@@ -144,13 +144,21 @@ async function getLatestJobIdForSchedule(
   jobsRepo: Repository<ScheduleJob>,
   scheduleId: string,
 ): Promise<string | null> {
+  // Primary: final_schedule_id is set by PERSIST_SCHEDULE on the job row directly
+  const byFinal = await jobsRepo.findOne({
+    where: { final_schedule_id: scheduleId as any } as any,
+    order: { created_at: 'DESC' as any } as any,
+  });
+  if (byFinal?.id) return String(byFinal.id);
+
+  // Fallback: some jobs store scheduleId in attributes (pre-PERSIST jobs)
   const rows = await jobsRepo.find({
+    where: { final_schedule_id: null as any } as any,
     order: { created_at: 'DESC' as any } as any,
     take: 50,
   });
   const found = rows.find(
-    (r) =>
-      String((r.attributes as any)?.scheduleId ?? '') === String(scheduleId),
+    (r) => String((r.attributes as any)?.scheduleId ?? '') === String(scheduleId),
   );
   return found?.id ? String(found.id) : null;
 }
