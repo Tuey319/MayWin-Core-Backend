@@ -314,8 +314,30 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
         solve_req["nurse_skills"] = payload["nurse_skills"]
     elif nurse_skills_map:
         solve_req["nurse_skills"] = nurse_skills_map
+
+    # Derive required_skills from coverage rules when not pre-computed:
+    # { date: { shiftCode: { skill: count } } }
     if isinstance(payload.get("required_skills"), dict):
         solve_req["required_skills"] = payload["required_skills"]
+    else:
+        required_skills = {}
+        for date in day_dates:
+            dt = day_types_by_date.get(date)
+            for r in coverage_rules:
+                if not isinstance(r, dict):
+                    continue
+                tag = r.get("requiredTag")
+                if not tag:
+                    continue
+                if dt is not None and r.get("dayType") != dt:
+                    continue
+                sc = r.get("shiftCode")
+                if not sc:
+                    continue
+                required_skills.setdefault(date, {}).setdefault(sc, {})
+                required_skills[date][sc][str(tag)] = required_skills[date][sc].get(str(tag), 0) + 1
+        if required_skills:
+            solve_req["required_skills"] = required_skills
     if isinstance(payload.get("week_index_by_day"), dict):
         solve_req["week_index_by_day"] = payload["week_index_by_day"]
     if isinstance(payload.get("min_total_shifts_per_nurse"), dict):
@@ -339,6 +361,7 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
         "min_rest_hours_between_shifts": cp.get("minRestHoursBetweenShifts"),
         "forbid_night_to_morning": cp.get("forbidNightToMorning", True),
         "forbid_morning_to_night_same_day": cp.get("forbidMorningToNightSameDay", False),
+        "forbid_evening_to_night": cp.get("forbidEveningToNight", True),
         "allow_second_shift_same_day_in_emergency": cp.get("allowSecondShiftSameDayInEmergency", True),
         "ignore_availability_in_emergency": cp.get("ignoreAvailabilityInEmergency", False),
         "allow_night_cap_override_in_emergency": cp.get("allowNightCapOverrideInEmergency", True),
@@ -527,7 +550,12 @@ def handler(event, context):
         solver_result = json.loads(stdout)
 
         feasible = (
-            bool(solver_result.get("status") in ("OPTIMAL", "FEASIBLE", "RELAXED_OPTIMAL", "RELAXED_FEASIBLE", "HEURISTIC"))
+            bool(solver_result.get("status") in (
+                "OPTIMAL", "FEASIBLE",
+                "EMERGENCY_OPTIMAL", "EMERGENCY_FEASIBLE",
+                "RELAXED_OPTIMAL", "RELAXED_FEASIBLE",
+                "HEURISTIC",
+            ))
             if "status" in solver_result
             else bool(solver_result.get("assignments"))
         )
