@@ -291,9 +291,29 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
         except Exception:
             pass
 
+    # Derive backup_nurses from isBackup flag
+    backup_codes = [
+        n["code"] for n in nurses
+        if isinstance(n, dict) and n.get("isBackup") and n.get("code")
+    ]
+    if backup_codes:
+        solve_req["backup_nurses"] = backup_codes
+
+    # Derive nurse_skills from tags or attributes.skills
+    nurse_skills_map = {}
+    for n in nurses:
+        if not isinstance(n, dict):
+            continue
+        code = n.get("code")
+        skills = (n.get("attributes") or {}).get("skills") or n.get("tags") or []
+        if code and skills:
+            nurse_skills_map[str(code)] = list(skills)
+
     # Pass-through if your normalizer already computed these in correct shapes
     if isinstance(payload.get("nurse_skills"), dict):
         solve_req["nurse_skills"] = payload["nurse_skills"]
+    elif nurse_skills_map:
+        solve_req["nurse_skills"] = nurse_skills_map
     if isinstance(payload.get("required_skills"), dict):
         solve_req["required_skills"] = payload["required_skills"]
     if isinstance(payload.get("week_index_by_day"), dict):
@@ -313,13 +333,12 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
         "allow_emergency_overrides": cp.get("allowEmergencyOverrides", True),
         "max_shifts_per_day": cp.get("maxShiftsPerDay", 1),
         "max_consecutive_work_days": cp.get("maxConsecutiveWorkDays"),
-        "max_consecutive_shifts": cp.get("maxConsecutiveNightShifts"),
+        "max_consecutive_shifts": cp.get("maxConsecutiveShifts"),
         "min_days_off_per_week": cp.get("minDaysOffPerWeek", 2),
         "max_nights_per_week": cp.get("maxNightsPerWeek", 2),
         "min_rest_hours_between_shifts": cp.get("minRestHoursBetweenShifts"),
         "forbid_night_to_morning": cp.get("forbidNightToMorning", True),
         "forbid_morning_to_night_same_day": cp.get("forbidMorningToNightSameDay", False),
-        "forbid_evening_to_night": cp.get("forbidEveningToNight", True),
         "allow_second_shift_same_day_in_emergency": cp.get("allowSecondShiftSameDayInEmergency", True),
         "ignore_availability_in_emergency": cp.get("ignoreAvailabilityInEmergency", False),
         "allow_night_cap_override_in_emergency": cp.get("allowNightCapOverrideInEmergency", True),
@@ -334,7 +353,6 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
         "shift_type_limit_exempt_nurses": cp.get("shiftTypeLimitExemptNurses") or [],
         "evening_after_morning_counts_as_overtime": cp.get("eveningAfterMorningCountsAsOvertime", True),
         "enable_consecutive_night_limit": cp.get("enableConsecutiveNightLimit", True),
-        "max_consecutive_shifts": cp.get("maxConsecutiveShifts"),
         "max_consecutive_night_shifts": cp.get("maxConsecutiveNightShifts", 3),
         "enable_min_total_days_off": cp.get("enableMinTotalDaysOff", True),
         "min_total_days_off": cp.get("minTotalDaysOff", 11),
@@ -437,44 +455,6 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
                     pass
         if min_total:
             solve_req["min_total_shifts_per_nurse"] = min_total
-
-    # Pass constraint profile fields to solver
-    constraints = payload.get("constraints") or {}
-    ignore_avail_emergency = constraints.get("ignoreAvailabilityInEmergency", False)
-    solve_req["ignore_availability_in_emergency"] = bool(ignore_avail_emergency)
-
-    # max_shifts_per_day: 1 = no doubles, 2 = allow doubles (default 1)
-    max_spd = constraints.get("maxShiftsPerDay")
-    if max_spd is not None:
-        try:
-            solve_req["max_shifts_per_day"] = int(max_spd)
-        except Exception:
-            pass
-
-    # Shift-sequence toggles
-    for src_key, dst_key, default in [
-        ("forbidEveningToNight",      "forbid_evening_to_night",          True),
-        ("forbidNightToMorning",       "forbid_night_to_morning",           True),
-        ("forbidMorningToNightSameDay","forbid_morning_to_night_same_day",  False),
-    ]:
-        val = constraints.get(src_key)
-        if val is not None:
-            solve_req[dst_key] = bool(val)
-
-    # Weekly limits
-    min_days_off = constraints.get("minDaysOffPerWeek")
-    if min_days_off is not None:
-        try:
-            solve_req["min_days_off_per_week"] = int(min_days_off)
-        except Exception:
-            pass
-
-    max_nights = constraints.get("maxNightsPerWeek")
-    if max_nights is not None:
-        try:
-            solve_req["max_nights_per_week"] = int(max_nights)
-        except Exception:
-            pass
 
     # Force full 2-nurse coverage per shift — understaff must outweigh any OT cost
     solve_req["weights"] = {
