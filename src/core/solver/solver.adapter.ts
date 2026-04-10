@@ -394,8 +394,6 @@ export class SolverAdapter {
     const numSearchWorkers = cp.numSearchWorkers ?? 8;
 
     // ── assemble final request ────────────────────────────────────────────────
-    // The AWS lambda SolveRequest expects constraint flags as TOP-LEVEL fields,
-    // not nested under a "rules" object.
     const req: Record<string, any> = {
       nurses,
       shifts,
@@ -408,14 +406,6 @@ export class SolverAdapter {
       fairness_weights: fairnessWeights,
       time_limit_sec: timeLimitSec,
       num_search_workers: numSearchWorkers,
-      max_shifts_per_day: cp.maxShiftsPerDay ?? 1,
-      min_days_off_per_week: cp.minDaysOffPerWeek ?? 2,
-      // Shift-sequence toggles — top-level fields consumed by the lambda solver
-      forbid_evening_to_night: cp.forbidEveningToNight ?? true,
-      forbid_night_to_morning: cp.forbidNightToMorning ?? true,
-      forbid_morning_to_night_same_day: cp.forbidMorningToNightSameDay ?? false,
-      ignore_availability_in_emergency: cp.ignoreAvailabilityInEmergency ?? false,
-      max_nights_per_week: cp.maxNightsPerWeek ?? 2,
     };
 
     if (preferences) req.preferences = preferences;
