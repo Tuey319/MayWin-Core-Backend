@@ -666,16 +666,20 @@ export const handler = async (event: AnyObj, _context: Context) => {
             : Array.isArray(assignments) && assignments.length > 0;
 
         if (!feasible) {
-          const details =
+          const rawDetails =
             layer?.details ??
             layer?.meta?.details ??
             'Solver infeasible / error';
+          const details =
+            typeof rawDetails === 'object'
+              ? String(rawDetails?.message ?? rawDetails?.error ?? JSON.stringify(rawDetails))
+              : String(rawDetails);
           await markJobFailed({
             jobsRepo,
             jobId: String(jobId),
-            errorMessage: String(details),
+            errorMessage: details,
           });
-          return { status: 'FAILED', name: 'Error', message: String(details) };
+          return { status: 'FAILED', name: 'Error', message: details };
         }
 
         const cleaned = (assignments as any[])
@@ -884,6 +888,20 @@ export const handler = async (event: AnyObj, _context: Context) => {
       }
 
       case Op.EVALUATE_SCHEDULE: {
+        // If the previous step (PersistSchedule) returned a FAILED payload without
+        // throwing, Step Functions passes it here unchanged. Forward it so MarkFailed
+        // receives the original error instead of a confusing "requires jobId" message.
+        if (input?.status === 'FAILED') {
+          const fwdMsg = input?.message;
+          return {
+            status: 'FAILED',
+            name: input?.name ?? 'Error',
+            message: typeof fwdMsg === 'object'
+              ? JSON.stringify(fwdMsg)
+              : (fwdMsg ?? 'Previous step failed'),
+          };
+        }
+
         let jobId = pickJobId(input);
         if (!jobId && input?.scheduleId)
           jobId = await getLatestJobIdForSchedule(

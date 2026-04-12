@@ -350,35 +350,41 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
         solve_req["max_overtime_per_nurse"] = payload["max_overtime_per_nurse"]
 
     cp = payload.get("constraints") or {}
+
+    def _cp(key, default):
+        """Like cp.get(key, default) but treats None as missing so the default is used."""
+        v = cp.get(key)
+        return v if v is not None else default
+
     solve_req["rules"] = {
-        "guarantee_full_coverage": cp.get("guaranteeFullCoverage", True),
-        "allow_emergency_overrides": cp.get("allowEmergencyOverrides", True),
-        "max_shifts_per_day": cp.get("maxShiftsPerDay", 1),
-        "max_consecutive_work_days": cp.get("maxConsecutiveWorkDays"),
-        "max_consecutive_shifts": cp.get("maxConsecutiveShifts"),
-        "min_days_off_per_week": cp.get("minDaysOffPerWeek", 2),
-        "max_nights_per_week": cp.get("maxNightsPerWeek", 2),
-        "min_rest_hours_between_shifts": cp.get("minRestHoursBetweenShifts"),
-        "forbid_night_to_morning": cp.get("forbidNightToMorning", True),
-        "forbid_morning_to_night_same_day": cp.get("forbidMorningToNightSameDay", False),
-        "forbid_evening_to_night": cp.get("forbidEveningToNight", True),
-        "allow_second_shift_same_day_in_emergency": cp.get("allowSecondShiftSameDayInEmergency", True),
-        "ignore_availability_in_emergency": cp.get("ignoreAvailabilityInEmergency", False),
-        "allow_night_cap_override_in_emergency": cp.get("allowNightCapOverrideInEmergency", True),
-        "allow_rest_rule_override_in_emergency": cp.get("allowRestRuleOverrideInEmergency", True),
-        "goal_minimize_staff_cost": cp.get("goalMinimizeStaffCost", True),
-        "goal_maximize_preference_satisfaction": cp.get("goalMaximizePreferenceSatisfaction", True),
-        "goal_balance_workload": cp.get("goalBalanceWorkload", False),
-        "goal_balance_night_workload": cp.get("goalBalanceNightWorkload", False),
-        "goal_reduce_undesirable_shifts": cp.get("goalReduceUndesirableShifts", True),
-        "enable_shift_type_limit": cp.get("enableShiftTypeLimit", True),
-        "max_shift_per_type": cp.get("maxShiftPerType") or {"morning": 9, "evening": 9, "night": 9},
-        "shift_type_limit_exempt_nurses": cp.get("shiftTypeLimitExemptNurses") or [],
-        "evening_after_morning_counts_as_overtime": cp.get("eveningAfterMorningCountsAsOvertime", True),
-        "enable_consecutive_night_limit": cp.get("enableConsecutiveNightLimit", True),
-        "max_consecutive_night_shifts": cp.get("maxConsecutiveNightShifts", 3),
-        "enable_min_total_days_off": cp.get("enableMinTotalDaysOff", True),
-        "min_total_days_off": cp.get("minTotalDaysOff", 11),
+        "guarantee_full_coverage": _cp("guaranteeFullCoverage", True),
+        "allow_emergency_overrides": _cp("allowEmergencyOverrides", True),
+        "max_shifts_per_day": _cp("maxShiftsPerDay", 1),
+        "max_consecutive_work_days": _cp("maxConsecutiveWorkDays", None),
+        "max_consecutive_shifts": _cp("maxConsecutiveShifts", None),
+        "min_days_off_per_week": _cp("minDaysOffPerWeek", 2),
+        "max_nights_per_week": _cp("maxNightsPerWeek", 2),
+        "min_rest_hours_between_shifts": _cp("minRestHoursBetweenShifts", None),
+        "forbid_night_to_morning": _cp("forbidNightToMorning", True),
+        "forbid_morning_to_night_same_day": _cp("forbidMorningToNightSameDay", False),
+        "forbid_evening_to_night": _cp("forbidEveningToNight", True),
+        "allow_second_shift_same_day_in_emergency": _cp("allowSecondShiftSameDayInEmergency", True),
+        "ignore_availability_in_emergency": _cp("ignoreAvailabilityInEmergency", False),
+        "allow_night_cap_override_in_emergency": _cp("allowNightCapOverrideInEmergency", True),
+        "allow_rest_rule_override_in_emergency": _cp("allowRestRuleOverrideInEmergency", True),
+        "goal_minimize_staff_cost": _cp("goalMinimizeStaffCost", True),
+        "goal_maximize_preference_satisfaction": _cp("goalMaximizePreferenceSatisfaction", True),
+        "goal_balance_workload": _cp("goalBalanceWorkload", False),
+        "goal_balance_night_workload": _cp("goalBalanceNightWorkload", False),
+        "goal_reduce_undesirable_shifts": _cp("goalReduceUndesirableShifts", True),
+        "enable_shift_type_limit": _cp("enableShiftTypeLimit", True),
+        "max_shift_per_type": _cp("maxShiftPerType", None) or {"morning": 9, "evening": 9, "night": 9},
+        "shift_type_limit_exempt_nurses": _cp("shiftTypeLimitExemptNurses", None) or [],
+        "evening_after_morning_counts_as_overtime": _cp("eveningAfterMorningCountsAsOvertime", True),
+        "enable_consecutive_night_limit": _cp("enableConsecutiveNightLimit", True),
+        "max_consecutive_night_shifts": _cp("maxConsecutiveNightShifts", 3),
+        "enable_min_total_days_off": _cp("enableMinTotalDaysOff", True),
+        "min_total_days_off": _cp("minTotalDaysOff", 11),
     }
     solve_req["goal_priority"] = cp.get("goalPriorityJson") or {
         "coverage": 1,
@@ -503,6 +509,50 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
     return solve_req
 
 
+_FEASIBLE_STATUSES = {
+    "OPTIMAL", "FEASIBLE",
+    "EMERGENCY_OPTIMAL", "EMERGENCY_FEASIBLE",
+    "RELAXED_OPTIMAL", "RELAXED_FEASIBLE",
+    "HEURISTIC",
+}
+
+# Mirrors jobs-runner.service.ts solveWithFallback():
+# A_STRICT (30s) → A_RELAXED (60s) → B_MILP (25s)
+_PLAN_SEQUENCE = [
+    {"plan": "A_STRICT",  "time_limit_sec": 30},
+    {"plan": "A_RELAXED", "time_limit_sec": 60},
+    {"plan": "B_MILP",    "time_limit_sec": 25},
+]
+
+
+def _is_feasible(result: dict) -> bool:
+    if "status" in result:
+        return result["status"] in _FEASIBLE_STATUSES
+    return bool(result.get("assignments"))
+
+
+def _run_solver(solve_req: dict, time_limit_sec: float) -> dict:
+    """Invoke solver_cli.py with the given time limit. Returns the parsed result dict."""
+    req = dict(solve_req)
+    req["time_limit_sec"] = time_limit_sec
+
+    proc = subprocess.run(
+        ["python", "solver_cli.py", "--cli"],
+        input=json.dumps(req, ensure_ascii=False),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    stdout = (proc.stdout or "").strip()
+    stderr = (proc.stderr or "").strip()
+
+    if proc.returncode != 0:
+        raise RuntimeError(f"solver_cli exited {proc.returncode}: {stderr or stdout}")
+
+    return json.loads(stdout)
+
+
 def handler(event, context):
     """
     Expected input from Step Functions:
@@ -510,8 +560,12 @@ def handler(event, context):
       "jobId": "...",
       "scheduleId": "1",
       "normalizedArtifact": {"bucket":"...","key":"..."},
-      "timeLimitSeconds": 60
+      "timeLimitSeconds": 60   (optional override — ignored when using plan fallback)
     }
+
+    Replicates jobs-runner.service.ts solveWithFallback():
+      A_STRICT (30s) → A_RELAXED (60s) → B_MILP (25s)
+    Uses the first plan that produces a feasible result, exactly as the local runner does.
     """
     job_id = event.get("jobId")
     if not job_id:
@@ -530,36 +584,37 @@ def handler(event, context):
         normalized_text = _read_json_text(bucket, key)
         normalized_obj = json.loads(normalized_text)
 
-        solve_req = _to_solve_request(normalized_obj, event.get("timeLimitSeconds"))
-        solve_req_text = json.dumps(solve_req, ensure_ascii=False)
+        # Build the base solve request once (time_limit_sec is overridden per plan)
+        base_req = _to_solve_request(normalized_obj, None)
 
-        proc = subprocess.run(
-            ["python", "solver_cli.py", "--cli"],
-            input=solve_req_text,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
+        solver_result = None
+        chosen_plan = None
 
-        stdout = (proc.stdout or "").strip()
-        stderr = (proc.stderr or "").strip()
+        for attempt in _PLAN_SEQUENCE:
+            try:
+                result = _run_solver(base_req, attempt["time_limit_sec"])
+            except Exception as e:
+                # Subprocess/parse failure on this attempt — try next plan
+                solver_result = {
+                    "status": "ERROR",
+                    "objective_value": None,
+                    "assignments": [],
+                    "understaffed": [],
+                    "nurse_stats": [],
+                    "details": {"error": str(e), "plan": attempt["plan"]},
+                }
+                continue
 
-        if proc.returncode != 0:
-            raise RuntimeError(f"solver_cli failed: {stderr or stdout}")
+            if _is_feasible(result):
+                solver_result = result
+                chosen_plan = attempt["plan"]
+                break
+            else:
+                # Keep last infeasible result so we can surface the reason if all plans fail
+                solver_result = result
 
-        solver_result = json.loads(stdout)
-
-        feasible = (
-            bool(solver_result.get("status") in (
-                "OPTIMAL", "FEASIBLE",
-                "EMERGENCY_OPTIMAL", "EMERGENCY_FEASIBLE",
-                "RELAXED_OPTIMAL", "RELAXED_FEASIBLE",
-                "HEURISTIC",
-            ))
-            if "status" in solver_result
-            else bool(solver_result.get("assignments"))
-        )
-        objective = solver_result.get("objective_value", None)
+        feasible = _is_feasible(solver_result) if solver_result else False
+        objective = solver_result.get("objective_value", None) if solver_result else None
 
     except Exception as e:
         solver_result = {
@@ -572,13 +627,15 @@ def handler(event, context):
         }
         feasible = False
         objective = None
+        chosen_plan = None
 
     elapsed_ms = int((time.time() - t0) * 1000)
+    plan_label = chosen_plan or "NONE"
 
     out_obj = {
         "schema": "SolverResult.v1",
         "jobId": job_id,
-        "plan": "A_STRICT",
+        "plan": plan_label,
         "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "elapsedMs": elapsed_ms,
         "result": solver_result,

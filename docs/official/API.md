@@ -547,7 +547,74 @@ Lists constraint profiles scoped to the organization.
 **Response — 200 OK**
 ```json
 {
-  "profiles": [ { "id": "1", "name": "ICU Standard", ... } ]
+  "profiles": [
+    {
+      "id": "5",
+      "unitId": "5",
+      "orgId": "4",
+      "name": "Ward 3A - April 2026",
+      "description": "Constraint profile for Ward 3A nursing schedule - April 2026",
+      "assignedTo": "Ward 3A",
+      "color": "primary",
+      "maxConsecutiveWorkDays": 5,
+      "maxConsecutiveNightShifts": 5,
+      "minRestHoursBetweenShifts": 12,
+      "maxShiftsPerDay": 2,
+      "minDaysOffPerWeek": 0,
+      "maxNightsPerWeek": 2,
+      "forbidNightToMorning": true,
+      "forbidMorningToNightSameDay": false,
+      "forbidEveningToNight": true,
+      "guaranteeFullCoverage": true,
+      "allowEmergencyOverrides": true,
+      "allowSecondShiftSameDayInEmergency": true,
+      "ignoreAvailabilityInEmergency": false,
+      "allowNightCapOverrideInEmergency": true,
+      "allowRestRuleOverrideInEmergency": true,
+      "goalMinimizeStaffCost": true,
+      "goalMaximizePreferenceSatisfaction": true,
+      "goalBalanceWorkload": true,
+      "goalBalanceNightWorkload": true,
+      "goalReduceUndesirableShifts": true,
+      "enableShiftTypeLimit": true,
+      "maxShiftPerType": {
+        "morning": 9,
+        "evening": 9,
+        "night": 9
+      },
+      "shiftTypeLimitExemptNurses": [],
+      "eveningAfterMorningCountsAsOvertime": true,
+      "enableConsecutiveNightLimit": true,
+      "enableMinTotalDaysOff": true,
+      "minTotalDaysOff": 11,
+      "penaltyWeightJson": {
+        "overtime_penalty": 1500,
+        "understaff_penalty": 1000,
+        "workload_balance_weight": 500,
+        "weekly_night_over_penalty": 400,
+        "emergency_override_penalty": 2000,
+        "preference_penalty_multiplier": 100,
+        "same_day_second_shift_penalty": 300
+      },
+      "fairnessWeightJson": {
+        "night_balance": 50,
+        "workload_balance": 1000,
+        "shift_type_balance": 500,
+        "overtime_distribution_balance": 300
+      },
+      "goalPriorityJson": {
+        "cost": 3,
+        "coverage": 2,
+        "fairness": 1,
+        "preference": 4
+      },
+      "numSearchWorkers": 8,
+      "timeLimitSec": 180,
+      "attributes": {},
+      "isActive": true,
+      "createdAt": "2026-03-22T14:07:42.392Z"
+    }
+  ]
 }
 ```
 
@@ -903,30 +970,70 @@ Constraint profiles control solver behavior. Each field maps directly to a solve
 **Profile object shape**
 ```json
 {
-  "id": "1",
-  "unitId": "2",
-  "orgId": null,
-  "name": "ICU Standard",
-  "description": "Standard ICU shift rules",
-  "assignedTo": "ICU",
+  "id": "5",
+  "unitId": "5",
+  "orgId": "4",
+  "name": "Ward 3A - April 2026",
+  "description": "Constraint profile for Ward 3A nursing schedule - April 2026",
+  "assignedTo": "Ward 3A",
   "color": "primary",
-  "isActive": true,
   "maxConsecutiveWorkDays": 5,
-  "maxConsecutiveNightShifts": 2,
-  "minRestHoursBetweenShifts": 11,
-  "maxShiftsPerDay": 1,
-  "minDaysOffPerWeek": 2,
+  "maxConsecutiveNightShifts": 5,
+  "minRestHoursBetweenShifts": 12,
+  "maxShiftsPerDay": 2,
+  "minDaysOffPerWeek": 0,
   "maxNightsPerWeek": 2,
   "forbidNightToMorning": true,
-  "forbidEveningToNight": false,
   "forbidMorningToNightSameDay": false,
+  "forbidEveningToNight": true,
   "guaranteeFullCoverage": true,
   "allowEmergencyOverrides": true,
   "allowSecondShiftSameDayInEmergency": true,
   "ignoreAvailabilityInEmergency": false,
   "allowNightCapOverrideInEmergency": true,
   "allowRestRuleOverrideInEmergency": true,
-  "goalMinimizeStaffCost": true
+  "goalMinimizeStaffCost": true,
+  "goalMaximizePreferenceSatisfaction": true,
+  "goalBalanceWorkload": true,
+  "goalBalanceNightWorkload": true,
+  "goalReduceUndesirableShifts": true,
+  "enableShiftTypeLimit": true,
+  "maxShiftPerType": {
+    "morning": 9,
+    "evening": 9,
+    "night": 9
+  },
+  "shiftTypeLimitExemptNurses": [],
+  "eveningAfterMorningCountsAsOvertime": true,
+  "enableConsecutiveNightLimit": true,
+  "enableMinTotalDaysOff": true,
+  "minTotalDaysOff": 11,
+  "penaltyWeightJson": {
+    "overtime_penalty": 1500,
+    "understaff_penalty": 1000,
+    "workload_balance_weight": 500,
+    "weekly_night_over_penalty": 400,
+    "emergency_override_penalty": 2000,
+    "preference_penalty_multiplier": 100,
+    "same_day_second_shift_penalty": 300
+  },
+  "fairnessWeightJson": {
+    "night_balance": 50,
+    "workload_balance": 1000,
+    "shift_type_balance": 500,
+    "overtime_distribution_balance": 300
+  },
+  "goalPriorityJson": {
+    "cost": 3,
+    "coverage": 2,
+    "fairness": 1,
+    "preference": 4
+  },
+  "numSearchWorkers": 8,
+  "timeLimitSec": 180,
+  "attributes": {},
+  "isActive": true,
+  "createdAt": "2026-03-22T14:07:42.392Z"
 }
 ```
 
@@ -934,13 +1041,157 @@ Constraint profiles control solver behavior. Each field maps directly to a solve
 
 Lists **all** constraint profiles across every unit and organisation.
 
-**Response — 200 OK** — `{ "profiles": [ { ... } ] }`
+**Response — 200 OK**
+```json
+{
+  "profiles": [
+    {
+      "id": "5",
+      "unitId": "5",
+      "orgId": "4",
+      "name": "Ward 3A - April 2026",
+      "description": "Constraint profile for Ward 3A nursing schedule - April 2026",
+      "assignedTo": "Ward 3A",
+      "color": "primary",
+      "maxConsecutiveWorkDays": 5,
+      "maxConsecutiveNightShifts": 5,
+      "minRestHoursBetweenShifts": 12,
+      "maxShiftsPerDay": 2,
+      "minDaysOffPerWeek": 0,
+      "maxNightsPerWeek": 2,
+      "forbidNightToMorning": true,
+      "forbidMorningToNightSameDay": false,
+      "forbidEveningToNight": true,
+      "guaranteeFullCoverage": true,
+      "allowEmergencyOverrides": true,
+      "allowSecondShiftSameDayInEmergency": true,
+      "ignoreAvailabilityInEmergency": false,
+      "allowNightCapOverrideInEmergency": true,
+      "allowRestRuleOverrideInEmergency": true,
+      "goalMinimizeStaffCost": true,
+      "goalMaximizePreferenceSatisfaction": true,
+      "goalBalanceWorkload": true,
+      "goalBalanceNightWorkload": true,
+      "goalReduceUndesirableShifts": true,
+      "enableShiftTypeLimit": true,
+      "maxShiftPerType": {
+        "morning": 9,
+        "evening": 9,
+        "night": 9
+      },
+      "shiftTypeLimitExemptNurses": [],
+      "eveningAfterMorningCountsAsOvertime": true,
+      "enableConsecutiveNightLimit": true,
+      "enableMinTotalDaysOff": true,
+      "minTotalDaysOff": 11,
+      "penaltyWeightJson": {
+        "overtime_penalty": 1500,
+        "understaff_penalty": 1000,
+        "workload_balance_weight": 500,
+        "weekly_night_over_penalty": 400,
+        "emergency_override_penalty": 2000,
+        "preference_penalty_multiplier": 100,
+        "same_day_second_shift_penalty": 300
+      },
+      "fairnessWeightJson": {
+        "night_balance": 50,
+        "workload_balance": 1000,
+        "shift_type_balance": 500,
+        "overtime_distribution_balance": 300
+      },
+      "goalPriorityJson": {
+        "cost": 3,
+        "coverage": 2,
+        "fairness": 1,
+        "preference": 4
+      },
+      "numSearchWorkers": 8,
+      "timeLimitSec": 180,
+      "attributes": {},
+      "isActive": true,
+      "createdAt": "2026-03-22T14:07:42.392Z"
+    }
+  ]
+}
+```
 
 #### `GET /units/:unitId/constraint-profiles`
 
 Lists all constraint profiles for a unit. Also available as `GET /units/:unitId/profiles`.
 
-**Response — 200 OK** — `{ "profiles": [ { ... } ] }`
+**Response — 200 OK**
+```json
+{
+  "profiles": [
+    {
+      "id": "5",
+      "unitId": "5",
+      "orgId": "4",
+      "name": "Ward 3A - April 2026",
+      "description": "Constraint profile for Ward 3A nursing schedule - April 2026",
+      "assignedTo": "Ward 3A",
+      "color": "primary",
+      "maxConsecutiveWorkDays": 5,
+      "maxConsecutiveNightShifts": 5,
+      "minRestHoursBetweenShifts": 12,
+      "maxShiftsPerDay": 2,
+      "minDaysOffPerWeek": 0,
+      "maxNightsPerWeek": 2,
+      "forbidNightToMorning": true,
+      "forbidMorningToNightSameDay": false,
+      "forbidEveningToNight": true,
+      "guaranteeFullCoverage": true,
+      "allowEmergencyOverrides": true,
+      "allowSecondShiftSameDayInEmergency": true,
+      "ignoreAvailabilityInEmergency": false,
+      "allowNightCapOverrideInEmergency": true,
+      "allowRestRuleOverrideInEmergency": true,
+      "goalMinimizeStaffCost": true,
+      "goalMaximizePreferenceSatisfaction": true,
+      "goalBalanceWorkload": true,
+      "goalBalanceNightWorkload": true,
+      "goalReduceUndesirableShifts": true,
+      "enableShiftTypeLimit": true,
+      "maxShiftPerType": {
+        "morning": 9,
+        "evening": 9,
+        "night": 9
+      },
+      "shiftTypeLimitExemptNurses": [],
+      "eveningAfterMorningCountsAsOvertime": true,
+      "enableConsecutiveNightLimit": true,
+      "enableMinTotalDaysOff": true,
+      "minTotalDaysOff": 11,
+      "penaltyWeightJson": {
+        "overtime_penalty": 1500,
+        "understaff_penalty": 1000,
+        "workload_balance_weight": 500,
+        "weekly_night_over_penalty": 400,
+        "emergency_override_penalty": 2000,
+        "preference_penalty_multiplier": 100,
+        "same_day_second_shift_penalty": 300
+      },
+      "fairnessWeightJson": {
+        "night_balance": 50,
+        "workload_balance": 1000,
+        "shift_type_balance": 500,
+        "overtime_distribution_balance": 300
+      },
+      "goalPriorityJson": {
+        "cost": 3,
+        "coverage": 2,
+        "fairness": 1,
+        "preference": 4
+      },
+      "numSearchWorkers": 8,
+      "timeLimitSec": 180,
+      "attributes": {},
+      "isActive": true,
+      "createdAt": "2026-03-22T14:07:42.392Z"
+    }
+  ]
+}
+```
 
 #### `POST /units/:unitId/constraint-profiles`
 
