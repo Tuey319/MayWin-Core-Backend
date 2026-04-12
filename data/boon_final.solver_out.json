@@ -1,0 +1,1207 @@
+{
+    "status": "OPTIMAL",
+    "objective_value": 401430,
+    "assignments": [
+        {
+            "day": "2026-05-01",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-05",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-06",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-07",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-08",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-11",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-12",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-13",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-14",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-15",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-18",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-19",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-20",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-21",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-22",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-25",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-26",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-27",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-28",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-29",
+            "shift": "morning",
+            "nurse": "N1",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-02",
+            "shift": "evening",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-04",
+            "shift": "morning",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-06",
+            "shift": "evening",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-07",
+            "shift": "morning",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-08",
+            "shift": "night",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-09",
+            "shift": "night",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-10",
+            "shift": "evening",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-11",
+            "shift": "morning",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-11",
+            "shift": "night",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-12",
+            "shift": "evening",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-15",
+            "shift": "evening",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-16",
+            "shift": "morning",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-16",
+            "shift": "night",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-18",
+            "shift": "morning",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-18",
+            "shift": "night",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-19",
+            "shift": "night",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-21",
+            "shift": "morning",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-21",
+            "shift": "night",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-23",
+            "shift": "evening",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-24",
+            "shift": "evening",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-25",
+            "shift": "night",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-28",
+            "shift": "evening",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-29",
+            "shift": "evening",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-31",
+            "shift": "night",
+            "nurse": "N2",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-02",
+            "shift": "morning",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-02",
+            "shift": "night",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-05",
+            "shift": "evening",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-06",
+            "shift": "night",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-07",
+            "shift": "night",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-09",
+            "shift": "evening",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-11",
+            "shift": "evening",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-13",
+            "shift": "night",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-16",
+            "shift": "night",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-17",
+            "shift": "evening",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-18",
+            "shift": "evening",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-19",
+            "shift": "evening",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-20",
+            "shift": "morning",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-22",
+            "shift": "evening",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-23",
+            "shift": "morning",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-23",
+            "shift": "night",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-25",
+            "shift": "morning",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-26",
+            "shift": "night",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-27",
+            "shift": "evening",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-29",
+            "shift": "morning",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-29",
+            "shift": "night",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-30",
+            "shift": "evening",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-31",
+            "shift": "morning",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-31",
+            "shift": "night",
+            "nurse": "N3",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-02",
+            "shift": "morning",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-02",
+            "shift": "night",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-03",
+            "shift": "evening",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-04",
+            "shift": "night",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-05",
+            "shift": "evening",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-06",
+            "shift": "evening",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-07",
+            "shift": "evening",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-08",
+            "shift": "evening",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-10",
+            "shift": "morning",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-10",
+            "shift": "night",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-13",
+            "shift": "evening",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-16",
+            "shift": "morning",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-17",
+            "shift": "morning",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-17",
+            "shift": "night",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-18",
+            "shift": "evening",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-19",
+            "shift": "morning",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-20",
+            "shift": "night",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-24",
+            "shift": "evening",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-25",
+            "shift": "night",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-27",
+            "shift": "morning",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-28",
+            "shift": "night",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-29",
+            "shift": "night",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-31",
+            "shift": "evening",
+            "nurse": "N4",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-01",
+            "shift": "evening",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-03",
+            "shift": "morning",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-03",
+            "shift": "night",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-04",
+            "shift": "evening",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-05",
+            "shift": "morning",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-05",
+            "shift": "night",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-07",
+            "shift": "night",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-08",
+            "shift": "evening",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-09",
+            "shift": "morning",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-11",
+            "shift": "evening",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-12",
+            "shift": "night",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-13",
+            "shift": "night",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-14",
+            "shift": "evening",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-19",
+            "shift": "night",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-20",
+            "shift": "night",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-22",
+            "shift": "evening",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-23",
+            "shift": "night",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-25",
+            "shift": "evening",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-26",
+            "shift": "morning",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-26",
+            "shift": "night",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-27",
+            "shift": "evening",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-30",
+            "shift": "morning",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-31",
+            "shift": "evening",
+            "nurse": "N5",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-01",
+            "shift": "night",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-03",
+            "shift": "evening",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-04",
+            "shift": "morning",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-04",
+            "shift": "night",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-06",
+            "shift": "morning",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-06",
+            "shift": "night",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-07",
+            "shift": "evening",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-09",
+            "shift": "evening",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-10",
+            "shift": "evening",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-11",
+            "shift": "night",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-13",
+            "shift": "morning",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-14",
+            "shift": "evening",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-15",
+            "shift": "morning",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-15",
+            "shift": "night",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-16",
+            "shift": "evening",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-18",
+            "shift": "night",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-20",
+            "shift": "evening",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-21",
+            "shift": "night",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-23",
+            "shift": "morning",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-26",
+            "shift": "evening",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-28",
+            "shift": "morning",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-28",
+            "shift": "night",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-29",
+            "shift": "evening",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-30",
+            "shift": "night",
+            "nurse": "N6",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-01",
+            "shift": "morning",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-01",
+            "shift": "night",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-02",
+            "shift": "evening",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-04",
+            "shift": "evening",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-05",
+            "shift": "night",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-08",
+            "shift": "morning",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-08",
+            "shift": "night",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-10",
+            "shift": "morning",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-12",
+            "shift": "evening",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-14",
+            "shift": "night",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-15",
+            "shift": "evening",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-17",
+            "shift": "morning",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-17",
+            "shift": "night",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-21",
+            "shift": "evening",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-22",
+            "shift": "night",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-23",
+            "shift": "evening",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-24",
+            "shift": "morning",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-24",
+            "shift": "night",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-25",
+            "shift": "evening",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-26",
+            "shift": "evening",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-27",
+            "shift": "night",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-28",
+            "shift": "evening",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-30",
+            "shift": "morning",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-30",
+            "shift": "night",
+            "nurse": "N7",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-01",
+            "shift": "evening",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-03",
+            "shift": "morning",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-03",
+            "shift": "night",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-09",
+            "shift": "morning",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-09",
+            "shift": "night",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-10",
+            "shift": "night",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-12",
+            "shift": "morning",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-12",
+            "shift": "night",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-13",
+            "shift": "evening",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-14",
+            "shift": "morning",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-14",
+            "shift": "night",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-15",
+            "shift": "night",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-16",
+            "shift": "evening",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-17",
+            "shift": "evening",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-19",
+            "shift": "evening",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-20",
+            "shift": "evening",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-21",
+            "shift": "evening",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-22",
+            "shift": "morning",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-22",
+            "shift": "night",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-24",
+            "shift": "morning",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-24",
+            "shift": "night",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-27",
+            "shift": "night",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-30",
+            "shift": "evening",
+            "nurse": "N8",
+            "emergency_override": false
+        },
+        {
+            "day": "2026-05-31",
+            "shift": "morning",
+            "nurse": "N8",
+            "emergency_override": false
+        }
+    ],
+    "understaffed": [],
+    "nurse_stats": [
+        {
+            "nurse": "N1",
+            "assigned_shifts": 20,
+            "overtime": 0,
+            "morning_shifts": 20,
+            "evening_shifts": 0,
+            "night_shifts": 0,
+            "satisfaction": 100
+        },
+        {
+            "nurse": "N2",
+            "assigned_shifts": 24,
+            "overtime": 4,
+            "morning_shifts": 6,
+            "evening_shifts": 9,
+            "night_shifts": 9,
+            "satisfaction": 73
+        },
+        {
+            "nurse": "N3",
+            "assigned_shifts": 24,
+            "overtime": 4,
+            "morning_shifts": 6,
+            "evening_shifts": 9,
+            "night_shifts": 9,
+            "satisfaction": 73
+        },
+        {
+            "nurse": "N4",
+            "assigned_shifts": 23,
+            "overtime": 3,
+            "morning_shifts": 6,
+            "evening_shifts": 9,
+            "night_shifts": 8,
+            "satisfaction": 79
+        },
+        {
+            "nurse": "N5",
+            "assigned_shifts": 23,
+            "overtime": 3,
+            "morning_shifts": 5,
+            "evening_shifts": 9,
+            "night_shifts": 9,
+            "satisfaction": 78
+        },
+        {
+            "nurse": "N6",
+            "assigned_shifts": 24,
+            "overtime": 4,
+            "morning_shifts": 6,
+            "evening_shifts": 9,
+            "night_shifts": 9,
+            "satisfaction": 73
+        },
+        {
+            "nurse": "N7",
+            "assigned_shifts": 24,
+            "overtime": 4,
+            "morning_shifts": 6,
+            "evening_shifts": 9,
+            "night_shifts": 9,
+            "satisfaction": 73
+        },
+        {
+            "nurse": "N8",
+            "assigned_shifts": 24,
+            "overtime": 4,
+            "morning_shifts": 7,
+            "evening_shifts": 8,
+            "night_shifts": 9,
+            "satisfaction": 73
+        }
+    ],
+    "details": {
+        "average_satisfaction": 77.75,
+        "coverage_missing": 0,
+        "additional_nurses_required": 0,
+        "emergency_override_count": 0,
+        "best_bound": 401430.0,
+        "wall_time_sec": 0.6130022,
+        "conflicts": 0,
+        "branches": 1200
+    }
+}
