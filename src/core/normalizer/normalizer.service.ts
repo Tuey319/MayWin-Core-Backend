@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+// This service builds normalized input JSON for the solver based on DB data for a given ScheduleJob.
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, In, IsNull, Repository } from 'typeorm';
 
@@ -20,6 +21,8 @@ type SolverPreferences = Record<string, Record<string, Record<string, number>>>;
 
 @Injectable()
 export class NormalizerService {
+  private readonly logger = new Logger(NormalizerService.name);
+
   constructor(
     @InjectRepository(Schedule)
     private readonly schedulesRepo: Repository<Schedule>,
@@ -430,7 +433,7 @@ export class NormalizerService {
         where: { id: String(scheduleId) as any } as any,
       });
       scheduleConstraintProfileId = schedule?.constraint_profile_id ?? null;
-      console.log(`[NormalizerService] Schedule ${scheduleId} has constraint_profile_id: ${scheduleConstraintProfileId}`);
+      this.logger.debug(`Schedule ${scheduleId} has constraint_profile_id: ${scheduleConstraintProfileId}`);
     }
 
     const cpId =
@@ -439,16 +442,16 @@ export class NormalizerService {
       scheduleConstraintProfileId ??
       null;
 
-    console.log(`[NormalizerService] Resolved constraint profile ID: ${cpId}`);
+    this.logger.debug(`Resolved constraint profile ID: ${cpId}`);
 
     let cp: ConstraintProfile | null = null;
 
     if (cpId) {
       cp = await this.constraintRepo.findOne({
-        where: { id: String(cpId) as any, unit_id: job.unit_id as any } as any,
+        where: { id: String(cpId) as any } as any,
       });
       if (!cp) {
-        console.log(`[NormalizerService] WARNING: Constraint profile ${cpId} not found for unit ${job.unit_id}, falling back to latest active`);
+        this.logger.warn(`Constraint profile ${cpId} not found, falling back to latest active for unit ${job.unit_id}`);
       }
     }
 
@@ -457,10 +460,16 @@ export class NormalizerService {
         where: { unit_id: job.unit_id as any, is_active: true as any } as any,
         order: { created_at: 'DESC' as any },
       });
-      console.log(`[NormalizerService] Fell back to latest active profile: ${cp?.id}`);
+      this.logger.debug(`Fell back to latest active profile: ${cp?.id}`);
     }
 
-    console.log(`[NormalizerService] Using constraint profile ${cp?.id} with forbid_evening_to_night=${cp?.forbid_evening_to_night}`);
+    this.logger.debug(`Using constraint profile ${cp?.id} (forbid_evening_to_night=${cp?.forbid_evening_to_night})`);
+
+    const cpAttrs = (cp?.attributes ?? {}) as Record<string, any>;
+    const readAttr = <T>(camelKey: string, snakeKey: string, fallback: T): T => {
+      const value = cpAttrs[camelKey] ?? cpAttrs[snakeKey];
+      return value === undefined ? fallback : (value as T);
+    };
 
     return {
       constraintProfileId: cp?.id ?? null,
@@ -505,7 +514,32 @@ export class NormalizerService {
       numSearchWorkers: cp?.num_search_workers ?? 8,
       timeLimitSec: cp?.time_limit_sec ?? 20,
 
-      attributes: cp?.attributes ?? {},
+      // advanced solver knobs stored in attributes
+      enableShiftTypeLimit: readAttr('enableShiftTypeLimit', 'enable_shift_type_limit', true),
+      maxShiftPerType: readAttr<Record<string, number>>(
+        'maxShiftPerType',
+        'max_shift_per_type',
+        { morning: 9, evening: 9, night: 9 },
+      ),
+      shiftTypeLimitExemptNurses: readAttr<string[]>(
+        'shiftTypeLimitExemptNurses',
+        'shift_type_limit_exempt_nurses',
+        [],
+      ),
+      eveningAfterMorningCountsAsOvertime: readAttr(
+        'eveningAfterMorningCountsAsOvertime',
+        'evening_after_morning_counts_as_overtime',
+        true,
+      ),
+      enableConsecutiveNightLimit: readAttr(
+        'enableConsecutiveNightLimit',
+        'enable_consecutive_night_limit',
+        true,
+      ),
+      enableMinTotalDaysOff: readAttr('enableMinTotalDaysOff', 'enable_min_total_days_off', true),
+      minTotalDaysOff: readAttr('minTotalDaysOff', 'min_total_days_off', 11),
+
+      attributes: cpAttrs,
     };
   }
 

@@ -144,13 +144,21 @@ async function getLatestJobIdForSchedule(
   jobsRepo: Repository<ScheduleJob>,
   scheduleId: string,
 ): Promise<string | null> {
+  // Primary: final_schedule_id is set by PERSIST_SCHEDULE on the job row directly
+  const byFinal = await jobsRepo.findOne({
+    where: { final_schedule_id: scheduleId as any } as any,
+    order: { created_at: 'DESC' as any } as any,
+  });
+  if (byFinal?.id) return String(byFinal.id);
+
+  // Fallback: some jobs store scheduleId in attributes (pre-PERSIST jobs)
   const rows = await jobsRepo.find({
+    where: { final_schedule_id: null as any } as any,
     order: { created_at: 'DESC' as any } as any,
     take: 50,
   });
   const found = rows.find(
-    (r) =>
-      String((r.attributes as any)?.scheduleId ?? '') === String(scheduleId),
+    (r) => String((r.attributes as any)?.scheduleId ?? '') === String(scheduleId),
   );
   return found?.id ? String(found.id) : null;
 }
@@ -658,16 +666,20 @@ export const handler = async (event: AnyObj, _context: Context) => {
             : Array.isArray(assignments) && assignments.length > 0;
 
         if (!feasible) {
-          const details =
+          const rawDetails =
             layer?.details ??
             layer?.meta?.details ??
             'Solver infeasible / error';
+          const details =
+            typeof rawDetails === 'object'
+              ? String(rawDetails?.message ?? rawDetails?.error ?? JSON.stringify(rawDetails))
+              : String(rawDetails);
           await markJobFailed({
             jobsRepo,
             jobId: String(jobId),
-            errorMessage: String(details),
+            errorMessage: details,
           });
-          return { status: 'FAILED', name: 'Error', message: String(details) };
+          return { status: 'FAILED', name: 'Error', message: details };
         }
 
         const cleaned = (assignments as any[])
@@ -876,6 +888,20 @@ export const handler = async (event: AnyObj, _context: Context) => {
       }
 
       case Op.EVALUATE_SCHEDULE: {
+        // If the previous step (PersistSchedule) returned a FAILED payload without
+        // throwing, Step Functions passes it here unchanged. Forward it so MarkFailed
+        // receives the original error instead of a confusing "requires jobId" message.
+        if (input?.status === 'FAILED') {
+          const fwdMsg = input?.message;
+          return {
+            status: 'FAILED',
+            name: input?.name ?? 'Error',
+            message: typeof fwdMsg === 'object'
+              ? JSON.stringify(fwdMsg)
+              : (fwdMsg ?? 'Previous step failed'),
+          };
+        }
+
         let jobId = pickJobId(input);
         if (!jobId && input?.scheduleId)
           jobId = await getLatestJobIdForSchedule(

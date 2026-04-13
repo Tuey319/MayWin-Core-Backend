@@ -11,26 +11,27 @@ All endpoints require `Authorization: Bearer <accessToken>` unless marked **Publ
 ## Table of Contents
 
 1. [Auth](#auth)
-2. [Health](#health)
-3. [Organizations](#organizations)
-4. [Sites](#sites)
-5. [Units](#units)
-6. [Roles](#roles)
-7. [Unit Configuration](#unit-configuration)
+2. [Profiles](#profiles)
+3. [Health](#health)
+4. [Organizations](#organizations)
+5. [Sites](#sites)
+6. [Units](#units)
+7. [Roles](#roles)
+8. [Unit Configuration](#unit-configuration)
    - [Shift Templates](#shift-templates)
    - [Constraint Profiles](#constraint-profiles)
    - [Coverage Rules](#coverage-rules)
-8. [Staff](#staff)
-9. [Workers](#workers)
-10. [Worker Availability](#worker-availability)
-11. [Worker Preferences](#worker-preferences)
-12. [Schedules](#schedules)
-13. [Schedule Assignments](#schedule-assignments)
-14. [Jobs (Solver)](#jobs-solver)
-15. [Worker Messages](#worker-messages)
-16. [Orchestrator](#orchestrator)
-17. [Webhook (LINE)](#webhook-line)
-18. [Audit Logs](#audit-logs)
+9. [Staff](#staff)
+10. [Workers](#workers)
+11. [Worker Availability](#worker-availability)
+12. [Worker Preferences](#worker-preferences)
+13. [Schedules](#schedules)
+14. [Schedule Assignments](#schedule-assignments)
+15. [Jobs (Solver)](#jobs-solver)
+16. [Worker Messages](#worker-messages)
+17. [Orchestrator](#orchestrator)
+18. [Webhook (LINE)](#webhook-line)
+19. [Audit Logs](#audit-logs)
 
 ---
 
@@ -151,17 +152,176 @@ Returns the current user's JWT payload.
 ```json
 {
   "user": {
-    "id": "42",
+    "sub": 42,
     "email": "user@example.com",
     "fullName": "John Doe",
     "organizationId": 1,
     "roles": ["NURSE", "UNIT_MANAGER"],
-    "unitIds": [2, 3]
+    "unitIds": [2, 3],
+    "iat": 1743505320,
+    "exp": 1743533920
   }
 }
 ```
 
 **Errors:** `401`
+
+---
+
+### `PATCH /auth/me/username`
+
+**Protected.** Updates the current user's full name.
+
+**Request Body**
+```json
+{ "fullName": "Jane Doe" }
+```
+
+**Response — 200 OK**
+```json
+{
+  "user": {
+    "id": "42",
+    "email": "user@example.com",
+    "fullName": "Jane Doe"
+  }
+}
+```
+
+**Errors:** `400`, `401`
+
+---
+
+## Profiles
+
+### `GET /profiles/me`
+
+Returns the current user's profile record. If the row does not exist yet, the backend creates an empty one first.
+
+**Response — 200 OK**
+```json
+{
+  "id": "1",
+  "userId": "42",
+  "avatar_data": "profiles/avatars/42/1712530000000-acde1234.webp",
+  "avatar_bucket": "maywin-artifacts",
+  "avatar_key": "profiles/avatars/42/1712530000000-acde1234.webp",
+  "avatar_content_type": "image/webp",
+  "avatar_updated_at": "2026-04-08T10:00:00.000Z",
+  "bio": "Night shift nurse",
+  "phone_number": "+66xxxxxxxxx",
+  "metadata": {
+    "avatarOriginalName": "avatar.webp"
+  },
+  "avatar": {
+    "bucket": "maywin-artifacts",
+    "key": "profiles/avatars/42/1712530000000-acde1234.webp",
+    "contentType": "image/webp",
+    "url": "/api/v1/core/profiles/me/avatar"
+  }
+}
+```
+
+---
+
+### `PATCH /profiles/me`
+
+**Protected.** Updates text profile fields such as bio and phone number.
+
+**Request Body**
+```json
+{
+  "bio": "Night shift nurse",
+  "phone_number": "+66xxxxxxxxx"
+}
+```
+
+**Response — 200 OK** — updated profile record. Same shape as `GET /profiles/me`, with the updated text fields.
+
+---
+
+### `POST /profiles/me/avatar`
+
+**Protected.** Uploads the authenticated user's profile image to S3 and stores the object key in the profile record.
+
+**Request**
+- `multipart/form-data`
+- File field name: `file`
+- Allowed types: `image/jpeg`, `image/png`, `image/webp`
+- Max size: 5 MB
+
+**Response — 200 OK**
+```json
+{
+  "profile": {
+    "id": "1",
+    "userId": "42",
+    "avatar_data": "profiles/avatars/42/1712530000000-acde1234.webp",
+    "avatar_bucket": "maywin-artifacts",
+    "avatar_key": "profiles/avatars/42/1712530000000-acde1234.webp",
+    "avatar_content_type": "image/webp",
+    "avatar_updated_at": "2026-04-08T10:00:00.000Z",
+    "bio": "Night shift nurse",
+    "phone_number": "+66xxxxxxxxx",
+    "metadata": {
+      "avatarOriginalName": "avatar.webp"
+    },
+    "avatar": {
+      "bucket": "maywin-artifacts",
+      "key": "profiles/avatars/42/1712530000000-acde1234.webp",
+      "contentType": "image/webp",
+      "url": "/api/v1/core/profiles/me/avatar"
+    }
+  }
+}
+```
+
+**Errors:** `400`, `401`, `503`
+
+---
+
+### `GET /profiles/me/avatar`
+
+**Protected.** Streams the current user's avatar image from S3.
+
+**Response — 200 OK**
+- `Content-Type`: image content type from profile metadata or S3 object metadata
+- `Cache-Control`: `private, max-age=300`
+- Body: binary image stream
+
+**Errors:** `401`, `404`
+
+---
+
+### `DELETE /profiles/me/avatar`
+
+**Protected.** Removes the current user's avatar from S3 and clears the profile pointer.
+
+**Response — 200 OK**
+```json
+{
+  "profile": {
+    "id": "1",
+    "userId": "42",
+    "avatar_data": null,
+    "avatar_bucket": null,
+    "avatar_key": null,
+    "avatar_content_type": null,
+    "avatar_updated_at": null,
+    "bio": "Night shift nurse",
+    "phone_number": "+66xxxxxxxxx",
+    "metadata": {
+      "avatarBucket": null,
+      "avatarContentType": null,
+      "avatarOriginalName": null,
+      "avatarUpdatedAt": null
+    },
+    "avatar": null
+  }
+}
+```
+
+**Errors:** `401`, `404`
 
 ---
 
@@ -387,7 +547,74 @@ Lists constraint profiles scoped to the organization.
 **Response — 200 OK**
 ```json
 {
-  "profiles": [ { "id": "1", "name": "ICU Standard", ... } ]
+  "profiles": [
+    {
+      "id": "5",
+      "unitId": "5",
+      "orgId": "4",
+      "name": "Ward 3A - April 2026",
+      "description": "Constraint profile for Ward 3A nursing schedule - April 2026",
+      "assignedTo": "Ward 3A",
+      "color": "primary",
+      "maxConsecutiveWorkDays": 5,
+      "maxConsecutiveNightShifts": 5,
+      "minRestHoursBetweenShifts": 12,
+      "maxShiftsPerDay": 2,
+      "minDaysOffPerWeek": 0,
+      "maxNightsPerWeek": 2,
+      "forbidNightToMorning": true,
+      "forbidMorningToNightSameDay": false,
+      "forbidEveningToNight": true,
+      "guaranteeFullCoverage": true,
+      "allowEmergencyOverrides": true,
+      "allowSecondShiftSameDayInEmergency": true,
+      "ignoreAvailabilityInEmergency": false,
+      "allowNightCapOverrideInEmergency": true,
+      "allowRestRuleOverrideInEmergency": true,
+      "goalMinimizeStaffCost": true,
+      "goalMaximizePreferenceSatisfaction": true,
+      "goalBalanceWorkload": true,
+      "goalBalanceNightWorkload": true,
+      "goalReduceUndesirableShifts": true,
+      "enableShiftTypeLimit": true,
+      "maxShiftPerType": {
+        "morning": 9,
+        "evening": 9,
+        "night": 9
+      },
+      "shiftTypeLimitExemptNurses": [],
+      "eveningAfterMorningCountsAsOvertime": true,
+      "enableConsecutiveNightLimit": true,
+      "enableMinTotalDaysOff": true,
+      "minTotalDaysOff": 11,
+      "penaltyWeightJson": {
+        "overtime_penalty": 1500,
+        "understaff_penalty": 1000,
+        "workload_balance_weight": 500,
+        "weekly_night_over_penalty": 400,
+        "emergency_override_penalty": 2000,
+        "preference_penalty_multiplier": 100,
+        "same_day_second_shift_penalty": 300
+      },
+      "fairnessWeightJson": {
+        "night_balance": 50,
+        "workload_balance": 1000,
+        "shift_type_balance": 500,
+        "overtime_distribution_balance": 300
+      },
+      "goalPriorityJson": {
+        "cost": 3,
+        "coverage": 2,
+        "fairness": 1,
+        "preference": 4
+      },
+      "numSearchWorkers": 8,
+      "timeLimitSec": 180,
+      "attributes": {},
+      "isActive": true,
+      "createdAt": "2026-03-22T14:07:42.392Z"
+    }
+  ]
 }
 ```
 
@@ -743,30 +970,148 @@ Constraint profiles control solver behavior. Each field maps directly to a solve
 **Profile object shape**
 ```json
 {
-  "id": "1",
-  "unitId": "2",
-  "orgId": null,
-  "name": "ICU Standard",
-  "description": "Standard ICU shift rules",
-  "assignedTo": "ICU",
+  "id": "5",
+  "unitId": "5",
+  "orgId": "4",
+  "name": "Ward 3A - April 2026",
+  "description": "Constraint profile for Ward 3A nursing schedule - April 2026",
+  "assignedTo": "Ward 3A",
   "color": "primary",
-  "isActive": true,
   "maxConsecutiveWorkDays": 5,
-  "maxConsecutiveNightShifts": 2,
-  "minRestHoursBetweenShifts": 11,
-  "maxShiftsPerDay": 1,
-  "minDaysOffPerWeek": 2,
+  "maxConsecutiveNightShifts": 5,
+  "minRestHoursBetweenShifts": 12,
+  "maxShiftsPerDay": 2,
+  "minDaysOffPerWeek": 0,
   "maxNightsPerWeek": 2,
   "forbidNightToMorning": true,
-  "forbidEveningToNight": false,
   "forbidMorningToNightSameDay": false,
+  "forbidEveningToNight": true,
   "guaranteeFullCoverage": true,
   "allowEmergencyOverrides": true,
   "allowSecondShiftSameDayInEmergency": true,
   "ignoreAvailabilityInEmergency": false,
   "allowNightCapOverrideInEmergency": true,
   "allowRestRuleOverrideInEmergency": true,
-  "goalMinimizeStaffCost": true
+  "goalMinimizeStaffCost": true,
+  "goalMaximizePreferenceSatisfaction": true,
+  "goalBalanceWorkload": true,
+  "goalBalanceNightWorkload": true,
+  "goalReduceUndesirableShifts": true,
+  "enableShiftTypeLimit": true,
+  "maxShiftPerType": {
+    "morning": 9,
+    "evening": 9,
+    "night": 9
+  },
+  "shiftTypeLimitExemptNurses": [],
+  "eveningAfterMorningCountsAsOvertime": true,
+  "enableConsecutiveNightLimit": true,
+  "enableMinTotalDaysOff": true,
+  "minTotalDaysOff": 11,
+  "penaltyWeightJson": {
+    "overtime_penalty": 1500,
+    "understaff_penalty": 1000,
+    "workload_balance_weight": 500,
+    "weekly_night_over_penalty": 400,
+    "emergency_override_penalty": 2000,
+    "preference_penalty_multiplier": 100,
+    "same_day_second_shift_penalty": 300
+  },
+  "fairnessWeightJson": {
+    "night_balance": 50,
+    "workload_balance": 1000,
+    "shift_type_balance": 500,
+    "overtime_distribution_balance": 300
+  },
+  "goalPriorityJson": {
+    "cost": 3,
+    "coverage": 2,
+    "fairness": 1,
+    "preference": 4
+  },
+  "numSearchWorkers": 8,
+  "timeLimitSec": 180,
+  "attributes": {},
+  "isActive": true,
+  "createdAt": "2026-03-22T14:07:42.392Z"
+}
+```
+
+#### `GET /constraint-profiles`
+
+Lists **all** constraint profiles across every unit and organisation.
+
+**Response — 200 OK**
+```json
+{
+  "profiles": [
+    {
+      "id": "5",
+      "unitId": "5",
+      "orgId": "4",
+      "name": "Ward 3A - April 2026",
+      "description": "Constraint profile for Ward 3A nursing schedule - April 2026",
+      "assignedTo": "Ward 3A",
+      "color": "primary",
+      "maxConsecutiveWorkDays": 5,
+      "maxConsecutiveNightShifts": 5,
+      "minRestHoursBetweenShifts": 12,
+      "maxShiftsPerDay": 2,
+      "minDaysOffPerWeek": 0,
+      "maxNightsPerWeek": 2,
+      "forbidNightToMorning": true,
+      "forbidMorningToNightSameDay": false,
+      "forbidEveningToNight": true,
+      "guaranteeFullCoverage": true,
+      "allowEmergencyOverrides": true,
+      "allowSecondShiftSameDayInEmergency": true,
+      "ignoreAvailabilityInEmergency": false,
+      "allowNightCapOverrideInEmergency": true,
+      "allowRestRuleOverrideInEmergency": true,
+      "goalMinimizeStaffCost": true,
+      "goalMaximizePreferenceSatisfaction": true,
+      "goalBalanceWorkload": true,
+      "goalBalanceNightWorkload": true,
+      "goalReduceUndesirableShifts": true,
+      "enableShiftTypeLimit": true,
+      "maxShiftPerType": {
+        "morning": 9,
+        "evening": 9,
+        "night": 9
+      },
+      "shiftTypeLimitExemptNurses": [],
+      "eveningAfterMorningCountsAsOvertime": true,
+      "enableConsecutiveNightLimit": true,
+      "enableMinTotalDaysOff": true,
+      "minTotalDaysOff": 11,
+      "penaltyWeightJson": {
+        "overtime_penalty": 1500,
+        "understaff_penalty": 1000,
+        "workload_balance_weight": 500,
+        "weekly_night_over_penalty": 400,
+        "emergency_override_penalty": 2000,
+        "preference_penalty_multiplier": 100,
+        "same_day_second_shift_penalty": 300
+      },
+      "fairnessWeightJson": {
+        "night_balance": 50,
+        "workload_balance": 1000,
+        "shift_type_balance": 500,
+        "overtime_distribution_balance": 300
+      },
+      "goalPriorityJson": {
+        "cost": 3,
+        "coverage": 2,
+        "fairness": 1,
+        "preference": 4
+      },
+      "numSearchWorkers": 8,
+      "timeLimitSec": 180,
+      "attributes": {},
+      "isActive": true,
+      "createdAt": "2026-03-22T14:07:42.392Z"
+    }
+  ]
 }
 ```
 
@@ -774,7 +1119,79 @@ Constraint profiles control solver behavior. Each field maps directly to a solve
 
 Lists all constraint profiles for a unit. Also available as `GET /units/:unitId/profiles`.
 
-**Response — 200 OK** — `{ "profiles": [ { ... } ] }`
+**Response — 200 OK**
+```json
+{
+  "profiles": [
+    {
+      "id": "5",
+      "unitId": "5",
+      "orgId": "4",
+      "name": "Ward 3A - April 2026",
+      "description": "Constraint profile for Ward 3A nursing schedule - April 2026",
+      "assignedTo": "Ward 3A",
+      "color": "primary",
+      "maxConsecutiveWorkDays": 5,
+      "maxConsecutiveNightShifts": 5,
+      "minRestHoursBetweenShifts": 12,
+      "maxShiftsPerDay": 2,
+      "minDaysOffPerWeek": 0,
+      "maxNightsPerWeek": 2,
+      "forbidNightToMorning": true,
+      "forbidMorningToNightSameDay": false,
+      "forbidEveningToNight": true,
+      "guaranteeFullCoverage": true,
+      "allowEmergencyOverrides": true,
+      "allowSecondShiftSameDayInEmergency": true,
+      "ignoreAvailabilityInEmergency": false,
+      "allowNightCapOverrideInEmergency": true,
+      "allowRestRuleOverrideInEmergency": true,
+      "goalMinimizeStaffCost": true,
+      "goalMaximizePreferenceSatisfaction": true,
+      "goalBalanceWorkload": true,
+      "goalBalanceNightWorkload": true,
+      "goalReduceUndesirableShifts": true,
+      "enableShiftTypeLimit": true,
+      "maxShiftPerType": {
+        "morning": 9,
+        "evening": 9,
+        "night": 9
+      },
+      "shiftTypeLimitExemptNurses": [],
+      "eveningAfterMorningCountsAsOvertime": true,
+      "enableConsecutiveNightLimit": true,
+      "enableMinTotalDaysOff": true,
+      "minTotalDaysOff": 11,
+      "penaltyWeightJson": {
+        "overtime_penalty": 1500,
+        "understaff_penalty": 1000,
+        "workload_balance_weight": 500,
+        "weekly_night_over_penalty": 400,
+        "emergency_override_penalty": 2000,
+        "preference_penalty_multiplier": 100,
+        "same_day_second_shift_penalty": 300
+      },
+      "fairnessWeightJson": {
+        "night_balance": 50,
+        "workload_balance": 1000,
+        "shift_type_balance": 500,
+        "overtime_distribution_balance": 300
+      },
+      "goalPriorityJson": {
+        "cost": 3,
+        "coverage": 2,
+        "fairness": 1,
+        "preference": 4
+      },
+      "numSearchWorkers": 8,
+      "timeLimitSec": 180,
+      "attributes": {},
+      "isActive": true,
+      "createdAt": "2026-03-22T14:07:42.392Z"
+    }
+  ]
+}
+```
 
 #### `POST /units/:unitId/constraint-profiles`
 
@@ -942,6 +1359,21 @@ Soft-deactivates a staff member (`isActive = false`). Appends an audit log entry
 
 ---
 
+### `POST /staff/:id/link-user`
+
+Links an existing user account to this worker by setting `workers.linked_user_id`.
+
+**Request**
+```json
+{ "userId": 5 }
+```
+
+**Response — 200 OK** — `{ "ok": true, "staff": { ... } }`
+
+**Errors:** `400` (invalid id/userId), `404` (worker or user not found in organization)
+
+---
+
 ### `POST /staff/:id/link-token`
 
 Generates a one-time LINE invite token so the nurse can link their LINE account.
@@ -957,6 +1389,45 @@ Generates a one-time LINE invite token so the nurse can link their LINE account.
 ---
 
 ## Workers
+
+### `GET /workers/me/schedule`
+
+**Protected.** Returns the authenticated nurse's shift assignments for a given month. The worker profile is resolved from the JWT (`sub` → `workers.linked_user_id`).
+
+**Query params**
+
+| Param | Type | Required | Notes |
+|---|---|---|---|
+| `month` | `string` | No | `YYYY-MM` format. Defaults to current month. |
+
+**Response — 200 OK**
+```json
+{
+  "worker": { "id": 3, "fullName": "Nurse Name", "workerCode": "N001" },
+  "month": "2026-04",
+  "schedule": { "id": 12, "name": "April 2026 Schedule", "status": "PUBLISHED" },
+  "shiftTemplates": [
+    { "code": "M", "name": "เช้า", "startTime": "07:00:00", "endTime": "15:00:00" },
+    { "code": "A", "name": "บ่าย", "startTime": "15:00:00", "endTime": "23:00:00" },
+    { "code": "N", "name": "ดึก", "startTime": "23:00:00", "endTime": "07:00:00" }
+  ],
+  "days": [
+    {
+      "date": "2026-04-01",
+      "shifts": [
+        { "shiftCode": "M", "shiftName": "เช้า", "startTime": "07:00:00", "endTime": "15:00:00", "isOvertime": false }
+      ]
+    },
+    { "date": "2026-04-02", "shifts": [] }
+  ]
+}
+```
+
+If no published schedule exists for the month, `schedule` is `null` and `days` is `[]`.
+
+**Errors:** `400` (invalid month format), `401`, `404` (no worker profile linked to account)
+
+---
 
 ### `GET /units/:unitId/workers`
 
@@ -1219,6 +1690,33 @@ Rejects a day-off request for a specific date. Removes from both `days_off_patte
 ---
 
 ## Schedules
+
+### `GET /schedules`
+
+Lists **all** schedules across every unit and organisation, ordered by most recently created.
+
+**Response — 200 OK**
+```json
+{
+  "schedules": [
+    {
+      "id": "42",
+      "organizationId": "1",
+      "unitId": "5",
+      "name": "March 2026",
+      "startDate": "2026-03-01",
+      "endDate": "2026-03-31",
+      "status": "PUBLISHED",
+      "jobId": null,
+      "constraintProfileId": "cp-uuid",
+      "createdAt": "2026-02-15T08:00:00.000Z",
+      "publishedAt": "2026-02-20T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+---
 
 ### `POST /units/:unitId/schedules`
 
@@ -1770,6 +2268,13 @@ The Next.js BFF proxies browser requests to this backend. Quick reference:
 | `POST` | `/api/auth/verify-otp` | `POST /auth/verify-otp` |
 | `POST` | `/api/auth/logout` | `POST /auth/logout` |
 | `GET` | `/api/auth/me` | `GET /auth/me` |
+| `PATCH` | `/api/auth/me/username` | `PATCH /auth/me/username` |
+| `GET` | `/api/profiles/me` | `GET /profiles/me` |
+| `PATCH` | `/api/profiles/me` | `PATCH /profiles/me` |
+| `POST` | `/api/profiles/me/avatar` | `POST /profiles/me/avatar` |
+| `GET` | `/api/profiles/me/avatar` | `GET /profiles/me/avatar` |
+| `DELETE` | `/api/profiles/me/avatar` | `DELETE /profiles/me/avatar` |
+| `GET` | `/api/workers/me/schedule?month=` | `GET /workers/me/schedule` |
 | `GET` | `/api/schedule` | `GET /schedule?unitId=` |
 | `GET` | `/api/export` | `GET /nurses/export` |
 | `GET` | `/api/preferences` | `GET /units/:id/workers/preferences` |
@@ -1795,3 +2300,4 @@ The Next.js BFF proxies browser requests to this backend. Quick reference:
 | `DELETE` | `/api/hospital/profiles/:id` | `DELETE /organizations/:orgId/constraint-profiles/:id` |
 | `GET` | `/api/units/:unitId/members` | `GET /units/:unitId/members` |
 | `GET` | `/api/units/:unitId/profiles` | `GET /units/:unitId/profiles` |
+

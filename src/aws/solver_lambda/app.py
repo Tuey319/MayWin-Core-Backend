@@ -291,11 +291,53 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
         except Exception:
             pass
 
+    # Derive backup_nurses from isBackup flag
+    backup_codes = [
+        n["code"] for n in nurses
+        if isinstance(n, dict) and n.get("isBackup") and n.get("code")
+    ]
+    if backup_codes:
+        solve_req["backup_nurses"] = backup_codes
+
+    # Derive nurse_skills from tags or attributes.skills
+    nurse_skills_map = {}
+    for n in nurses:
+        if not isinstance(n, dict):
+            continue
+        code = n.get("code")
+        skills = (n.get("attributes") or {}).get("skills") or n.get("tags") or []
+        if code and skills:
+            nurse_skills_map[str(code)] = list(skills)
+
     # Pass-through if your normalizer already computed these in correct shapes
     if isinstance(payload.get("nurse_skills"), dict):
         solve_req["nurse_skills"] = payload["nurse_skills"]
+    elif nurse_skills_map:
+        solve_req["nurse_skills"] = nurse_skills_map
+
+    # Derive required_skills from coverage rules when not pre-computed:
+    # { date: { shiftCode: { skill: count } } }
     if isinstance(payload.get("required_skills"), dict):
         solve_req["required_skills"] = payload["required_skills"]
+    else:
+        required_skills = {}
+        for date in day_dates:
+            dt = day_types_by_date.get(date)
+            for r in coverage_rules:
+                if not isinstance(r, dict):
+                    continue
+                tag = r.get("requiredTag")
+                if not tag:
+                    continue
+                if dt is not None and r.get("dayType") != dt:
+                    continue
+                sc = r.get("shiftCode")
+                if not sc:
+                    continue
+                required_skills.setdefault(date, {}).setdefault(sc, {})
+                required_skills[date][sc][str(tag)] = required_skills[date][sc].get(str(tag), 0) + 1
+        if required_skills:
+            solve_req["required_skills"] = required_skills
     if isinstance(payload.get("week_index_by_day"), dict):
         solve_req["week_index_by_day"] = payload["week_index_by_day"]
     if isinstance(payload.get("min_total_shifts_per_nurse"), dict):
@@ -306,6 +348,56 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
         solve_req["regular_shifts_per_nurse"] = payload["regular_shifts_per_nurse"]
     if isinstance(payload.get("max_overtime_per_nurse"), dict):
         solve_req["max_overtime_per_nurse"] = payload["max_overtime_per_nurse"]
+
+    cp = payload.get("constraints") or {}
+
+    def _cp(key, default):
+        """Like cp.get(key, default) but treats None as missing so the default is used."""
+        v = cp.get(key)
+        return v if v is not None else default
+
+    solve_req["rules"] = {
+        "guarantee_full_coverage": _cp("guaranteeFullCoverage", True),
+        "allow_emergency_overrides": _cp("allowEmergencyOverrides", True),
+        "max_shifts_per_day": _cp("maxShiftsPerDay", 1),
+        "max_consecutive_work_days": _cp("maxConsecutiveWorkDays", None),
+        "max_consecutive_shifts": _cp("maxConsecutiveShifts", None),
+        "min_days_off_per_week": _cp("minDaysOffPerWeek", 2),
+        "max_nights_per_week": _cp("maxNightsPerWeek", 2),
+        "min_rest_hours_between_shifts": _cp("minRestHoursBetweenShifts", None),
+        "forbid_night_to_morning": _cp("forbidNightToMorning", True),
+        "forbid_morning_to_night_same_day": _cp("forbidMorningToNightSameDay", False),
+        "forbid_evening_to_night": _cp("forbidEveningToNight", True),
+        "allow_second_shift_same_day_in_emergency": _cp("allowSecondShiftSameDayInEmergency", True),
+        "ignore_availability_in_emergency": _cp("ignoreAvailabilityInEmergency", False),
+        "allow_night_cap_override_in_emergency": _cp("allowNightCapOverrideInEmergency", True),
+        "allow_rest_rule_override_in_emergency": _cp("allowRestRuleOverrideInEmergency", True),
+        "goal_minimize_staff_cost": _cp("goalMinimizeStaffCost", True),
+        "goal_maximize_preference_satisfaction": _cp("goalMaximizePreferenceSatisfaction", True),
+        "goal_balance_workload": _cp("goalBalanceWorkload", False),
+        "goal_balance_night_workload": _cp("goalBalanceNightWorkload", False),
+        "goal_reduce_undesirable_shifts": _cp("goalReduceUndesirableShifts", True),
+        "enable_shift_type_limit": _cp("enableShiftTypeLimit", True),
+        "max_shift_per_type": _cp("maxShiftPerType", None) or {"morning": 9, "evening": 9, "night": 9},
+        "shift_type_limit_exempt_nurses": _cp("shiftTypeLimitExemptNurses", None) or [],
+        "evening_after_morning_counts_as_overtime": _cp("eveningAfterMorningCountsAsOvertime", True),
+        "enable_consecutive_night_limit": _cp("enableConsecutiveNightLimit", True),
+        "max_consecutive_night_shifts": _cp("maxConsecutiveNightShifts", 3),
+        "enable_min_total_days_off": _cp("enableMinTotalDaysOff", True),
+        "min_total_days_off": _cp("minTotalDaysOff", 11),
+    }
+    solve_req["goal_priority"] = cp.get("goalPriorityJson") or {
+        "coverage": 1,
+        "cost": 2,
+        "preference": 3,
+        "fairness": 4,
+    }
+    solve_req["fairness_weights"] = cp.get("fairnessWeightJson") or {
+        "workload_balance": 1,
+        "night_balance": 1,
+        "shift_type_balance": 1,
+    }
+    penalty_weights = cp.get("penaltyWeightJson") or {}
 
     # Derive per-nurse regular/overtime maps from nurses[] if missing.
     if "regular_shifts_per_nurse" not in solve_req or "max_overtime_per_nurse" not in solve_req:
@@ -393,21 +485,19 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
         if min_total:
             solve_req["min_total_shifts_per_nurse"] = min_total
 
-    # Pass constraint profile fields to solver
-    constraints = payload.get("constraints") or {}
-    ignore_avail_emergency = constraints.get("ignoreAvailabilityInEmergency", False)
-    solve_req["ignore_availability_in_emergency"] = bool(ignore_avail_emergency)
-
-    # max_shifts_per_day: 1 = no doubles, 2 = allow doubles (default 1)
-    max_spd = constraints.get("maxShiftsPerDay")
-    if max_spd is not None:
-        try:
-            solve_req["max_shifts_per_day"] = int(max_spd)
-        except Exception:
-            pass
-
     # Force full 2-nurse coverage per shift — understaff must outweigh any OT cost
-    solve_req["weights"] = {"understaff_penalty": 50000, "overtime_penalty": 0}
+    solve_req["weights"] = {
+        "understaff_penalty": penalty_weights.get("understaff_penalty", 50000),
+        "overtime_penalty": penalty_weights.get("overtime_penalty", 0),
+        "preference_penalty_multiplier": penalty_weights.get("preference_penalty_multiplier", 1),
+        "workload_balance_weight": penalty_weights.get("workload_balance_weight", 0),
+        "emergency_override_penalty": penalty_weights.get("emergency_override_penalty", 500),
+        "same_day_second_shift_penalty": penalty_weights.get("same_day_second_shift_penalty", 150),
+        "weekly_night_over_penalty": penalty_weights.get("weekly_night_over_penalty", 120),
+        "evening_to_night_penalty": penalty_weights.get("evening_to_night_penalty", 10000),
+        "shift_type_balance_penalty": penalty_weights.get("shift_type_balance_penalty", 100),
+        "overtime_balance_penalty": penalty_weights.get("overtime_balance_penalty", 1000),
+    }
 
     # If availability/preferences became None (unknown format), remove key entirely
     # (None is allowed by SolveRequest, but removing keeps payload smaller)
@@ -419,6 +509,50 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
     return solve_req
 
 
+_FEASIBLE_STATUSES = {
+    "OPTIMAL", "FEASIBLE",
+    "EMERGENCY_OPTIMAL", "EMERGENCY_FEASIBLE",
+    "RELAXED_OPTIMAL", "RELAXED_FEASIBLE",
+    "HEURISTIC",
+}
+
+# Mirrors jobs-runner.service.ts solveWithFallback():
+# A_STRICT (30s) → A_RELAXED (60s) → B_MILP (25s)
+_PLAN_SEQUENCE = [
+    {"plan": "A_STRICT",  "time_limit_sec": 30},
+    {"plan": "A_RELAXED", "time_limit_sec": 60},
+    {"plan": "B_MILP",    "time_limit_sec": 25},
+]
+
+
+def _is_feasible(result: dict) -> bool:
+    if "status" in result:
+        return result["status"] in _FEASIBLE_STATUSES
+    return bool(result.get("assignments"))
+
+
+def _run_solver(solve_req: dict, time_limit_sec: float) -> dict:
+    """Invoke solver_cli.py with the given time limit. Returns the parsed result dict."""
+    req = dict(solve_req)
+    req["time_limit_sec"] = time_limit_sec
+
+    proc = subprocess.run(
+        ["python", "solver_cli.py", "--cli"],
+        input=json.dumps(req, ensure_ascii=False),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    stdout = (proc.stdout or "").strip()
+    stderr = (proc.stderr or "").strip()
+
+    if proc.returncode != 0:
+        raise RuntimeError(f"solver_cli exited {proc.returncode}: {stderr or stdout}")
+
+    return json.loads(stdout)
+
+
 def handler(event, context):
     """
     Expected input from Step Functions:
@@ -426,8 +560,12 @@ def handler(event, context):
       "jobId": "...",
       "scheduleId": "1",
       "normalizedArtifact": {"bucket":"...","key":"..."},
-      "timeLimitSeconds": 60
+      "timeLimitSeconds": 60   (optional override — ignored when using plan fallback)
     }
+
+    Replicates jobs-runner.service.ts solveWithFallback():
+      A_STRICT (30s) → A_RELAXED (60s) → B_MILP (25s)
+    Uses the first plan that produces a feasible result, exactly as the local runner does.
     """
     job_id = event.get("jobId")
     if not job_id:
@@ -446,31 +584,37 @@ def handler(event, context):
         normalized_text = _read_json_text(bucket, key)
         normalized_obj = json.loads(normalized_text)
 
-        solve_req = _to_solve_request(normalized_obj, event.get("timeLimitSeconds"))
-        solve_req_text = json.dumps(solve_req, ensure_ascii=False)
+        # Build the base solve request once (time_limit_sec is overridden per plan)
+        base_req = _to_solve_request(normalized_obj, None)
 
-        proc = subprocess.run(
-            ["python", "solver_cli.py", "--cli"],
-            input=solve_req_text,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
+        solver_result = None
+        chosen_plan = None
 
-        stdout = (proc.stdout or "").strip()
-        stderr = (proc.stderr or "").strip()
+        for attempt in _PLAN_SEQUENCE:
+            try:
+                result = _run_solver(base_req, attempt["time_limit_sec"])
+            except Exception as e:
+                # Subprocess/parse failure on this attempt — try next plan
+                solver_result = {
+                    "status": "ERROR",
+                    "objective_value": None,
+                    "assignments": [],
+                    "understaffed": [],
+                    "nurse_stats": [],
+                    "details": {"error": str(e), "plan": attempt["plan"]},
+                }
+                continue
 
-        if proc.returncode != 0:
-            raise RuntimeError(f"solver_cli failed: {stderr or stdout}")
+            if _is_feasible(result):
+                solver_result = result
+                chosen_plan = attempt["plan"]
+                break
+            else:
+                # Keep last infeasible result so we can surface the reason if all plans fail
+                solver_result = result
 
-        solver_result = json.loads(stdout)
-
-        feasible = (
-            bool(solver_result.get("status") in ("OPTIMAL", "FEASIBLE", "RELAXED_OPTIMAL", "RELAXED_FEASIBLE", "HEURISTIC"))
-            if "status" in solver_result
-            else bool(solver_result.get("assignments"))
-        )
-        objective = solver_result.get("objective_value", None)
+        feasible = _is_feasible(solver_result) if solver_result else False
+        objective = solver_result.get("objective_value", None) if solver_result else None
 
     except Exception as e:
         solver_result = {
@@ -483,13 +627,15 @@ def handler(event, context):
         }
         feasible = False
         objective = None
+        chosen_plan = None
 
     elapsed_ms = int((time.time() - t0) * 1000)
+    plan_label = chosen_plan or "NONE"
 
     out_obj = {
         "schema": "SolverResult.v1",
         "jobId": job_id,
-        "plan": "A_STRICT",
+        "plan": plan_label,
         "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "elapsedMs": elapsed_ms,
         "result": solver_result,

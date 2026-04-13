@@ -83,6 +83,8 @@ export class AuthService {
   private signFull(user: User, roles: string[], unitIds: number[]) {
     const payload: JwtPayload = {
       sub: Number(user.id),
+      email: user.email,
+      fullName: user.full_name,
       organizationId: Number(user.organization_id),
       roles,
       unitIds,
@@ -295,6 +297,16 @@ export class AuthService {
         unitIds,
       },
     };
+  }
+
+  async patchUsername(userId: string, fullName: string) {
+    const user = await this.userRepo.findOne({ where: { id: userId as any, is_active: true } });
+    if (!user) throw new UnauthorizedException('Account not found');
+
+    user.full_name = fullName.trim();
+    const saved = await this.userRepo.save(user);
+
+    return { user: { id: saved.id, email: saved.email, fullName: saved.full_name } };
   }
 
   async logout(_jwtUser: any, _dto: { deviceId?: string }) {

@@ -211,6 +211,7 @@ export class SolverAdapter {
 
     // ── demand ────────────────────────────────────────────────────────────────
     const demand: Record<string, Record<string, number>> = {};
+
     for (const day of normalized?.horizon?.days ?? []) {
       const date = String(day.date);
       const dayType = String(day.dayType);
@@ -337,7 +338,7 @@ export class SolverAdapter {
       allow_emergency_overrides: cp.allowEmergencyOverrides ?? true,
       max_shifts_per_day: cp.maxShiftsPerDay ?? 1,
       max_consecutive_work_days: cp.maxConsecutiveWorkDays ?? null,
-      max_consecutive_shifts: cp.maxConsecutiveNightShifts ?? null,
+      max_consecutive_shifts: cp.maxConsecutiveShifts ?? undefined,
       min_days_off_per_week: cp.minDaysOffPerWeek ?? 2,
       max_nights_per_week: cp.maxNightsPerWeek ?? 2,
       min_rest_hours_between_shifts: cp.minRestHoursBetweenShifts ?? null,
@@ -353,6 +354,14 @@ export class SolverAdapter {
       goal_balance_workload: cp.goalBalanceWorkload ?? false,
       goal_balance_night_workload: cp.goalBalanceNightWorkload ?? false,
       goal_reduce_undesirable_shifts: cp.goalReduceUndesirableShifts ?? true,
+      enable_shift_type_limit: cp.enableShiftTypeLimit ?? true,
+      max_shift_per_type: cp.maxShiftPerType ?? { morning: 9, evening: 9, night: 9 },
+      shift_type_limit_exempt_nurses: cp.shiftTypeLimitExemptNurses ?? [],
+      evening_after_morning_counts_as_overtime: cp.eveningAfterMorningCountsAsOvertime ?? true,
+      enable_consecutive_night_limit: cp.enableConsecutiveNightLimit ?? true,
+      max_consecutive_night_shifts: cp.maxConsecutiveNightShifts ?? 3,
+      enable_min_total_days_off: cp.enableMinTotalDaysOff ?? true,
+      min_total_days_off: cp.minTotalDaysOff ?? 11,
     };
 
     const weights: Record<string, any> = {
@@ -363,6 +372,9 @@ export class SolverAdapter {
       emergency_override_penalty: penaltyWeightJson.emergency_override_penalty ?? 500,
       same_day_second_shift_penalty: penaltyWeightJson.same_day_second_shift_penalty ?? 150,
       weekly_night_over_penalty: penaltyWeightJson.weekly_night_over_penalty ?? 120,
+      evening_to_night_penalty: penaltyWeightJson.evening_to_night_penalty ?? 10000,
+      shift_type_balance_penalty: penaltyWeightJson.shift_type_balance_penalty ?? 100,
+      overtime_balance_penalty: penaltyWeightJson.overtime_balance_penalty ?? 1000,
     };
 
     const goalPriority: Record<string, any> = {
@@ -382,8 +394,6 @@ export class SolverAdapter {
     const numSearchWorkers = cp.numSearchWorkers ?? 8;
 
     // ── assemble final request ────────────────────────────────────────────────
-    // The AWS lambda SolveRequest expects constraint flags as TOP-LEVEL fields,
-    // not nested under a "rules" object.
     const req: Record<string, any> = {
       nurses,
       shifts,
@@ -391,16 +401,11 @@ export class SolverAdapter {
       demand,
       availability,
       weights,
+      rules,
+      goal_priority: goalPriority,
+      fairness_weights: fairnessWeights,
       time_limit_sec: timeLimitSec,
       num_search_workers: numSearchWorkers,
-      max_shifts_per_day: cp.maxShiftsPerDay ?? 1,
-      min_days_off_per_week: cp.minDaysOffPerWeek ?? 2,
-      // Shift-sequence toggles — top-level fields consumed by the lambda solver
-      forbid_evening_to_night: cp.forbidEveningToNight ?? true,
-      forbid_night_to_morning: cp.forbidNightToMorning ?? true,
-      forbid_morning_to_night_same_day: cp.forbidMorningToNightSameDay ?? false,
-      ignore_availability_in_emergency: cp.ignoreAvailabilityInEmergency ?? false,
-      max_nights_per_week: cp.maxNightsPerWeek ?? 2,
     };
 
     if (preferences) req.preferences = preferences;

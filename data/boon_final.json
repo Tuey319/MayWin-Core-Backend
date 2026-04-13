@@ -1,0 +1,129 @@
+{
+  "nurses": ["N1","N2","N3","N4","N5","N6","N7","N8"],
+
+  "days": [
+    "2026-05-01","2026-05-02","2026-05-03","2026-05-04","2026-05-05",
+    "2026-05-06","2026-05-07","2026-05-08","2026-05-09","2026-05-10",
+    "2026-05-11","2026-05-12","2026-05-13","2026-05-14","2026-05-15",
+    "2026-05-16","2026-05-17","2026-05-18","2026-05-19","2026-05-20",
+    "2026-05-21","2026-05-22","2026-05-23","2026-05-24","2026-05-25",
+    "2026-05-26","2026-05-27","2026-05-28","2026-05-29","2026-05-30",
+    "2026-05-31"
+  ],
+
+  "shifts": ["morning","evening","night"],
+
+  "demand": {
+    "2026-05-01":{"morning":2,"evening":2,"night":2},
+    "2026-05-02":{"morning":2,"evening":2,"night":2},
+    "2026-05-03":{"morning":2,"evening":2,"night":2},
+    "2026-05-04":{"morning":2,"evening":2,"night":2},
+    "2026-05-05":{"morning":2,"evening":2,"night":2},
+    "2026-05-06":{"morning":2,"evening":2,"night":2},
+    "2026-05-07":{"morning":2,"evening":2,"night":2},
+    "2026-05-08":{"morning":2,"evening":2,"night":2},
+    "2026-05-09":{"morning":2,"evening":2,"night":2},
+    "2026-05-10":{"morning":2,"evening":2,"night":2},
+    "2026-05-11":{"morning":2,"evening":2,"night":2},
+    "2026-05-12":{"morning":2,"evening":2,"night":2},
+    "2026-05-13":{"morning":2,"evening":2,"night":2},
+    "2026-05-14":{"morning":2,"evening":2,"night":2},
+    "2026-05-15":{"morning":2,"evening":2,"night":2},
+    "2026-05-16":{"morning":2,"evening":2,"night":2},
+    "2026-05-17":{"morning":2,"evening":2,"night":2},
+    "2026-05-18":{"morning":2,"evening":2,"night":2},
+    "2026-05-19":{"morning":2,"evening":2,"night":2},
+    "2026-05-20":{"morning":2,"evening":2,"night":2},
+    "2026-05-21":{"morning":2,"evening":2,"night":2},
+    "2026-05-22":{"morning":2,"evening":2,"night":2},
+    "2026-05-23":{"morning":2,"evening":2,"night":2},
+    "2026-05-24":{"morning":2,"evening":2,"night":2},
+    "2026-05-25":{"morning":2,"evening":2,"night":2},
+    "2026-05-26":{"morning":2,"evening":2,"night":2},
+    "2026-05-27":{"morning":2,"evening":2,"night":2},
+    "2026-05-28":{"morning":2,"evening":2,"night":2},
+    "2026-05-29":{"morning":2,"evening":2,"night":2},
+    "2026-05-30":{"morning":2,"evening":2,"night":2},
+    "2026-05-31":{"morning":2,"evening":2,"night":2}
+  },
+
+  "regular_shifts_per_nurse": {
+    "N1":20,"N2":20,"N3":20,"N4":20,
+    "N5":20,"N6":20,"N7":20,"N8":20
+  },
+
+  "max_overtime_per_nurse": {
+    "N1":8,"N2":8,"N3":8,"N4":8,
+    "N5":8,"N6":8,"N7":8,"N8":8
+  },
+
+  "availability": {
+    "N1": {
+      "2026-05-01":{"morning":1,"evening":0,"night":0},
+      "2026-05-02":{"morning":0,"evening":0,"night":0},
+      "2026-05-03":{"morning":0,"evening":0,"night":0},
+      "2026-05-04":{"morning":0,"evening":0,"night":0},
+      "2026-05-05":{"morning":1,"evening":0,"night":0},
+      "2026-05-06":{"morning":1,"evening":0,"night":0},
+      "2026-05-07":{"morning":1,"evening":0,"night":0},
+      "2026-05-08":{"morning":1,"evening":0,"night":0},
+      "2026-05-09":{"morning":0,"evening":0,"night":0},
+      "2026-05-10":{"morning":0,"evening":0,"night":0},
+      "2026-05-11":{"morning":1,"evening":0,"night":0},
+      "2026-05-12":{"morning":1,"evening":0,"night":0},
+      "2026-05-13":{"morning":1,"evening":0,"night":0},
+      "2026-05-14":{"morning":1,"evening":0,"night":0},
+      "2026-05-15":{"morning":1,"evening":0,"night":0},
+      "2026-05-16":{"morning":0,"evening":0,"night":0},
+      "2026-05-17":{"morning":0,"evening":0,"night":0},
+      "2026-05-18":{"morning":1,"evening":0,"night":0},
+      "2026-05-19":{"morning":1,"evening":0,"night":0},
+      "2026-05-20":{"morning":1,"evening":0,"night":0},
+      "2026-05-21":{"morning":1,"evening":0,"night":0},
+      "2026-05-22":{"morning":1,"evening":0,"night":0},
+      "2026-05-23":{"morning":0,"evening":0,"night":0},
+      "2026-05-24":{"morning":0,"evening":0,"night":0},
+      "2026-05-25":{"morning":1,"evening":0,"night":0},
+      "2026-05-26":{"morning":1,"evening":0,"night":0},
+      "2026-05-27":{"morning":1,"evening":0,"night":0},
+      "2026-05-28":{"morning":1,"evening":0,"night":0},
+      "2026-05-29":{"morning":1,"evening":0,"night":0},
+      "2026-05-30":{"morning":0,"evening":0,"night":0},
+      "2026-05-31":{"morning":0,"evening":0,"night":0}
+    }
+  },
+
+  "weights": {
+    "understaff_penalty": 100000000,
+    "overtime_penalty": 5,
+    "preference_penalty_multiplier": 1,
+    "workload_balance_weight": 40,
+    "emergency_override_penalty": 50,
+    "same_day_second_shift_penalty": 20
+  },
+
+  "fairness_weights": {
+    "workload_balance": 1,
+    "night_balance": 1,
+    "shift_type_balance": 0
+  },
+
+  "rules": {
+    "guarantee_full_coverage": true,
+    "max_shifts_per_day": 2,
+    "min_days_off_per_week": 1,
+    "max_nights_per_week": 7,
+
+    "enable_shift_type_limit": true,
+    "shift_type_limit_exempt_nurses": ["N1"],
+
+    "max_shift_per_type": {
+      "morning": 9,
+      "evening": 9,
+      "night": 9
+    },
+
+    "enable_min_total_days_off": true,
+    "min_total_days_off": 11
+  }
+}

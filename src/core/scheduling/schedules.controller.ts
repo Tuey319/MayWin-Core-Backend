@@ -23,6 +23,11 @@ import { GetScheduleHistoryQuery } from './dto/get-history.query';
 export class SchedulesController {
   constructor(private readonly schedules: SchedulesService) {}
 
+  @Get('/schedules')
+  listAll() {
+    return this.schedules.listAll();
+  }
+
   /**
    * Purpose: Create a schedule “container” for a unit + date horizon (no solver run yet).
    */

@@ -301,7 +301,8 @@ All paths below are relative to `/api/v1/core` and require a valid Bearer token 
 - `PATCH /units/:unitId/shift-templates/:id` – update a shift template.
 - `DELETE /units/:unitId/shift-templates/:id` – soft‑delete a shift template.
 
-- `GET /units/:unitId/constraint-profiles` – list constraint profiles.
+- `GET /constraint-profiles` – list all constraint profiles (global).
+- `GET /units/:unitId/constraint-profiles` – list constraint profiles for a unit.
 - `POST /units/:unitId/constraint-profiles` – create a profile.
 - `PATCH /units/:unitId/constraint-profiles/:id` – update a profile.
 - `POST /units/:unitId/constraint-profiles/:id/activate?deactivateOthers=true|false` – activate a profile.
@@ -341,6 +342,7 @@ All paths below are relative to `/api/v1/core` and require a valid Bearer token 
 
 ### Scheduling & jobs
 
+- `GET /schedules` – list all schedules (global).
 - `POST /units/:unitId/schedules` – create a schedule container for a date horizon.
 - `GET /units/:unitId/schedules/current?dateFrom&dateTo` – current schedule + assignments.
 - `GET /units/:unitId/schedules/history?limit=` – list past schedules.

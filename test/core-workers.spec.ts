@@ -28,6 +28,9 @@ function makeSvc(overrides: Partial<any> = {}) {
   const prefsRepo = { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn(), ...overrides.prefsRepo };
   const jobsRepo = {};
   const artifactsRepo = {};
+  const schedulesRepo = {};
+  const assignmentsRepo = {};
+  const shiftTemplatesRepo = {};
   const s3Artifacts = {};
   const cache = makeCache();
 
@@ -36,6 +39,9 @@ function makeSvc(overrides: Partial<any> = {}) {
     prefsRepo as any,
     jobsRepo as any,
     artifactsRepo as any,
+    schedulesRepo as any,
+    assignmentsRepo as any,
+    shiftTemplatesRepo as any,
     s3Artifacts as any,
     cache as any,
   );
@@ -56,7 +62,7 @@ describe('WorkersController', () => {
 describe('WorkersService', () => {
   it('should be defined', () => {
     const svc = new WorkersService(
-      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
     );
     expect(svc).toBeDefined();
   });
