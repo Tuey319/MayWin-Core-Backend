@@ -32,6 +32,8 @@ All endpoints require `Authorization: Bearer <accessToken>` unless marked **Publ
 17. [Orchestrator](#orchestrator)
 18. [Webhook (LINE)](#webhook-line)
 19. [Audit Logs](#audit-logs)
+20. [Display Settings](#display-settings)
+21. [Export Options](#export-options)
 
 ---
 
@@ -2258,6 +2260,96 @@ Appends a new audit log entry. Actor is derived from the JWT.
 
 ---
 
+## Display Settings
+
+User-scoped display preferences (shift colours, OT indicator style). One row per user, stored as free-form JSON so new fields can be added without a schema migration.
+
+### `GET /display-settings/me`
+
+Returns the current user's saved display settings.
+
+**Response — 200 OK**
+```json
+{
+  "shifts": {
+    "Morning": { "charEn": "M", "charTh": "ช", "bg": "#FFE4B5", "text": "#b45309" },
+    "Evening": { "charEn": "A", "charTh": "บ", "bg": "#D1FAE5", "text": "#047857" },
+    "Night":   { "charEn": "N", "charTh": "ด", "bg": "#E3F2FD", "text": "#1d4ed8" },
+    "Leave":   { "charEn": "X", "charTh": "ล", "bg": "#fee2e2", "text": "#b91c1c" }
+  },
+  "overtime": {
+    "indicatorStyle": "circle",
+    "otColor": "#ef4444",
+    "ringWidth": 2
+  }
+}
+```
+
+Returns `{}` if the user has never saved settings (frontend falls back to defaults).
+
+**Errors:** `401`
+
+---
+
+### `PUT /display-settings/me`
+
+Creates or fully replaces the current user's display settings.
+
+**Request** — any JSON object (stored as-is). Frontend sends the full settings object.
+
+**Response — 200 OK** — the saved settings object (same shape as GET).
+
+**Errors:** `401`, `400`
+
+---
+
+## Export Options
+
+User-scoped default options for the Excel schedule export. One row per user, stored as free-form JSON.
+
+### `GET /export-options/me`
+
+Returns the current user's saved export options.
+
+**Response — 200 OK**
+```json
+{
+  "language": "en",
+  "colorCells": true,
+  "includeShiftCounts": true,
+  "includeOTCounts": true,
+  "sheetName": "Schedule",
+  "filename": ""
+}
+```
+
+Returns `{}` if the user has never saved options (frontend falls back to defaults).
+
+**Errors:** `401`
+
+---
+
+### `PUT /export-options/me`
+
+Creates or fully replaces the current user's export options.
+
+**Request** — any JSON object. Frontend sends the full options object.
+
+| Field | Type | Notes |
+|---|---|---|
+| `language` | `"en"` \| `"th"` | Shift label language in exported file |
+| `colorCells` | boolean | Fill cell backgrounds with shift colours |
+| `includeShiftCounts` | boolean | Append a working-days count column |
+| `includeOTCounts` | boolean | Append an OT-day count column |
+| `sheetName` | string | Worksheet tab name (max 31 chars) |
+| `filename` | string | Override filename; empty = auto-generate |
+
+**Response — 200 OK** — the saved options object.
+
+**Errors:** `401`, `400`
+
+---
+
 ## BFF Route Mapping
 
 The Next.js BFF proxies browser requests to this backend. Quick reference:
@@ -2300,4 +2392,8 @@ The Next.js BFF proxies browser requests to this backend. Quick reference:
 | `DELETE` | `/api/hospital/profiles/:id` | `DELETE /organizations/:orgId/constraint-profiles/:id` |
 | `GET` | `/api/units/:unitId/members` | `GET /units/:unitId/members` |
 | `GET` | `/api/units/:unitId/profiles` | `GET /units/:unitId/profiles` |
+| `GET` | `/api/display-settings` | `GET /display-settings/me` |
+| `PUT` | `/api/display-settings` | `PUT /display-settings/me` |
+| `GET` | `/api/export-options` | `GET /export-options/me` |
+| `PUT` | `/api/export-options` | `PUT /export-options/me` |
 
