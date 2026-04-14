@@ -552,12 +552,12 @@ await repo.save(entity);
 await repo.delete({ id: entityId });
 ```
 
-### All 27 Entities
+### All 29 Entities
 
 | Domain | Entities |
 |---|---|
 | Core | `Organization`, `Unit`, `Role`, `Site` |
-| Users | `User`, `UserRole`, `UnitMembership`, `AuthOtp` |
+| Users | `User`, `UserRole`, `UnitMembership`, `AuthOtp`, `DisplaySettings`, `ExportOptions` |
 | Workers | `Worker`, `WorkerUnitMembership`, `WorkerAvailability`, `WorkerPreference` |
 | Scheduling | `Schedule`, `ScheduleAssignment`, `ShiftTemplate`, `CoverageRule`, `ConstraintProfile`, `ScheduleRun` |
 | Orchestration | `ScheduleJob`, `ScheduleArtifact`, `ScheduleJobEvent`, `SolverRun`, `SolverRunAssignment` |
@@ -684,6 +684,18 @@ GET   /worker-messages
 POST  /worker-messages
 GET   /worker-messages/:id
 POST  /worker-messages/:id/read
+```
+
+### Display Settings (user-scoped)
+```
+GET   /display-settings/me     Current user's display settings (shift colours, OT style)
+PUT   /display-settings/me     Save/replace current user's display settings
+```
+
+### Export Options (user-scoped)
+```
+GET   /export-options/me       Current user's default Excel export options
+PUT   /export-options/me       Save/replace current user's export options
 ```
 
 ---

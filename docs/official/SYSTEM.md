@@ -593,6 +593,8 @@ Schema: `maywin_db` (PostgreSQL)
 | `user_roles` | UserRole | Global role assignments |
 | `unit_memberships` | UnitMembership | User → unit mapping + role |
 | `auth_otp` | AuthOtp | Pending OTP codes (10 min TTL) |
+| `display_settings` | DisplaySettings | Per-user shift colour & OT indicator prefs (JSONB) |
+| `export_options` | ExportOptions | Per-user default Excel export options (JSONB) |
 
 #### Workers
 
