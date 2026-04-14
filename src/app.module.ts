@@ -28,6 +28,7 @@ import { WebhookModule } from '@/core/webhook/webhook.module';
 import { StaffModule } from '@/core/staff/staff.module';
 import { AuditLogsModule } from '@/core/audit-logs/audit-logs.module';
 import { ProfilesModule } from '@/core/profiles/profiles.module';
+import { DisplaySettingsModule } from '@/core/display-settings/display-settings.module';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { ProfilesModule } from '@/core/profiles/profiles.module';
     StaffModule,
     AuditLogsModule,
     ProfilesModule,
+    DisplaySettingsModule,
   ],
 })
 export class AppModule {}
