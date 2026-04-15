@@ -327,14 +327,7 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
     x = {(n, d, s): model.NewBoolVar(f"x_{n}_{d}_{s}") for n in nurses for d in days for s in shifts}
     terms: List[cp_model.LinearExpr] = []
 
-    # ============================================================
-    # HARD SHIFT TYPE LIMIT (always hard — even in emergency mode)
-    # Per-nurse total type caps remain hard in Phase 2 because the aggregate
-    # 7×9=63 ≥ 62 nights needed is always feasible; relaxing it here only lets
-    # the solver "cheat" by piling extra nights on one nurse instead of solving
-    # the real distribution problem.
-    # ============================================================
-
+    # Shift type limit — hard in Phase 1, soft penalty in Phase 2
     if rules.enable_shift_type_limit:
         exempt_nurses = set(rules.shift_type_limit_exempt_nurses or [])
 
@@ -345,17 +338,32 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
             if morning_label and "morning" in rules.max_shift_per_type:
                 max_m = rules.max_shift_per_type["morning"]
                 total_m = sum(x[(n, d, morning_label)] for d in days)
-                model.Add(total_m <= max_m)
+                if emergency_mode:
+                    excess_m = model.NewIntVar(0, len(days), f"excess_m_{n}")
+                    model.Add(total_m - max_m <= excess_m)
+                    terms.append(weights.emergency_override_penalty * excess_m)
+                else:
+                    model.Add(total_m <= max_m)
 
             if evening_label and "evening" in rules.max_shift_per_type:
                 max_e = rules.max_shift_per_type["evening"]
                 total_e = sum(x[(n, d, evening_label)] for d in days)
-                model.Add(total_e <= max_e)
+                if emergency_mode:
+                    excess_e = model.NewIntVar(0, len(days), f"excess_e_{n}")
+                    model.Add(total_e - max_e <= excess_e)
+                    terms.append(weights.emergency_override_penalty * excess_e)
+                else:
+                    model.Add(total_e <= max_e)
 
             if night_label and "night" in rules.max_shift_per_type:
                 max_n = rules.max_shift_per_type["night"]
                 total_n = sum(x[(n, d, night_label)] for d in days)
-                model.Add(total_n <= max_n)
+                if emergency_mode:
+                    excess_n = model.NewIntVar(0, len(days), f"excess_n_{n}")
+                    model.Add(total_n - max_n <= excess_n)
+                    terms.append(weights.emergency_override_penalty * excess_n)
+                else:
+                    model.Add(total_n <= max_n)
 
 
     # Emergency override variable: assignment allowed even if availability/rest/night-cap would normally block it.
@@ -504,6 +512,9 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
                 worked_days.append(wd)
 
             model.Add(sum(worked_days) <= len(days) - rules.min_total_days_off)
+            # Also enforce minimum unique working days = regular shifts target
+            # so nurses can't fall short by packing doubles on fewer days
+            model.Add(sum(worked_days) >= per_nurse_regular[n])
 
     # Consecutive work days
     if rules.max_consecutive_work_days is not None:
