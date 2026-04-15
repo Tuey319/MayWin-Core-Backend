@@ -51,10 +51,18 @@ export class WebhookService {
       }
 
       // ── PHASE 0: LINE Account Linking ──────────────────────────────────────
-      // Detect: "ลงทะเบียน: A3X9K2" or "link account: A3X9K2" (case-insensitive)
-      const linkMatch = text.trim().match(/^(?:ลงทะเบียน|link\s*account)\s*:\s*([a-z0-9]+)$/i);
+      // Supported formats (both case-insensitive):
+      //   "ลงทะเบียน: CODE"              (code only — legacy)
+      //   "ลงทะเบียน ชื่อ นามสกุล: CODE"  (name + code — secure)
+      //   "link account: CODE"            (English, code only)
+      //   "link account ชื่อ นามสกุล: CODE" (English + name)
+      const linkMatch = text.trim().match(
+        /^(?:ลงทะเบียน|link\s*account)(?:\s+([^:]+?))?\s*:\s*([a-z0-9]+)$/i,
+      );
       if (linkMatch) {
-        return this.handleLinkAccount(userId, linkMatch[1].toUpperCase());
+        const suppliedName = linkMatch[1]?.trim() ?? null;
+        const code = linkMatch[2].toUpperCase();
+        return this.handleLinkAccount(userId, code, suppliedName);
       }
 
       // Get or create conversation state from database
@@ -173,7 +181,41 @@ export class WebhookService {
 
   // ── LINE Account Linking ─────────────────────────────────────────────────
 
-  private async handleLinkAccount(lineUserId: string, token: string): Promise<string> {
+  /**
+   * Normalises a Thai/English name for comparison.
+   * Strips common honorifics, collapses whitespace, lowercases.
+   */
+  private normaliseName(raw: string): string {
+    return raw
+      .replace(/^(นาย|นาง|นางสาว|น\.ส\.|นพ\.|พญ\.|Mr\.|Mrs\.|Ms\.|Miss\.?|Dr\.?)/i, '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+  }
+
+  /**
+   * Returns true when the nurse's supplied name is a close enough match
+   * to the worker record's full_name.
+   *   - Full match after normalisation: always passes
+   *   - First name (first token) match:  passes (many Thai nurses use only first name)
+   *   - Mismatch:                         fails
+   */
+  private nameMatches(supplied: string, workerFullName: string): boolean {
+    const s = this.normaliseName(supplied);
+    const w = this.normaliseName(workerFullName);
+    if (s === w) return true; // exact
+    // first token (first name) match
+    const sFirst = s.split(' ')[0];
+    const wFirst = w.split(' ')[0];
+    if (sFirst && wFirst && sFirst === wFirst) return true;
+    return false;
+  }
+
+  private async handleLinkAccount(
+    lineUserId: string,
+    token: string,
+    suppliedName: string | null,
+  ): Promise<string> {
     try {
       this.logger.log(`[LINK] Attempting to link LINE user ${lineUserId} with token ${token}`);
 
@@ -182,35 +224,101 @@ export class WebhookService {
       });
 
       if (!linkToken) {
-        return '❌ รหัสนี้ไม่ถูกต้องหรือถูกใช้งานแล้วค่ะ กรุณาขอรหัสใหม่จากผู้ดูแลระบบ';
+        return [
+          '❌ รหัสนี้ไม่ถูกต้องหรือถูกใช้งานแล้วค่ะ',
+          '',
+          '💡 วิธีลงทะเบียน:',
+          'พิมพ์ว่า: ลงทะเบียน: [รหัส]',
+          'หรือพิมพ์ชื่อด้วย: ลงทะเบียน ชื่อ-นามสกุล: [รหัส]',
+          '',
+          'หากไม่มีรหัส กรุณาติดต่อหัวหน้าพยาบาลค่ะ',
+        ].join('\n');
       }
 
       if (linkToken.expires_at < new Date()) {
-        return '❌ รหัสนี้หมดอายุแล้วค่ะ กรุณาขอรหัสใหม่จากผู้ดูแลระบบ';
+        return '❌ รหัสนี้หมดอายุแล้วค่ะ กรุณาขอรหัสใหม่จากหัวหน้าพยาบาลค่ะ';
       }
 
-      // Guard: LINE ID already linked to a DIFFERENT worker
+      // Fetch the worker attached to this token
+      const worker = await this.workerRepo.findOne({ where: { id: linkToken.worker_id as any } });
+      if (!worker) {
+        return '❌ ไม่พบข้อมูลบุคลากรในระบบ กรุณาติดต่อหัวหน้าพยาบาลค่ะ';
+      }
+
+      // ── Name verification ────────────────────────────────────────────────
+      // If nurse included their name in the command, verify it matches.
+      // If they did NOT include a name, prompt them to confirm.
+      if (!suppliedName) {
+        return [
+          '⚠️ เพื่อความปลอดภัย กรุณายืนยันตัวตนด้วยค่ะ',
+          '',
+          'กรุณาพิมพ์ชื่อของคุณพร้อมกับรหัสดังนี้:',
+          `ลงทะเบียน [ชื่อ-นามสกุล]: ${token}`,
+          '',
+          `📋 ตัวอย่าง: ลงทะเบียน ${worker.full_name}: ${token}`,
+        ].join('\n');
+      }
+
+      if (!this.nameMatches(suppliedName, worker.full_name)) {
+        this.logger.warn(
+          `[LINK] Name mismatch for token ${token}: supplied="${suppliedName}" expected="${worker.full_name}"`,
+        );
+        return [
+          '❌ ชื่อที่ระบุไม่ตรงกับข้อมูลในระบบค่ะ',
+          '',
+          'กรุณาตรวจสอบชื่อและลองอีกครั้ง หรือติดต่อหัวหน้าพยาบาลเพื่อตรวจสอบชื่อที่ลงทะเบียนไว้ค่ะ',
+        ].join('\n');
+      }
+
+      // Check if this LINE ID is already linked anywhere
       const existingWorker = await this.workerRepo.findOne({ where: { line_id: lineUserId } });
-      if (existingWorker && String(existingWorker.id) !== String(linkToken.worker_id)) {
-        return '❌ LINE account นี้เชื่อมต่อกับบัญชีอื่นอยู่แล้วค่ะ กรุณาติดต่อผู้ดูแลระบบ';
+
+      if (existingWorker) {
+        const isSameWorker = String(existingWorker.id) === String(linkToken.worker_id);
+
+        if (!isSameWorker) {
+          // Linked to a completely different account — block and advise head nurse
+          return [
+            '⚠️ LINE account ของคุณเชื่อมต่อกับบัญชีอื่นอยู่แล้วค่ะ',
+            '',
+            'หากต้องการเปลี่ยนบัญชี กรุณาติดต่อหัวหน้าพยาบาลเพื่อยกเลิกการเชื่อมต่อเดิมก่อนค่ะ',
+          ].join('\n');
+        }
+
+        // Same worker — this is a re-link (e.g. refreshing after regenerating token)
+        // Proceed but let them know
+        this.logger.log(`[LINK] Re-linking LINE ${lineUserId} → same Worker ${linkToken.worker_id}`);
       }
 
-      // Link the worker's LINE ID
+      // Link (or re-link) the worker's LINE ID
       await this.workerRepo.update(linkToken.worker_id, { line_id: lineUserId });
 
       // Mark token used
       linkToken.used_at = new Date();
       await this.lineLinkTokenRepo.save(linkToken);
 
-      const worker = await this.workerRepo.findOne({ where: { id: linkToken.worker_id as any } });
-      const name = worker?.full_name ?? 'คุณ';
-
+      const name = worker.full_name ?? 'คุณ';
       this.logger.log(`[LINK] ✅ Linked LINE ${lineUserId} → Worker ${linkToken.worker_id} (${name})`);
 
-      return `✅ เชื่อมต่อบัญชีเรียบร้อยแล้วค่ะ สวัสดีค่ะ ${name}! 😊\n\nตั้งแต่นี้ไปคุณสามารถแจ้งความต้องการเข้าเวรได้เลยค่ะ เช่น "ขอเวรเช้าวันที่ 20 มีนาคม"`;
+      const isRelink = !!existingWorker; // existingWorker is same worker at this point
+      if (isRelink) {
+        return [
+          `🔄 รีเฟรชการเชื่อมต่อเรียบร้อยแล้วค่ะ สวัสดีค่ะ ${name}! 😊`,
+          '',
+          'บัญชีของคุณยังคงเชื่อมต่ออยู่ตามเดิมค่ะ',
+        ].join('\n');
+      }
+
+      return [
+        `✅ เชื่อมต่อบัญชีเรียบร้อยแล้วค่ะ สวัสดีค่ะ ${name}! 😊`,
+        '',
+        'ตั้งแต่นี้ไปคุณสามารถแจ้งความต้องการเข้าเวรได้เลยค่ะ',
+        'ตัวอย่าง: "ขอเวรเช้าวันที่ 20 มีนาคม"',
+        '          "ขอลาวันที่ 5-7 เมษายน"',
+      ].join('\n');
     } catch (error) {
       this.logger.error('[LINK] handleLinkAccount failed:', error);
-      return '❌ เกิดข้อผิดพลาดในการเชื่อมต่อบัญชี กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ';
+      return '❌ เกิดข้อผิดพลาดในการเชื่อมต่อบัญชี กรุณาลองใหม่หรือติดต่อหัวหน้าพยาบาลค่ะ';
     }
   }
 
