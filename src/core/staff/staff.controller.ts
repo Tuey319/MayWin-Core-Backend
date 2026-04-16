@@ -65,6 +65,16 @@ export class StaffController {
   }
 
   /**
+   * POST /staff/:id/create-account
+   * Create a new web login account for an existing worker that has no linked user.
+   * Uses the email stored in worker.attributes.email and sends a welcome email.
+   */
+  @Post('/staff/:id/create-account')
+  createWebAccount(@Param('id') id: string, @Req() req: Request) {
+    return this.staff.createWebAccount(id, this.context(req).organizationId, this.actor(req));
+  }
+
+  /**
    * POST /staff/:id/link-user
    * Link an existing user account to this worker.
    * Body: { userId: number }

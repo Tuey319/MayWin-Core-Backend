@@ -308,6 +308,90 @@ export class StaffService {
     return { ok: true, staff: this.mapWorkerToStaff(saved) };
   }
 
+  // ── Create Web Account for existing worker ───────────────────────────────
+
+  /**
+   * Create a web login account for an existing worker that has no linked user.
+   * Generates a temp password, creates the User, links it to the worker,
+   * assigns the unit role, and sends a welcome email.
+   */
+  async createWebAccount(
+    workerId: string,
+    organizationId: number,
+    actor: { actorId: string; actorName: string },
+  ) {
+    this.validateId(workerId);
+
+    const worker = await this.workersRepo.findOne({
+      where: { id: workerId as any, organization_id: String(organizationId) as any },
+    });
+    if (!worker) throw new NotFoundException('Staff not found');
+
+    if (worker.linked_user_id) {
+      throw new BadRequestException('This worker already has a linked web account');
+    }
+
+    const attrs = (worker.attributes ?? {}) as Record<string, any>;
+    const email = (attrs.email as string | undefined)?.trim().toLowerCase();
+    if (!email) {
+      throw new BadRequestException(
+        'Worker has no email on record. Update the staff email first.',
+      );
+    }
+
+    const emailTaken = await this.userRepo.findOne({ where: { email } });
+    if (emailTaken) {
+      throw new BadRequestException('An account with this email already exists');
+    }
+
+    const tempPassword = this.generateTempPassword();
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+    const user = await this.userRepo.save(
+      this.userRepo.create({
+        organization_id: String(organizationId),
+        email,
+        password_hash: passwordHash,
+        full_name: worker.full_name,
+        is_active: true,
+        attributes: { role_hint: attrs.position ?? 'nurse' },
+      }),
+    );
+
+    worker.linked_user_id = user.id;
+    const saved = await this.workersRepo.save(worker);
+
+    if (worker.primary_unit_id) {
+      const existingMembership = await this.membershipRepo.findOne({
+        where: { unit_id: String(worker.primary_unit_id), user_id: user.id },
+      });
+      if (!existingMembership) {
+        await this.membershipRepo.save(
+          this.membershipRepo.create({
+            unit_id: String(worker.primary_unit_id),
+            user_id: user.id,
+            role_code: this.mapPositionToRoleCode((attrs.position ?? 'nurse') as any),
+          }),
+        );
+      }
+    }
+
+    this.mailService.sendWelcome(email, worker.full_name, tempPassword).catch((err) => {
+      console.warn(`[STAFF] Welcome email failed for ${email}:`, err?.message);
+    });
+
+    await this.auditLogs.append({
+      actorId: actor.actorId,
+      actorName: actor.actorName,
+      action: 'CREATE_WEB_ACCOUNT',
+      targetType: 'staff',
+      targetId: worker.worker_code ?? workerId,
+      detail: `Created web account for ${worker.full_name} (${email})`,
+    });
+
+    return { ok: true, staff: this.mapWorkerToStaff(saved) };
+  }
+
   // ── LINE Link Token ───────────────────────────────────────────────────────
 
   /**
