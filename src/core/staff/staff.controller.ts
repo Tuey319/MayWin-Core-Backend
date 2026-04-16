@@ -41,7 +41,9 @@ export class StaffController {
 
   @Get('/staff')
   list(@Req() req: Request) {
-    return this.staff.list(this.context(req).organizationId);
+    const user = (req as any).user ?? {};
+    const roles = Array.isArray(user.roles) ? user.roles : [];
+    return this.staff.list(this.context(req).organizationId, roles);
   }
 
   @Get('/staff/:id')
@@ -62,6 +64,16 @@ export class StaffController {
   @Delete('/staff/:id')
   remove(@Param('id') id: string, @Req() req: Request) {
     return this.staff.remove(id, this.actor(req), this.context(req).organizationId);
+  }
+
+  /**
+   * POST /staff/:id/create-account
+   * Create a new web login account for an existing worker that has no linked user.
+   * Uses the email stored in worker.attributes.email and sends a welcome email.
+   */
+  @Post('/staff/:id/create-account')
+  createWebAccount(@Param('id') id: string, @Req() req: Request) {
+    return this.staff.createWebAccount(id, this.context(req).organizationId, this.actor(req));
   }
 
   /**

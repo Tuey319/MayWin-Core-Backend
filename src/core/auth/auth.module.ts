@@ -14,13 +14,14 @@ import { UnitMembership } from '@/database/entities/users/unit-membership.entity
 import { UserRole } from '@/database/entities/users/user-role.entity';
 import { Role } from '@/database/entities/core/role.entity';
 import { AuthOtp } from '@/database/entities/users/auth-otp.entity';
+import { Worker } from '@/database/entities/workers/worker.entity';
 
 @Module({
   imports: [
     ConfigModule,
     MailModule,
 
-    TypeOrmModule.forFeature([User, UnitMembership, UserRole, Role, AuthOtp]),
+    TypeOrmModule.forFeature([User, UnitMembership, UserRole, Role, AuthOtp, Worker]),
 
     JwtModule.registerAsync({
       imports: [ConfigModule],

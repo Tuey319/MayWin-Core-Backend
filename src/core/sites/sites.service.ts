@@ -18,7 +18,7 @@ export class SitesService {
   ) {}
 
   private isAdmin(ctx: JwtCtx) {
-    return ctx.roles.includes('ADMIN');
+    return ctx.roles.includes('ADMIN') || ctx.roles.includes('super_admin');
   }
 
   private assertOrg(ctx: JwtCtx, orgId: string) {
