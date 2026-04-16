@@ -41,7 +41,9 @@ export class StaffController {
 
   @Get('/staff')
   list(@Req() req: Request) {
-    return this.staff.list(this.context(req).organizationId);
+    const user = (req as any).user ?? {};
+    const roles = Array.isArray(user.roles) ? user.roles : [];
+    return this.staff.list(this.context(req).organizationId, roles);
   }
 
   @Get('/staff/:id')

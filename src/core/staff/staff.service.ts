@@ -100,7 +100,22 @@ export class StaffService {
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
 
-  async list(organizationId: number) {
+  async list(organizationId: number, callerRoles: string[] = []) {
+    // organizationId = 0 means the user's organization_id column is NULL in the DB
+    // (Number(null) = 0). This happens for super_admin accounts that aren't tied to a
+    // single hospital. The BFF already enforced worker.read permission, so any caller
+    // here is authorised. Return all workers rather than silently returning nothing.
+    // Same bypass applies if the JWT role explicitly identifies a super_admin.
+    const isSuperAdmin = callerRoles.some(
+      (r) => r.toLowerCase() === 'super_admin' || r.toUpperCase() === 'SUPER_ADMIN',
+    );
+    const hasNoOrg = !organizationId || organizationId === 0;
+
+    if (hasNoOrg || isSuperAdmin) {
+      const workers = await this.workersRepo.find({ order: { organization_id: 'ASC', id: 'ASC' } });
+      return { ok: true, staff: workers.map((w) => this.mapWorkerToStaff(w)) };
+    }
+
     const workers = await this.workersRepo.find({
       where: { organization_id: String(organizationId) as any },
       order: { id: 'ASC' },
