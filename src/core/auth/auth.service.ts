@@ -16,6 +16,7 @@ import { UnitMembership } from '@/database/entities/users/unit-membership.entity
 import { UserRole } from '@/database/entities/users/user-role.entity';
 import { Role } from '@/database/entities/core/role.entity';
 import { AuthOtp } from '@/database/entities/users/auth-otp.entity';
+import { Worker, EmploymentType } from '@/database/entities/workers/worker.entity';
 import { JwtPayload } from './types/jwt-payload';
 import { SignupDto } from './dto/signup.dto';
 import { MailService } from '@/core/mail/mail.service';
@@ -39,6 +40,9 @@ export class AuthService {
 
     @InjectRepository(AuthOtp)
     private readonly otpRepo: Repository<AuthOtp>,
+
+    @InjectRepository(Worker)
+    private readonly workerRepo: Repository<Worker>,
 
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
@@ -280,6 +284,26 @@ export class AuthService {
           role_code: roleCode,
         });
         await this.unitMembershipRepo.save(membership);
+      }
+
+      // Auto-create a Worker (scheduling entity) so this account can be included
+      // in schedule containers immediately without a separate staff-creation step.
+      const existingWorker = await this.workerRepo.findOne({
+        where: { linked_user_id: saved.id as any },
+      });
+      if (!existingWorker) {
+        await this.workerRepo.save(
+          this.workerRepo.create({
+            organization_id: String(dto.organizationId),
+            primary_unit_id: String(dto.unitId),
+            full_name: dto.fullName,
+            worker_code: `U${saved.id}`,
+            employment_type: EmploymentType.FULL_TIME,
+            linked_user_id: saved.id,
+            is_active: true,
+            attributes: { email, position: 'nurse', auto_created: true },
+          }),
+        );
       }
     }
 
