@@ -13,11 +13,13 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { RolesGuard } from '@/common/guards/roles.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
 import { StaffService } from './staff.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { PatchStaffDto } from './dto/patch-staff.dto';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
 export class StaffController {
   constructor(private readonly staff: StaffService) { }
@@ -39,6 +41,8 @@ export class StaffController {
     };
   }
 
+  // Read access: admins and unit managers (ISO 27001 A.9.4.1)
+  @Roles('ORG_ADMIN', 'UNIT_MANAGER', 'ADMIN')
   @Get('/staff')
   list(@Req() req: Request) {
     const user = (req as any).user ?? {};
@@ -46,21 +50,26 @@ export class StaffController {
     return this.staff.list(this.context(req).organizationId, roles);
   }
 
+  @Roles('ORG_ADMIN', 'UNIT_MANAGER', 'ADMIN')
   @Get('/staff/:id')
   getById(@Param('id') id: string, @Req() req: Request) {
     return this.staff.getById(id, this.context(req).organizationId);
   }
 
+  // Write access: admins only (ISO 27001 A.9.4.1)
+  @Roles('ORG_ADMIN', 'ADMIN')
   @Post('/staff')
   create(@Body() dto: CreateStaffDto, @Req() req: Request) {
     return this.staff.create(dto, this.actor(req), this.context(req));
   }
 
+  @Roles('ORG_ADMIN', 'UNIT_MANAGER', 'ADMIN')
   @Patch('/staff/:id')
   patch(@Param('id') id: string, @Body() dto: PatchStaffDto, @Req() req: Request) {
     return this.staff.patch(id, dto, this.actor(req), this.context(req).organizationId);
   }
 
+  @Roles('ORG_ADMIN', 'ADMIN')
   @Delete('/staff/:id')
   remove(@Param('id') id: string, @Req() req: Request) {
     return this.staff.remove(id, this.actor(req), this.context(req).organizationId);
@@ -92,9 +101,9 @@ export class StaffController {
 
   /**
    * POST /staff/:id/link-token
-   * Generate a one-time LINE invite code for a nurse.
-   * Returns { token, expiresAt, instruction }
+   * Generate a one-time LINE invite code for a nurse. Admin/manager only.
    */
+  @Roles('ORG_ADMIN', 'UNIT_MANAGER', 'ADMIN')
   @Post('/staff/:id/link-token')
   generateLinkToken(@Param('id') id: string, @Req() req: Request) {
     return this.staff.generateLinkToken(id, this.context(req).organizationId, this.actor(req));

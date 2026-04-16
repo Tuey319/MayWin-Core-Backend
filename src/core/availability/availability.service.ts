@@ -6,6 +6,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
 
 import { WorkerAvailability, AvailabilityType } from '@/database/entities/workers/worker-availability.entity';
+import { AuditLogsService } from '@/core/audit-logs/audit-logs.service';
 
 type Entry = {
   workerId: string;
@@ -23,6 +24,7 @@ export class AvailabilityService {
     @InjectRepository(WorkerAvailability)
     private readonly repo: Repository<WorkerAvailability>,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
+    private readonly auditLogs: AuditLogsService,
   ) {}
 
   async get(unitId: string, dateFrom: string, dateTo: string) {
@@ -54,7 +56,7 @@ export class AvailabilityService {
     return result;
   }
 
-  async upsert(unitId: string, entries: Entry[]) {
+  async upsert(unitId: string, entries: Entry[], actor?: { actorId: string; actorName: string }) {
     // Invalidate cache for the date range covered by this upsert
     if (entries.length > 0) {
       const dates = entries.map((e) => e.date).sort();
@@ -95,6 +97,18 @@ export class AvailabilityService {
       }
 
       updatedCount += 1;
+    }
+
+    // PDPA §27, ISO 27001:2022 A.8.15 — audit log every bulk availability mutation
+    if (actor) {
+      await this.auditLogs.append({
+        actorId: actor.actorId,
+        actorName: actor.actorName,
+        action: 'UPDATE_AVAILABILITY',
+        targetType: 'unit',
+        targetId: unitId,
+        detail: `Updated ${updatedCount} availability entries`,
+      }).catch(() => {});
     }
 
     return { unitId, updatedCount };

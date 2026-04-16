@@ -2,6 +2,8 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { RolesGuard } from '@/common/guards/roles.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
 import { OrganizationsService } from './organizations.service';
 import { ScheduleContainersService } from './schedule-containers.service';
 import { ConstraintProfilesService } from '../unit-config/constraint-profiles/constraint-profiles.service';
@@ -12,7 +14,7 @@ import { UpdateScheduleContainerDto } from './dto/update-schedule-container.dto'
 import { CreateConstraintProfileDto } from '../unit-config/constraint-profiles/dto/create-constraint-profile.dto';
 import { UpdateConstraintProfileDto } from '../unit-config/constraint-profiles/dto/update-constraint-profile.dto';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
 export class OrganizationsController {
   constructor(
@@ -47,13 +49,15 @@ export class OrganizationsController {
     return this.svc.getById(orgId, Number(u.organizationId), roles);
   }
 
-  /** POST /organizations (bootstrapping only) */
+  /** POST /organizations — super-admin bootstrapping only (ISO 27001:2022 A.5.15) */
+  @Roles('ADMIN')
   @Post('/organizations')
   create(@Body() dto: CreateOrganizationDto) {
     return this.svc.create(dto);
   }
 
-  /** PUT /organizations — save full org tree (upsert via patch of caller's org) */
+  /** PUT /organizations — save full org tree (ISO 27001:2022 A.5.15) */
+  @Roles('ORG_ADMIN')
   @Put('/organizations')
   put(@Req() req: Request, @Body() dto: PatchOrganizationDto) {
     const u = (req as any).user ?? {};
@@ -61,7 +65,8 @@ export class OrganizationsController {
     return this.svc.patch(String(u.organizationId), Number(u.organizationId), dto, roles);
   }
 
-  /** PATCH /organizations/:orgId */
+  /** PATCH /organizations/:orgId (ISO 27001:2022 A.5.15) */
+  @Roles('ORG_ADMIN')
   @Patch('/organizations/:orgId')
   patch(@Req() req: Request, @Param('orgId') orgId: string, @Body() dto: PatchOrganizationDto) {
     const u = (req as any).user ?? {};
@@ -69,7 +74,8 @@ export class OrganizationsController {
     return this.svc.patch(orgId, Number(u.organizationId), dto, roles);
   }
 
-  /** DELETE /organizations/:orgId */
+  /** DELETE /organizations/:orgId (ISO 27001:2022 A.5.15) */
+  @Roles('ORG_ADMIN')
   @Delete('/organizations/:orgId')
   delete(@Req() req: Request, @Param('orgId') orgId: string) {
     const u = (req as any).user ?? {};
@@ -79,13 +85,15 @@ export class OrganizationsController {
 
   // ── Schedule containers ─────────────────────────────────────────────────────
 
-  /** GET /organizations/:orgId/schedule-containers */
+  /** GET /organizations/:orgId/schedule-containers (ISO 27001:2022 A.5.15) */
+  @Roles('ORG_ADMIN', 'UNIT_MANAGER')
   @Get('/organizations/:orgId/schedule-containers')
   listContainers(@Param('orgId') orgId: string) {
     return this.containers.list(orgId);
   }
 
-  /** POST /organizations/:orgId/schedule-containers */
+  /** POST /organizations/:orgId/schedule-containers (ISO 27001:2022 A.5.15) */
+  @Roles('ORG_ADMIN')
   @Post('/organizations/:orgId/schedule-containers')
   createContainer(
     @Param('orgId') orgId: string,
@@ -96,7 +104,8 @@ export class OrganizationsController {
     return this.containers.create(orgId, dto, userId);
   }
 
-  /** PUT /organizations/:orgId/schedule-containers/:id */
+  /** PUT /organizations/:orgId/schedule-containers/:id (ISO 27001:2022 A.5.15) */
+  @Roles('ORG_ADMIN')
   @Put('/organizations/:orgId/schedule-containers/:id')
   updateContainer(
     @Param('orgId') orgId: string,
@@ -106,7 +115,8 @@ export class OrganizationsController {
     return this.containers.update(orgId, id, dto);
   }
 
-  /** DELETE /organizations/:orgId/schedule-containers/:id */
+  /** DELETE /organizations/:orgId/schedule-containers/:id (ISO 27001:2022 A.5.15) */
+  @Roles('ORG_ADMIN')
   @Delete('/organizations/:orgId/schedule-containers/:id')
   deleteContainer(@Param('orgId') orgId: string, @Param('id') id: string) {
     return this.containers.delete(orgId, id);
@@ -114,13 +124,15 @@ export class OrganizationsController {
 
   // ── Constraint profiles ─────────────────────────────────────────────────────
 
-  /** GET /organizations/:orgId/constraint-profiles */
+  /** GET /organizations/:orgId/constraint-profiles (ISO 27001:2022 A.5.15) */
+  @Roles('ORG_ADMIN', 'UNIT_MANAGER')
   @Get('/organizations/:orgId/constraint-profiles')
   listProfiles(@Param('orgId') orgId: string) {
     return this.profiles.listByOrg(orgId);
   }
 
-  /** POST /organizations/:orgId/constraint-profiles */
+  /** POST /organizations/:orgId/constraint-profiles (ISO 27001:2022 A.5.15) */
+  @Roles('ORG_ADMIN')
   @Post('/organizations/:orgId/constraint-profiles')
   createProfile(
     @Param('orgId') orgId: string,
@@ -129,7 +141,8 @@ export class OrganizationsController {
     return this.profiles.createForOrg(orgId, dto);
   }
 
-  /** PUT /organizations/:orgId/constraint-profiles/:id */
+  /** PUT /organizations/:orgId/constraint-profiles/:id (ISO 27001:2022 A.5.15) */
+  @Roles('ORG_ADMIN')
   @Put('/organizations/:orgId/constraint-profiles/:id')
   updateProfile(
     @Param('orgId') orgId: string,
@@ -139,7 +152,8 @@ export class OrganizationsController {
     return this.profiles.updateForOrg(orgId, id, dto);
   }
 
-  /** DELETE /organizations/:orgId/constraint-profiles/:id */
+  /** DELETE /organizations/:orgId/constraint-profiles/:id (ISO 27001:2022 A.5.15) */
+  @Roles('ORG_ADMIN')
   @Delete('/organizations/:orgId/constraint-profiles/:id')
   deleteProfile(@Param('orgId') orgId: string, @Param('id') id: string) {
     return this.profiles.deleteForOrg(orgId, id);

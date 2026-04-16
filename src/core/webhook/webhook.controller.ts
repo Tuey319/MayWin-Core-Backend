@@ -21,34 +21,35 @@ export class WebhookController {
     }
   }
 
-  /** Verify that the webhook payload actually came from LINE */
+  /**
+   * Verify that the webhook payload actually came from LINE.
+   * LINE_CHANNEL_SECRET is mandatory — fail hard if missing (ISO 27001 A.13.1.1)
+   */
   private verifySignature(rawBody: Buffer | string, signature: string): boolean {
     const secret = process.env.LINE_CHANNEL_SECRET;
     if (!secret) {
-      // In dev without secret configured — allow through with a warning
-      this.logger.warn('[WEBHOOK] LINE_CHANNEL_SECRET not set — skipping signature check');
-      return true;
+      this.logger.error('[WEBHOOK] LINE_CHANNEL_SECRET is not configured — rejecting all requests');
+      return false;
     }
-    const hash = crypto
-      .createHmac('sha256', secret)
-      .update(rawBody)
-      .digest('base64');
-    return hash === signature;
+    const body = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody);
+    const expected = crypto.createHmac('sha256', secret).update(body).digest('base64');
+    try {
+      return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+    } catch {
+      return false;
+    }
   }
 
   @Post()
   @HttpCode(200)
   async handleLineWebhook(@Req() req: Request, @Body() body: any) {
-    // ── Signature Verification ─────────────────────────────────────────────
+    // ── Signature Verification — always enforced (ISO 27001 A.13.1.1) ──────
     const signature = req.headers['x-line-signature'] as string;
     const rawBody = (req as any).rawBody as Buffer;
 
-    if (signature && rawBody) {
-      if (!this.verifySignature(rawBody, signature)) {
-        this.logger.warn('[WEBHOOK] Invalid LINE signature — request rejected');
-        // Still return 200 so LINE doesn't retry (it already knows we rejected it)
-        return { status: 'rejected' };
-      }
+    if (!signature || !rawBody || !this.verifySignature(rawBody, signature)) {
+      this.logger.warn('[WEBHOOK] Invalid or missing LINE signature — request rejected');
+      return { status: 'rejected' };
     }
 
     try {

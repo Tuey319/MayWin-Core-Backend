@@ -1,5 +1,5 @@
 // src/core/jobs/jobs.service.ts
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 
@@ -58,10 +58,16 @@ export class JobsService {
     dto: CreateJobDto,
     idempotencyKey: string | null,
     opts?: { enqueueLocalRunner?: boolean },
+    callerOrgId?: number,
   ) {
     const schedule = await this.schedulesRepo.findOne({ where: { id: scheduleId } });
     if (!schedule) throw new NotFoundException('Schedule not found');
     if (!schedule.unit_id) throw new BadRequestException('Solver jobs require a unit-scoped schedule');
+
+    // ISO 27001:2022 A.5.15 — verify schedule belongs to caller's org
+    if (callerOrgId && String(schedule.organization_id) !== String(callerOrgId)) {
+      throw new ForbiddenException('Access denied');
+    }
 
     // Better idempotency: scope by org + unit + key
     if (idempotencyKey) {
@@ -126,9 +132,18 @@ export class JobsService {
     };
   }
 
-  async getJob(jobId: string) {
+  private assertJobOwnership(job: ScheduleJob, callerOrgId?: number) {
+    if (callerOrgId && String(job.organization_id) !== String(callerOrgId)) {
+      throw new ForbiddenException('Access denied');
+    }
+  }
+
+  async getJob(jobId: string, callerOrgId?: number) {
     const job = await this.jobsRepo.findOne({ where: { id: jobId } });
     if (!job) throw new NotFoundException('Job not found');
+
+    // ISO 27001:2022 A.5.15
+    this.assertJobOwnership(job, callerOrgId);
 
     return {
       job: {
@@ -144,9 +159,10 @@ export class JobsService {
     };
   }
 
-  async listArtifacts(jobId: string) {
+  async listArtifacts(jobId: string, callerOrgId?: number) {
     const job = await this.jobsRepo.findOne({ where: { id: jobId } });
     if (!job) throw new NotFoundException('Job not found');
+    this.assertJobOwnership(job, callerOrgId);
 
     const artifacts = await this.artifactsRepo.find({ where: { job_id: jobId }, order: { created_at: 'ASC' } });
 
@@ -166,9 +182,10 @@ export class JobsService {
     };
   }
 
-  async getSolverPayload(jobId: string) {
+  async getSolverPayload(jobId: string, callerOrgId?: number) {
     const job = await this.jobsRepo.findOne({ where: { id: jobId } });
     if (!job) throw new NotFoundException('Job not found');
+    this.assertJobOwnership(job, callerOrgId);
 
     const normalizedArtifact = await this.artifactsRepo.findOne({
       where: {
@@ -208,9 +225,10 @@ export class JobsService {
     };
   }
 
-  async preview(jobId: string) {
+  async preview(jobId: string, callerOrgId?: number) {
     const job = await this.jobsRepo.findOne({ where: { id: jobId } });
     if (!job) throw new NotFoundException('Job not found');
+    this.assertJobOwnership(job, callerOrgId);
 
     // PRIORITY 1: Always try to rebuild from artifact first (has authoritative solver nurse_stats)
     const rebuilt = await this.rebuildPreviewFromArtifacts(jobId);
@@ -417,9 +435,10 @@ export class JobsService {
     }
   }
 
-  async apply(jobId: string, overwriteManualChanges: boolean) {
+  async apply(jobId: string, overwriteManualChanges: boolean, callerOrgId?: number) {
     const job = await this.jobsRepo.findOne({ where: { id: jobId } });
     if (!job) throw new NotFoundException('Job not found');
+    this.assertJobOwnership(job, callerOrgId);
 
     if (job.status !== ScheduleJobStatus.COMPLETED) {
       throw new ConflictException('Job is not completed yet');
@@ -529,9 +548,10 @@ export class JobsService {
     };
   }
 
-  async cancel(jobId: string) {
+  async cancel(jobId: string, callerOrgId?: number) {
     const job = await this.jobsRepo.findOne({ where: { id: jobId } });
     if (!job) throw new NotFoundException('Job not found');
+    this.assertJobOwnership(job, callerOrgId);
 
     job.status = ScheduleJobStatus.FAILED;
     job.error_code = 'CANCELLED';

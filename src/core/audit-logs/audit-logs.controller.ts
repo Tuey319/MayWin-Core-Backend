@@ -10,14 +10,18 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { RolesGuard } from '@/common/guards/roles.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
 import { AuditLogsService } from './audit-logs.service';
 import { CreateAuditLogDto } from './dto/create-audit-log.dto';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
 export class AuditLogsController {
   constructor(private readonly auditLogs: AuditLogsService) {}
 
+  // Audit log access restricted to admins only (ISO 27001 A.12.4.1)
+  @Roles('ORG_ADMIN', 'ADMIN')
   @Get('/audit-logs')
   async list(
     @Query('export') exportType: string | undefined,

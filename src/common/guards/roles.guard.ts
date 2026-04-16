@@ -1,13 +1,23 @@
 
 // src/common/guards/roles.guard.ts
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
-import { Observable } from 'rxjs';
+import { Reflector } from '@nestjs/core';
+import { ROLES_KEY } from '../decorators/roles.decorator';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
-  canActivate(
-    context: ExecutionContext,
-  ): boolean | Promise<boolean> | Observable<boolean> {
-    return true;
+  constructor(private reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    // No @Roles() decorator = no restriction beyond JWT auth
+    if (!requiredRoles || requiredRoles.length === 0) return true;
+
+    const { user } = context.switchToHttp().getRequest();
+    if (!user || !Array.isArray(user.roles)) return false;
+    return requiredRoles.some((role) => user.roles.includes(role));
   }
 }

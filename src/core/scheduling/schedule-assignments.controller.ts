@@ -1,23 +1,29 @@
 // src/core/scheduling/schedule-assignments.controller.ts
-import { Body, Controller, Param, Patch, UseGuards } from '@nestjs/common';
+// src/core/scheduling/schedule-assignments.controller.ts
+import { Body, Controller, Param, Patch, Req, UseGuards } from '@nestjs/common';
 
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { RolesGuard } from '@/common/guards/roles.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
 import { SchedulesService } from './schedules.service';
 import { PatchAssignmentDto } from './dto/patch-assignment.dto';
 
-@UseGuards(JwtAuthGuard)
+@Roles('UNIT_MANAGER', 'ORG_ADMIN')
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
 export class ScheduleAssignmentsController {
   constructor(private readonly schedules: SchedulesService) {}
 
   /**
    * Purpose: Manual edit of one schedule cell (override solver output).
+   * ISO 27001:2022 A.5.15 — org ownership verified in service via parent schedule
    */
   @Patch('/schedule-assignments/:assignmentId')
   patch(
     @Param('assignmentId') assignmentId: string,
     @Body() dto: PatchAssignmentDto,
+    @Req() req: any,
   ) {
-    return this.schedules.patchAssignment(assignmentId, dto);
+    return this.schedules.patchAssignment(assignmentId, dto, Number(req.user?.organizationId));
   }
 }

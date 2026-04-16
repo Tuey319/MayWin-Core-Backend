@@ -3,12 +3,14 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { RolesGuard } from '@/common/guards/roles.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
 import { SitesService } from './sites.service';
 import { ListSitesQueryDto } from './dto/list-sites.query.dto';
 import { CreateSiteDto } from './dto/create-site.dto';
 import { PatchSiteDto } from './dto/patch-site.dto';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
 export class SitesController {
   constructor(private readonly svc: SitesService) {}
@@ -28,6 +30,7 @@ export class SitesController {
   }
 
   // POST /sites
+  @Roles('ORG_ADMIN')
   @Post('/sites')
   create(@Req() req: Request, @Body() dto: CreateSiteDto) {
     return this.svc.create(this.ctx(req), dto);
@@ -52,6 +55,7 @@ export class SitesController {
   }
 
   // DELETE /sites/:siteId
+  @Roles('ORG_ADMIN')
   @Delete('/sites/:siteId')
   delete(@Req() req: Request, @Param('siteId') siteId: string) {
     return this.svc.delete(this.ctx(req), siteId);

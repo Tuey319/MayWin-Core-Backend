@@ -1,5 +1,6 @@
 // src/core/scheduling/schedules.service.ts
 import {
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -148,10 +149,17 @@ export class SchedulesService {
     };
   }
 
-  async getCurrentSchedule(unitId: string, dateFrom?: string, dateTo?: string) {
+  async getCurrentSchedule(unitId: string, dateFrom?: string, dateTo?: string, callerOrgId?: number) {
+    // Validate unitId is numeric before using in raw query (ISO 27001:2022 A.8.28)
+    if (!/^\d+$/.test(unitId)) throw new BadRequestException('Invalid unitId');
+
     const cacheKey = `schedule:current:${unitId}:${dateFrom ?? ''}:${dateTo ?? ''}`;
     const cached = await this.cache.get<any>(cacheKey);
     if (cached) {
+      // Ownership check applies even for cached results (ISO 27001:2022 A.5.15)
+      if (callerOrgId && String(cached.schedule?.organizationId) !== String(callerOrgId)) {
+        throw new ForbiddenException('Access denied');
+      }
       this.logger.debug(`[cache:hit] ${cacheKey}`);
       return cached;
     }
@@ -181,6 +189,11 @@ export class SchedulesService {
 
     if (!schedule) {
       throw new NotFoundException('No schedule found for unit');
+    }
+
+    // ISO 27001:2022 A.5.15 — verify caller owns this schedule's organisation
+    if (callerOrgId && String(schedule.organization_id) !== String(callerOrgId)) {
+      throw new ForbiddenException('Access denied');
     }
 
     const where: any = latestRun
@@ -235,7 +248,8 @@ export class SchedulesService {
     return result;
   }
 
-  async getScheduleHistory(unitId: string, limit: number) {
+  async getScheduleHistory(unitId: string, limit: number, callerOrgId?: number) {
+    if (!/^\d+$/.test(unitId)) throw new BadRequestException('Invalid unitId');
     const cacheKey = `schedule:history:${unitId}:${limit}`;
     const cached = await this.cache.get<any>(cacheKey);
     if (cached) return cached;
@@ -245,6 +259,11 @@ export class SchedulesService {
       order: { created_at: 'DESC' },
       take: limit,
     });
+
+    // ISO 27001:2022 A.5.15 — verify all returned schedules belong to caller's org
+    if (callerOrgId && rows.some((s) => String(s.organization_id) !== String(callerOrgId))) {
+      throw new ForbiddenException('Access denied');
+    }
 
     const result = {
       unitId,
@@ -264,13 +283,18 @@ export class SchedulesService {
     return result;
   }
 
-  async getScheduleById(scheduleId: string) {
+  async getScheduleById(scheduleId: string, callerOrgId?: number) {
     const schedule = await this.schedulesRepo.findOne({
       where: { id: scheduleId },
     });
 
     if (!schedule) {
       throw new NotFoundException('Schedule not found');
+    }
+
+    // ISO 27001:2022 A.5.15
+    if (callerOrgId && String(schedule.organization_id) !== String(callerOrgId)) {
+      throw new ForbiddenException('Access denied');
     }
 
     const assignments = await this.assignmentsRepo.find({
@@ -315,9 +339,17 @@ export class SchedulesService {
     };
   }
 
-  async patchAssignment(assignmentId: string, dto: PatchAssignmentDto) {
+  async patchAssignment(assignmentId: string, dto: PatchAssignmentDto, callerOrgId?: number) {
     const a = await this.assignmentsRepo.findOne({ where: { id: assignmentId } });
     if (!a) throw new NotFoundException('Assignment not found');
+
+    // ISO 27001:2022 A.5.15 — verify ownership via parent schedule
+    if (callerOrgId) {
+      const parentSchedule = await this.schedulesRepo.findOne({ where: { id: a.schedule_id } });
+      if (!parentSchedule || String(parentSchedule.organization_id) !== String(callerOrgId)) {
+        throw new ForbiddenException('Access denied');
+      }
+    }
 
     a.worker_id = dto.workerId;
     a.date = dto.date;
@@ -342,9 +374,14 @@ export class SchedulesService {
     };
   }
 
-  async exportSchedule(scheduleId: string, format: 'pdf' | 'xlsx') {
+  async exportSchedule(scheduleId: string, format: 'pdf' | 'xlsx', callerOrgId?: number) {
     const schedule = await this.schedulesRepo.findOne({ where: { id: scheduleId } });
     if (!schedule) throw new NotFoundException('Schedule not found');
+
+    // ISO 27001:2022 A.5.15
+    if (callerOrgId && String(schedule.organization_id) !== String(callerOrgId)) {
+      throw new ForbiddenException('Access denied');
+    }
 
     return {
       scheduleId: schedule.id,

@@ -1,11 +1,14 @@
 // src/core/unit-config/coverage-rules/coverage-rules.controller.ts
 import { Body, Controller, Delete, Param, Patch, Post, Put, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { RolesGuard } from '@/common/guards/roles.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
 import { CoverageRulesService } from './coverage-rules.service';
 import { CoverageRuleItemDto } from './dto/coverage-rule-item.dto';
 import { ReplaceCoverageRulesDto } from './dto/replace-coverage-rules.dto';
 
-@UseGuards(JwtAuthGuard)
+@Roles('UNIT_MANAGER', 'ORG_ADMIN')
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
 export class CoverageRulesController {
   constructor(private readonly service: CoverageRulesService) {}

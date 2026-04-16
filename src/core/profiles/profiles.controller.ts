@@ -1,5 +1,6 @@
 // src/core/profiles/profiles.controller.ts
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -16,9 +17,13 @@ import {
 import type { Request } from 'express';
 import { ProfilesService } from './profiles.service';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 const { FileInterceptor } = require('@nestjs/platform-express');
 const { memoryStorage } = require('multer');
+
+// ISO 27001:2022 A.8.26 — only JPEG/PNG/WebP accepted for avatar uploads
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 @Controller('profiles')
 @UseGuards(JwtAuthGuard)
@@ -31,22 +36,29 @@ export class ProfilesController {
     return this.profilesService.getProfile(String(user.sub));
   }
 
+  // ISO 27001:2022 A.8.26 — DTO replaces @Body() data: any; ValidationPipe enforces field constraints
   @Patch('me')
-  async updateMyProfile(@Req() req: Request, @Body() data: any) {
+  async updateMyProfile(@Req() req: Request, @Body() dto: UpdateProfileDto) {
     const user = (req as any).user;
-    // Basic sanitization: only allow specific fields
-    const { bio, phone_number } = data;
     return this.profilesService.updateProfile(String(user.sub), {
-      bio,
-      phone_number,
+      bio: dto.bio,
+      phone_number: dto.phone_number,
     });
   }
 
+  // ISO 27001:2022 A.8.26 — fileFilter restricts upload to safe image MIME types only
   @Post('me/avatar')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
       limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (_req: any, file: any, cb: any) => {
+        if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(new BadRequestException('Only JPEG, PNG, and WebP images are allowed'), false);
+        }
+      },
     }),
   )
   async uploadMyAvatar(@Req() req: Request, @UploadedFile() file: any) {

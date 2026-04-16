@@ -14,11 +14,15 @@ export class SignupDto {
   email!: string;
 
   @IsString()
-  @MinLength(6)
+  @MinLength(8)
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/, {
+    message: 'password must contain at least one uppercase letter, one lowercase letter, and one number',
+  })
   password!: string;
 
   @IsString()
   @IsNotEmpty()
+  @MinLength(2)
   fullName!: string;
 
   @IsOptional()

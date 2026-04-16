@@ -9,6 +9,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { randomInt, timingSafeEqual } from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 
 import { User } from '@/database/entities/users/user.entity';
@@ -20,6 +21,7 @@ import { Worker, EmploymentType } from '@/database/entities/workers/worker.entit
 import { JwtPayload } from './types/jwt-payload';
 import { SignupDto } from './dto/signup.dto';
 import { MailService } from '@/core/mail/mail.service';
+import { AuditLogsService } from '@/core/audit-logs/audit-logs.service';
 
 @Injectable()
 export class AuthService {
@@ -46,6 +48,7 @@ export class AuthService {
 
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
+    private readonly auditLogs: AuditLogsService,
   ) { }
 
   // ── Helpers ─────────────────────────────────────────────────────────────
@@ -125,8 +128,9 @@ export class AuthService {
     );
   }
 
+  // Cryptographically secure 6-digit OTP (ISO 27001 A.10.1.1)
   private generateOtp(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    return randomInt(100000, 1000000).toString();
   }
 
   // ── Auth flows ───────────────────────────────────────────────────────────
@@ -140,10 +144,22 @@ export class AuthService {
       where: { email, is_active: true },
     });
 
-    if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (!user) {
+      // PDPA §27, ISO 27001:2022 A.8.15 — log failed login attempt (no user details)
+      await this.auditLogs.append({ actorId: 'anonymous', actorName: email,
+        action: 'LOGIN_FAILED', targetType: 'user', targetId: email,
+        detail: 'User not found' }).catch(() => {});
+      throw new UnauthorizedException('Invalid credentials');
+    }
 
     const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) throw new UnauthorizedException('Invalid credentials');
+    if (!ok) {
+      // PDPA §27, ISO 27001:2022 A.8.15 — log failed login attempt
+      await this.auditLogs.append({ actorId: String(user.id), actorName: user.email,
+        action: 'LOGIN_FAILED', targetType: 'user', targetId: String(user.id),
+        detail: 'Invalid password' }).catch(() => {});
+      throw new UnauthorizedException('Invalid credentials');
+    }
 
     // OTP bypass: set AUTH_DISABLE_OTP=true to skip 2FA and return JWT directly
     if ((process.env.AUTH_DISABLE_OTP ?? '').toLowerCase() === 'true') {
@@ -177,24 +193,13 @@ export class AuthService {
       }),
     );
 
-    // Send email (non-blocking fail OK in dev if no SMTP configured)
+    // Send OTP email — fail hard if SMTP is unavailable (ISO 27001 A.9.4.2)
     try {
       await this.mailService.sendOtp(user.email, user.full_name, otp);
-    } catch (err: any) {
-      const isProduction = (process.env.NODE_ENV ?? '').toLowerCase() === 'production';
-      const allowDevFallback = (
-        process.env.AUTH_ALLOW_OTP_LOG_FALLBACK ?? (!isProduction).toString()
-      ).toLowerCase() === 'true';
-
-      if (!allowDevFallback) {
-        this.logger.error(`[AUTH] Failed to deliver OTP to ${user.email}`);
-        throw new ServiceUnavailableException(
-          'Unable to send verification code right now. Please try again later.',
-        );
-      }
-
-      this.logger.warn(
-        `[AUTH] Could not send OTP email. DEV fallback OTP for ${user.email}: ${otp}`,
+    } catch {
+      this.logger.error(`[AUTH] Failed to deliver OTP to ${user.email}`);
+      throw new ServiceUnavailableException(
+        'Unable to send verification code right now. Please try again later.',
       );
     }
 
@@ -236,7 +241,10 @@ export class AuthService {
       throw new UnauthorizedException('Verification code has expired. Please log in again.');
     }
 
-    if (record.otp_code !== otp.trim()) {
+    // Timing-safe OTP comparison to prevent timing attacks (ISO 27001 A.10.1.1)
+    const provided = Buffer.from(otp.trim().padEnd(record.otp_code.length));
+    const expected = Buffer.from(record.otp_code);
+    if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
       throw new UnauthorizedException('Incorrect verification code');
     }
 
@@ -253,6 +261,11 @@ export class AuthService {
 
     const { unitIds, roles } = await this.buildContext(user.id, user.attributes ?? {});
     const accessToken = this.signFull(user, roles, unitIds);
+
+    // PDPA §27, ISO 27001:2022 A.8.15 — log successful authentication
+    await this.auditLogs.append({ actorId: String(user.id), actorName: user.email,
+      action: 'LOGIN_SUCCESS', targetType: 'user', targetId: String(user.id),
+      detail: 'OTP verified — session issued' }).catch(() => {});
 
     return {
       accessToken,

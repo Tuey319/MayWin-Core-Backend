@@ -3,10 +3,13 @@ import { Body, Controller, Post, UseGuards, Logger } from '@nestjs/common';
 import { JobsService } from '@/core/jobs/jobs.service';
 import { RunOrchestratorDto } from './dto/run-orchestrator.dto';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { RolesGuard } from '@/common/guards/roles.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
 import { SFNClient, StartExecutionCommand } from '@aws-sdk/client-sfn';
 import { NodeHttpHandler } from '@aws-sdk/node-http-handler';
 
-@UseGuards(JwtAuthGuard)
+@Roles('UNIT_MANAGER', 'ORG_ADMIN')
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('/orchestrator')
 export class OrchestratorController {
   private readonly logger = new Logger(OrchestratorController.name);
@@ -150,7 +153,8 @@ export class OrchestratorController {
         },
       };
     } catch (e: any) {
-      this.logger.error(`ORCH StartExecution failed: ${e?.name} ${e?.message}`);
+      // ISO 27001:2022 A.8.12 — log full details server-side; never return AWS ARNs/messages to client
+      this.logger.error(`ORCH StartExecution failed: ${e?.name} ${e?.message}`, e?.stack);
 
       return {
         ok: false,
@@ -158,10 +162,7 @@ export class OrchestratorController {
         job,
         jobId: job?.id ?? null,
         executionArn: null,
-        error: {
-          name: e?.name ?? 'StartExecutionError',
-          message: e?.message ?? String(e),
-        },
+        error: 'Scheduling engine is temporarily unavailable. Please try again.',
       };
     }
   }

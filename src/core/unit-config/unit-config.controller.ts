@@ -1,9 +1,10 @@
 // src/core/unit-config/unit-config.controller.ts
 import { Controller, Get, Param, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { RolesGuard } from '@/common/guards/roles.guard';
 import { UnitConfigService } from './unit-config.service';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
 export class UnitConfigController {
   constructor(private readonly service: UnitConfigService) {}

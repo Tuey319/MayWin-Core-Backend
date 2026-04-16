@@ -1,5 +1,6 @@
 // src/core/auth/auth.controller.ts
 import { Body, Controller, Get, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 
 import { AuthService } from './auth.service';
@@ -16,9 +17,9 @@ export class AuthController {
 
   /**
    * POST /auth/login
-   * Returns { requires2FA: true, otpToken } — NOT a usable JWT.
-   * The client must call /auth/verify-otp with the OTP from email.
+   * 10 attempts per 15 minutes per IP — brute force protection (ISO 27001:2022 — 8.5)
    */
+  @Throttle({ default: { ttl: 900000, limit: 10 } })
   @Post('login')
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto.email, dto.password);
@@ -26,15 +27,19 @@ export class AuthController {
 
   /**
    * POST /auth/verify-otp
-   * Validates the OTP sent to email + the pending token from /auth/login.
-   * Returns { accessToken, user } on success.
+   * 10 attempts per 15 minutes per IP (ISO 27001:2022 — 8.5)
    */
+  @Throttle({ default: { ttl: 900000, limit: 10 } })
   @Post('verify-otp')
   async verifyOtp(@Body() dto: VerifyOtpDto) {
     return this.authService.verifyOtp(dto.otpToken, dto.otp);
   }
 
-  // POST /auth/signup
+  /**
+   * POST /auth/signup
+   * 5 signups per hour per IP (ISO 27001:2022 — 8.5)
+   */
+  @Throttle({ default: { ttl: 3600000, limit: 5 } })
   @Post('signup')
   async signup(@Body() dto: SignupDto) {
     return this.authService.signup(dto);

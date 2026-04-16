@@ -4,9 +4,10 @@ import { WorkerMessagesService } from './worker-messages.service';
 import { CreateWorkerMessageDto } from './dto/create-worker-message.dto';
 import { ListWorkerMessagesQueryDto } from './dto/list-worker-messages.query.dto';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { RolesGuard } from '@/common/guards/roles.guard';
 import { CreateWorkerChatMessageDto } from './dto/create-worker-chat-message.dto';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
 export class WorkerMessagesController {
   constructor(private readonly svc: WorkerMessagesService) {}
@@ -41,29 +42,35 @@ export class WorkerMessagesController {
   }
 
   // GET /workers/:workerId/messages
+  // ISO 27001:2022 A.5.15 — scoped to caller's org in service
   @Get('/workers/:workerId/messages')
   listForWorker(
     @Param('workerId') workerId: string,
     @Query() q: ListWorkerMessagesQueryDto,
+    @Req() req: any,
   ) {
-    return this.svc.listByWorker(workerId, q);
+    return this.svc.listByWorker(workerId, q, String(req.user?.organizationId));
   }
 
   // GET /units/:unitId/messages
+  // ISO 27001:2022 A.5.15 — scoped to caller's org in service
   @Get('/units/:unitId/messages')
   listForUnit(
     @Param('unitId') unitId: string,
     @Query() q: ListWorkerMessagesQueryDto,
+    @Req() req: any,
   ) {
-    return this.svc.listByUnit(unitId, q);
+    return this.svc.listByUnit(unitId, q, String(req.user?.organizationId));
   }
 
   // GET /jobs/:jobId/messages
+  // ISO 27001:2022 A.5.15 — scoped to caller's org in service
   @Get('/jobs/:jobId/messages')
   listForJob(
     @Param('jobId') jobId: string,
     @Query() q: ListWorkerMessagesQueryDto,
+    @Req() req: any,
   ) {
-    return this.svc.listByJob(jobId, q);
+    return this.svc.listByJob(jobId, q, String(req.user?.organizationId));
   }
 }

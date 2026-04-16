@@ -2,12 +2,14 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { RolesGuard } from '@/common/guards/roles.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
 import { UnitsService } from './units.service';
 import { ListUnitsQueryDto } from './dto/list-units.query.dto';
 import { CreateUnitDto } from './dto/create-unit.dto';
 import { PatchUnitDto } from './dto/patch-unit.dto';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
 export class UnitsController {
   constructor(private readonly svc: UnitsService) {}
@@ -34,6 +36,7 @@ export class UnitsController {
   }
 
   // POST /units
+  @Roles('UNIT_MANAGER', 'ORG_ADMIN')
   @Post('/units')
   create(@Req() req: Request, @Body() dto: CreateUnitDto) {
     return this.svc.create(this.ctx(req), dto);
@@ -52,6 +55,7 @@ export class UnitsController {
   }
 
   // DELETE /units/:unitId
+  @Roles('ORG_ADMIN')
   @Delete('/units/:unitId')
   delete(@Req() req: Request, @Param('unitId') unitId: string) {
     return this.svc.delete(this.ctx(req), unitId);

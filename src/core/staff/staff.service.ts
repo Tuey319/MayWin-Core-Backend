@@ -3,6 +3,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { PatchStaffDto } from './dto/patch-staff.dto';
 import { AuditLogsService } from '@/core/audit-logs/audit-logs.service';
@@ -73,23 +74,19 @@ export class StaffService {
     return map[position] ?? 'NURSE';
   }
 
-  /** Generates a random temporary password: e.g. "Mw@8k3xP" */
+  /** Generates a cryptographically secure temporary password (ISO 27001 A.10.1.1) */
   private generateTempPassword(): string {
-    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-    const special = '@#!';
-    let pass = '';
-    for (let i = 0; i < 6; i++) pass += chars[Math.floor(Math.random() * chars.length)];
-    pass += special[Math.floor(Math.random() * special.length)];
-    pass += Math.floor(Math.random() * 10).toString();
-    return pass;
+    // 16 url-safe base64 chars — sufficient entropy, always printable
+    return randomBytes(12).toString('base64url');
   }
 
-  /** Generates a 6-char uppercase alphanumeric invite token string, e.g. "A3X9K2" */
+  /** Generates a cryptographically secure 12-char invite token (ISO 27001 A.10.1.1) */
   private generateTokenString(): string {
     const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no confusable chars (0,O,I,1)
-    let token = '';
-    for (let i = 0; i < 6; i++) token += chars[Math.floor(Math.random() * chars.length)];
-    return token;
+    const bytes = randomBytes(12);
+    return Array.from(bytes)
+      .map((b) => chars[b % chars.length])
+      .join('');
   }
 
   // ── Validation ────────────────────────────────────────────────────────────

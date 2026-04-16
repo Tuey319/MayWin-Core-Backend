@@ -210,9 +210,11 @@ export class WorkerMessagesService {
     };
   }
 
-  async listByWorker(workerId: string, q: ListWorkerMessagesQueryDto) {
+  async listByWorker(workerId: string, q: ListWorkerMessagesQueryDto, callerOrgId: string) {
+    // ISO 27001:2022 A.5.15 — scope to caller's organisation
     const where: FindOptionsWhere<WorkerMessage> = {
       worker_id: workerId,
+      organization_id: callerOrgId,
     };
 
     if (q.unitId) where.unit_id = q.unitId;
@@ -232,9 +234,11 @@ export class WorkerMessagesService {
     return { total, items, limit: take, offset: skip };
   }
 
-  async listByUnit(unitId: string, q: ListWorkerMessagesQueryDto) {
+  async listByUnit(unitId: string, q: ListWorkerMessagesQueryDto, callerOrgId: string) {
+    // ISO 27001:2022 A.5.15 — scope to caller's organisation
     const where: FindOptionsWhere<WorkerMessage> = {
       unit_id: unitId,
+      organization_id: callerOrgId,
     };
 
     if (q.jobId) where.job_id = q.jobId;
@@ -253,9 +257,11 @@ export class WorkerMessagesService {
     return { total, items, limit: take, offset: skip };
   }
 
-  async listByJob(jobId: string, q: ListWorkerMessagesQueryDto) {
+  async listByJob(jobId: string, q: ListWorkerMessagesQueryDto, callerOrgId: string) {
+    // ISO 27001:2022 A.5.15 — scope to caller's organisation
     const where: FindOptionsWhere<WorkerMessage> = {
       job_id: jobId,
+      organization_id: callerOrgId,
     };
 
     if (q.unitId) where.unit_id = q.unitId;

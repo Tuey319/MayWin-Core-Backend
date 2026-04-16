@@ -8,6 +8,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt-strategy';
 import { MailModule } from '@/core/mail/mail.module';
+import { AuditLogsModule } from '@/core/audit-logs/audit-logs.module';
 
 import { User } from '@/database/entities/users/user.entity';
 import { UnitMembership } from '@/database/entities/users/unit-membership.entity';
@@ -20,6 +21,7 @@ import { Worker } from '@/database/entities/workers/worker.entity';
   imports: [
     ConfigModule,
     MailModule,
+    AuditLogsModule,
 
     TypeOrmModule.forFeature([User, UnitMembership, UserRole, Role, AuthOtp, Worker]),
 

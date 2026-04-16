@@ -1,7 +1,10 @@
 // src/app.module.ts
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
+import { ThrottlerModule } from '@nestjs/throttler';
+
+import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 
 import { AuthModule } from './core/auth/auth.module';
 import { HealthModule } from './core/health/health.module';
@@ -41,6 +44,8 @@ import { ExportOptionsModule } from '@/core/export-options/export-options.module
       isGlobal: true,
       ttl: 5 * 60 * 1000, // 5 minutes default TTL (ms)
     }),
+    // Rate limiting — 60 req/min/IP globally (ISO 27001:2022 — 8.6, 8.20)
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]),
 
     DatabaseModule,
     AuthModule,
@@ -71,4 +76,9 @@ import { ExportOptionsModule } from '@/core/export-options/export-options.module
     ExportOptionsModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  // Apply request logging to every route (ISO 27001:2022 — 8.15, 8.16)
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestLoggerMiddleware).forRoutes('*');
+  }
+}
