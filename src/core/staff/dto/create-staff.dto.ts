@@ -19,8 +19,9 @@ export class CreateStaffDto {
   @IsIn(['nurse', 'head_nurse', 'scheduler', 'admin'])
   position: 'nurse' | 'head_nurse' | 'scheduler' | 'admin';
 
+  @IsOptional()
   @IsEmail()
-  email: string;
+  email?: string;
 
   /** Unit to assign this nurse to. Falls back to the caller's unit if omitted. */
   @IsOptional()
