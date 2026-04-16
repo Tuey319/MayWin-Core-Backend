@@ -50,7 +50,7 @@ export class AuthService {
 
   // ── Helpers ─────────────────────────────────────────────────────────────
 
-  private async buildContext(userId: string) {
+  private async buildContext(userId: string, userAttributes: Record<string, any> = {}) {
     // 1) Unit memberships (unit-scoped roles)
     const memberships = await this.unitMembershipRepo.find({
       where: { user_id: String(userId) },
@@ -78,18 +78,39 @@ export class AuthService {
         .filter(Boolean);
     }
 
-    // 3) Merge + dedupe
+    // 3) Include role_hint from user.attributes as a fallback role source.
+    //    Super_admin and other accounts created without unit_memberships / user_roles
+    //    entries would otherwise end up with roles: [] in the JWT, losing their role.
+    const hintRaw = String(userAttributes?.role_hint ?? '').trim();
+    if (hintRaw) {
+      globalRoleCodes.push(hintRaw);
+    }
+
+    // 4) Merge + dedupe
     const roles = Array.from(new Set([...globalRoleCodes, ...unitRoleCodes])).sort();
 
     return { unitIds, roles };
   }
 
   private signFull(user: User, roles: string[], unitIds: number[]) {
+    const orgId = Number(user.organization_id);
+
+    // organization_id = NULL in the DB produces orgId = 0 here. For normal users this
+    // means every org-scoped query (staff, schedules, …) returns nothing. Super_admin
+    // accounts are handled by a bypass in staff.service, but other services are not.
+    // Fix: set organization_id on this user row in the DB.
+    if (!orgId || orgId === 0) {
+      this.logger.warn(
+        `[AUTH] User ${user.email} (id=${user.id}) has no organization_id set. ` +
+        `Org-scoped queries will return empty results. Set organization_id in the users table.`,
+      );
+    }
+
     const payload: JwtPayload = {
       sub: Number(user.id),
       email: user.email,
       fullName: user.full_name,
-      organizationId: Number(user.organization_id),
+      organizationId: orgId,
       roles,
       unitIds,
     };
@@ -126,7 +147,7 @@ export class AuthService {
 
     // OTP bypass: set AUTH_DISABLE_OTP=true to skip 2FA and return JWT directly
     if ((process.env.AUTH_DISABLE_OTP ?? '').toLowerCase() === 'true') {
-      const { unitIds, roles } = await this.buildContext(user.id);
+      const { unitIds, roles } = await this.buildContext(user.id, user.attributes ?? {});
       const accessToken = this.signFull(user, roles, unitIds);
       return {
         accessToken,
@@ -230,7 +251,7 @@ export class AuthService {
 
     if (!user) throw new UnauthorizedException('Account not found');
 
-    const { unitIds, roles } = await this.buildContext(user.id);
+    const { unitIds, roles } = await this.buildContext(user.id, user.attributes ?? {});
     const accessToken = this.signFull(user, roles, unitIds);
 
     return {
@@ -307,7 +328,7 @@ export class AuthService {
       }
     }
 
-    const { unitIds, roles } = await this.buildContext(saved.id);
+    const { unitIds, roles } = await this.buildContext(saved.id, saved.attributes ?? {});
     const accessToken = this.signFull(saved, roles, unitIds);
 
     return {
