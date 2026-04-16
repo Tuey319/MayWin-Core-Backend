@@ -3,9 +3,11 @@ import { Body, Controller, Post, UseGuards, Logger } from '@nestjs/common';
 import { JobsService } from '@/core/jobs/jobs.service';
 import { RunOrchestratorDto } from './dto/run-orchestrator.dto';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
 import { SFNClient, StartExecutionCommand } from '@aws-sdk/client-sfn';
 import { NodeHttpHandler } from '@aws-sdk/node-http-handler';
 
+@Roles('HEAD_NURSE')
 @UseGuards(JwtAuthGuard)
 @Controller('/orchestrator')
 export class OrchestratorController {

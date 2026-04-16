@@ -1,10 +1,12 @@
 // src/core/unit-config/constraint-profiles/constraint-profiles.controller.ts
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
 import { ConstraintProfilesService } from './constraint-profiles.service';
 import { CreateConstraintProfileDto } from './dto/create-constraint-profile.dto';
 import { UpdateConstraintProfileDto } from './dto/update-constraint-profile.dto';
 
+@Roles('HEAD_NURSE')
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class ConstraintProfilesController {
