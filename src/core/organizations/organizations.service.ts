@@ -14,16 +14,20 @@ export class OrganizationsService {
     private readonly orgRepo: Repository<Organization>,
   ) {}
 
+  private isSuperAdmin(roles: string[]): boolean {
+    return roles.includes('super_admin') || roles.includes('ADMIN');
+  }
+
   private assertSameOrg(requestOrgId: number, orgId: string, roles: string[] = []) {
-    if (roles.includes('ADMIN')) return;
+    if (this.isSuperAdmin(roles)) return;
     if (Number(orgId) !== Number(requestOrgId)) {
       throw new ForbiddenException('Forbidden: organization mismatch');
     }
   }
 
-  /** GET /organizations — returns all orgs for ADMIN, otherwise just the caller's org */
+  /** GET /organizations — returns all orgs for super_admin/ADMIN, otherwise just the caller's org */
   async list(requestOrgId: number, roles: string[]) {
-    if (roles.includes('ADMIN')) {
+    if (this.isSuperAdmin(roles)) {
       const orgs = await this.orgRepo.find();
       return { organizations: orgs.map((o) => this.toApi(o)) };
     }
