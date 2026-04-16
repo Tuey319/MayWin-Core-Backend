@@ -1,7 +1,9 @@
 // src/app.module.ts
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
+import { RolesGuard } from '@/common/guards/roles.guard';
 
 import { AuthModule } from './core/auth/auth.module';
 import { HealthModule } from './core/health/health.module';
@@ -32,6 +34,12 @@ import { DisplaySettingsModule } from '@/core/display-settings/display-settings.
 import { ExportOptionsModule } from '@/core/export-options/export-options.module';
 
 @Module({
+  providers: [
+    // RolesGuard is registered globally so @Roles() works on every controller
+    // without needing @UseGuards(RolesGuard) per file.
+    // JwtAuthGuard is still applied per-controller (explicit opt-in).
+    { provide: APP_GUARD, useClass: RolesGuard },
+  ],
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,

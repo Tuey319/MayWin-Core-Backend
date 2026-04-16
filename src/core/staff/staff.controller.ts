@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
 import { StaffService } from './staff.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { PatchStaffDto } from './dto/patch-staff.dto';
@@ -39,6 +40,7 @@ export class StaffController {
     };
   }
 
+  @Roles('HEAD_NURSE')
   @Get('/staff')
   list(@Req() req: Request) {
     const user = (req as any).user ?? {};
@@ -46,21 +48,25 @@ export class StaffController {
     return this.staff.list(this.context(req).organizationId, roles);
   }
 
+  @Roles('HEAD_NURSE')
   @Get('/staff/:id')
   getById(@Param('id') id: string, @Req() req: Request) {
     return this.staff.getById(id, this.context(req).organizationId);
   }
 
+  @Roles('HEAD_NURSE')
   @Post('/staff')
   create(@Body() dto: CreateStaffDto, @Req() req: Request) {
     return this.staff.create(dto, this.actor(req), this.context(req));
   }
 
+  @Roles('HEAD_NURSE')
   @Patch('/staff/:id')
   patch(@Param('id') id: string, @Body() dto: PatchStaffDto, @Req() req: Request) {
     return this.staff.patch(id, dto, this.actor(req), this.context(req).organizationId);
   }
 
+  @Roles('HOSPITAL_ADMIN')
   @Delete('/staff/:id')
   remove(@Param('id') id: string, @Req() req: Request) {
     return this.staff.remove(id, this.actor(req), this.context(req).organizationId);
@@ -71,6 +77,7 @@ export class StaffController {
    * Create a new web login account for an existing worker that has no linked user.
    * Uses the email stored in worker.attributes.email and sends a welcome email.
    */
+  @Roles('HOSPITAL_ADMIN')
   @Post('/staff/:id/create-account')
   createWebAccount(@Param('id') id: string, @Req() req: Request) {
     return this.staff.createWebAccount(id, this.context(req).organizationId, this.actor(req));
@@ -81,6 +88,7 @@ export class StaffController {
    * Link an existing user account to this worker.
    * Body: { userId: number }
    */
+  @Roles('HOSPITAL_ADMIN')
   @Post('/staff/:id/link-user')
   linkUser(
     @Param('id') id: string,
@@ -95,6 +103,7 @@ export class StaffController {
    * Generate a one-time LINE invite code for a nurse.
    * Returns { token, expiresAt, instruction }
    */
+  @Roles('HEAD_NURSE')
   @Post('/staff/:id/link-token')
   generateLinkToken(@Param('id') id: string, @Req() req: Request) {
     return this.staff.generateLinkToken(id, this.context(req).organizationId, this.actor(req));

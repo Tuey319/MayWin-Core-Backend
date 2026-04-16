@@ -12,12 +12,14 @@ import {
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
 import { SchedulesService } from './schedules.service';
 
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { GetCurrentScheduleQuery } from './dto/get-current-schedule.query';
 import { GetScheduleHistoryQuery } from './dto/get-history.query';
 
+@Roles('HEAD_NURSE')
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class SchedulesController {

@@ -10,9 +10,11 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
 import { AuditLogsService } from './audit-logs.service';
 import { CreateAuditLogDto } from './dto/create-audit-log.dto';
 
+@Roles('HOSPITAL_ADMIN')
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class AuditLogsController {

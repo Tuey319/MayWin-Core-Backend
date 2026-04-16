@@ -2,9 +2,11 @@
 import { Body, Controller, Param, Patch, UseGuards } from '@nestjs/common';
 
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
 import { SchedulesService } from './schedules.service';
 import { PatchAssignmentDto } from './dto/patch-assignment.dto';
 
+@Roles('HEAD_NURSE')
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class ScheduleAssignmentsController {
