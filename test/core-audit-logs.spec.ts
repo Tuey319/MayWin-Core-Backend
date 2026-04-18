@@ -8,6 +8,8 @@ import { S3ArtifactsService } from '../src/database/buckets/s3-artifacts.service
 // falls back to the local /tmp file path.
 const s3Stub = {} as S3ArtifactsService;
 
+const ORG_ID = 'test-org';
+
 describe('AuditLogsController & AuditLogsService', () => {
   let controller: AuditLogsController;
   let service: AuditLogsService;
@@ -27,31 +29,28 @@ describe('AuditLogsController & AuditLogsService', () => {
 
   describe('list()', () => {
     it('should return all audit logs newest-first', async () => {
-      const logs = await service.listNewestFirst();
-
-      expect(Array.isArray(logs)).toBe(true);
+      const { entries } = await service.listNewestFirst(ORG_ID);
+      expect(Array.isArray(entries)).toBe(true);
     });
 
     it('should return empty array when no logs exist', async () => {
-      const logs = await service.listNewestFirst();
-
-      expect(Array.isArray(logs)).toBe(true);
-      expect(logs.length).toBeGreaterThanOrEqual(0);
+      const { entries } = await service.listNewestFirst(ORG_ID);
+      expect(Array.isArray(entries)).toBe(true);
+      expect(entries.length).toBeGreaterThanOrEqual(0);
     });
   });
 
   describe('append()', () => {
     it('should append a new audit log entry', async () => {
-      const entry = {
+      const result = await service.append({
+        orgId: ORG_ID,
         actorId: '1',
         actorName: 'Admin User',
         action: 'CREATE_STAFF',
         targetType: 'staff',
         targetId: 'EMP001',
         detail: 'Created new staff member',
-      };
-
-      const result = await service.append(entry);
+      });
 
       expect(result).toHaveProperty('timestamp');
       expect(result.actorId).toBe('1');
@@ -63,17 +62,16 @@ describe('AuditLogsController & AuditLogsService', () => {
     });
 
     it('should maintain CSV format in file', async () => {
-      const entry = {
+      await service.append({
+        orgId: ORG_ID,
         actorId: '2',
         actorName: 'Test User',
         action: 'UPDATE_STAFF',
         targetType: 'staff',
         targetId: 'EMP002',
         detail: 'Updated staff member',
-      };
-
-      await service.append(entry);
-      const csv = await service.readRawCsv();
+      });
+      const csv = await service.readRawCsv(ORG_ID);
 
       expect(csv).toContain('timestamp');
       expect(csv).toContain('actorId');
@@ -81,25 +79,23 @@ describe('AuditLogsController & AuditLogsService', () => {
     });
 
     it('should escape quotes in detail field', async () => {
-      const entry = {
+      await service.append({
+        orgId: ORG_ID,
         actorId: '3',
         actorName: 'Test User',
         action: 'NOTE',
         targetType: 'staff',
         targetId: 'EMP003',
         detail: 'Special chars: "quotes", commas, newlines',
-      };
-
-      await service.append(entry);
-      const csv = await service.readRawCsv();
-
+      });
+      const csv = await service.readRawCsv(ORG_ID);
       expect(csv).toContain('EMP003');
     });
   });
 
   describe('readRawCsv()', () => {
     it('should return CSV content with header', async () => {
-      const csv = await service.readRawCsv();
+      const csv = await service.readRawCsv(ORG_ID);
 
       expect(csv).toContain('timestamp');
       expect(csv).toContain('actorId');
@@ -112,22 +108,20 @@ describe('AuditLogsController & AuditLogsService', () => {
   });
 
   describe('integration with AuditLogsController', () => {
+    const mockReq = (overrides: Record<string, any> = {}) => ({
+      user: {
+        sub: 1,
+        email: 'test@test.com',
+        fullName: 'Test User',
+        organizationId: ORG_ID,
+        roles: ['HOSPITAL_ADMIN'],
+        ...overrides,
+      },
+    } as any);
+
     it('should list logs via controller', async () => {
-      // Mock request object
-      const mockReq = {
-        user: {
-          sub: 1,
-          email: 'test@test.com',
-          fullName: 'Test User',
-        },
-      } as any;
-
-      // Mock response object with passthrough
-      const mockRes = {
-        setHeader: jest.fn(),
-      } as any;
-
-      const result = await controller.list(undefined, mockRes);
+      const mockRes = { setHeader: jest.fn() } as any;
+      const result = await controller.list(mockReq(), undefined, undefined, mockRes);
 
       expect(result).toBeDefined();
       if (typeof result === 'object' && !Array.isArray(result)) {
@@ -138,14 +132,6 @@ describe('AuditLogsController & AuditLogsService', () => {
     });
 
     it('should create audit log via controller', async () => {
-      const mockReq = {
-        user: {
-          sub: 1,
-          email: 'test@test.com',
-          fullName: 'Test User',
-        },
-      } as any;
-
       const dto = {
         action: 'TEST_ACTION',
         targetType: 'test',
@@ -153,7 +139,7 @@ describe('AuditLogsController & AuditLogsService', () => {
         detail: 'Test entry',
       };
 
-      const result = await controller.create(mockReq, dto);
+      const result = await controller.create(mockReq(), dto);
 
       expect(result.ok).toBe(true);
       expect(result.log).toHaveProperty('timestamp');
@@ -161,19 +147,8 @@ describe('AuditLogsController & AuditLogsService', () => {
     });
 
     it('should export CSV when requested', async () => {
-      const mockReq = {
-        user: {
-          sub: 1,
-          email: 'test@test.com',
-          fullName: 'Test User',
-        },
-      } as any;
-
-      const mockRes = {
-        setHeader: jest.fn(),
-      } as any;
-
-      const result = await controller.list('csv', mockRes);
+      const mockRes = { setHeader: jest.fn() } as any;
+      const result = await controller.list(mockReq(), 'csv', undefined, mockRes);
 
       expect(typeof result).toBe('string');
       expect(result).toContain('timestamp');
