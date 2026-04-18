@@ -66,7 +66,7 @@ export class AuditLogsController {
       targetType: dto.targetType ?? '',
       targetId: dto.targetId ?? '',
       detail: dto.detail ?? '',
-      level: dto.level ?? 2,
+      level: dto.level ?? 6,
     });
 
     return { ok: true, log };

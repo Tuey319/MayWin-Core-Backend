@@ -183,7 +183,7 @@ export class StaffService {
       targetType: 'staff',
       targetId: created.employeeId,
       detail: `Created ${dto.position} ${dto.name}${email ? ` (${email})` : ''}`,
-      level: 3,
+      level: 5,
     });
 
     return { ok: true, staff: created };
@@ -225,7 +225,7 @@ export class StaffService {
       targetType: 'staff',
       targetId: updated.employeeId,
       detail: `Updated staff ${updated.name} (${updated.employeeId})`,
-      level: 3,
+      level: 5,
     });
 
     return { ok: true, staff: updated };
@@ -248,7 +248,7 @@ export class StaffService {
       action: 'DELETE_STAFF',
       targetType: 'staff',
       targetId: removed.employeeId,
-      level: 3,
+      level: 5,
       detail: `Deleted staff ${removed.name} (${removed.employeeId})`,
     });
 
@@ -284,7 +284,7 @@ export class StaffService {
       action: 'LINK_USER',
       targetType: 'staff',
       targetId: saved.worker_code ?? workerId,
-      level: 3,
+      level: 5,
       detail: `Linked user ${userId} to worker ${workerId} (${saved.full_name})`,
     });
 
@@ -370,7 +370,7 @@ export class StaffService {
       action: 'CREATE_WEB_ACCOUNT',
       targetType: 'staff',
       targetId: worker.worker_code ?? workerId,
-      level: 3,
+      level: 5,
       detail: `Created web account for ${worker.full_name} (${email})`,
     });
 
@@ -433,7 +433,7 @@ export class StaffService {
       action: 'GENERATE_LINE_TOKEN',
       targetType: 'staff',
       targetId: worker.worker_code ?? workerId,
-      level: 3,
+      level: 5,
       detail: `Generated LINE link token for ${worker.full_name}, expires ${expiresAt.toISOString()}`,
     });
 

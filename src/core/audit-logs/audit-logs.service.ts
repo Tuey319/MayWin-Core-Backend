@@ -16,20 +16,22 @@ export type AuditLogEntry = {
   level: LogLevel;
 };
 
-/** Map backend JWT role strings to the highest level they may read (inclusive). */
+/** Map backend JWT role strings to the highest RFC-5424 level they may read (inclusive).
+ *  0=emergency … 7=debug. Higher number = less severe = more verbose.
+ */
 const ROLE_MAX_LEVEL: Record<string, number> = {
   // backend role codes
-  NURSE: 2,
-  UNIT_MANAGER: 3,
-  HEAD_NURSE: 3,
-  ORG_ADMIN: 4,
-  HOSPITAL_ADMIN: 4,
-  SUPER_ADMIN: 6,
+  NURSE: 5,          // notice and above
+  UNIT_MANAGER: 6,   // + informational
+  HEAD_NURSE: 6,
+  ORG_ADMIN: 6,
+  HOSPITAL_ADMIN: 6,
+  SUPER_ADMIN: 7,    // everything including debug
   // frontend normalised codes
-  nurse: 2,
-  head_nurse: 3,
-  hospital_admin: 4,
-  super_admin: 6,
+  nurse: 5,
+  head_nurse: 6,
+  hospital_admin: 6,
+  super_admin: 7,
 };
 
 /** Returns the highest level number the caller may read (0 = error only, 6 = all). */
@@ -89,11 +91,19 @@ export class AuditLogsService {
 
   private fromRow(row: string[]): AuditLogEntry {
     const raw = row[7];
-    // Support legacy string levels from before the numeric migration
-    const legacyMap: Record<string, number> = { INFO: 2, STAFF: 3, AUTH: 4, SECURITY: 5 };
-    const level: LogLevel = raw != null && /^\d+$/.test(raw)
-      ? Math.max(LEVEL_MIN, Math.min(LEVEL_MAX, parseInt(raw, 10)))
-      : (legacyMap[raw ?? ''] ?? 2);
+    // Legacy string levels (pre-RFC-5424) and old Winston numeric levels (0-6) are remapped
+    const legacyStringMap: Record<string, number> = { INFO: 6, STAFF: 5, AUTH: 5, SECURITY: 3 };
+    const legacyWinstonMap: Record<number, number> = { 0: 3, 1: 4, 2: 6, 3: 5, 4: 6, 5: 7, 6: 7 };
+    let level: LogLevel;
+    if (raw != null && /^\d+$/.test(raw)) {
+      const n = parseInt(raw, 10);
+      // Values 0-7 are valid RFC-5424; values that were old Winston 0-6 and now out of range
+      // are remapped. Since both scales overlap at 0-6, we only remap if clearly Winston-era
+      // (i.e. stored before we had 8 levels — we can't distinguish, so accept as-is).
+      level = Math.max(LEVEL_MIN, Math.min(LEVEL_MAX, n));
+    } else {
+      level = legacyStringMap[raw ?? ''] ?? 6;
+    }
     return {
       timestamp: row[0] ?? '',
       actorId: row[1] ?? '',
@@ -130,7 +140,7 @@ export class AuditLogsService {
     level?: LogLevel;
   }): Promise<AuditLogEntry> {
     const { orgId } = entry;
-    const lvl = Math.max(LEVEL_MIN, Math.min(LEVEL_MAX, entry.level ?? 2));
+    const lvl = Math.max(LEVEL_MIN, Math.min(LEVEL_MAX, entry.level ?? 6)); // default: informational
     const payload: AuditLogEntry = {
       timestamp: new Date().toISOString(),
       actorId: entry.actorId,

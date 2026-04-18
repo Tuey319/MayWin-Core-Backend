@@ -49,24 +49,24 @@ describe('callerMaxLevel', () => {
     expect(callerMaxLevel(['UNKNOWN_ROLE'])).toBe(0);
   });
 
-  it('returns 2 for NURSE', () => {
-    expect(callerMaxLevel(['NURSE'])).toBe(2);
+  it('returns 5 for NURSE', () => {
+    expect(callerMaxLevel(['NURSE'])).toBe(5);
   });
 
-  it('returns 3 for HEAD_NURSE', () => {
-    expect(callerMaxLevel(['HEAD_NURSE'])).toBe(3);
+  it('returns 6 for HEAD_NURSE', () => {
+    expect(callerMaxLevel(['HEAD_NURSE'])).toBe(6);
   });
 
-  it('returns 4 for HOSPITAL_ADMIN', () => {
-    expect(callerMaxLevel(['HOSPITAL_ADMIN'])).toBe(4);
+  it('returns 6 for HOSPITAL_ADMIN', () => {
+    expect(callerMaxLevel(['HOSPITAL_ADMIN'])).toBe(6);
   });
 
-  it('returns 6 for SUPER_ADMIN', () => {
-    expect(callerMaxLevel(['SUPER_ADMIN'])).toBe(6);
+  it('returns 7 for SUPER_ADMIN', () => {
+    expect(callerMaxLevel(['SUPER_ADMIN'])).toBe(7);
   });
 
   it('returns the highest ceiling when multiple roles present', () => {
-    expect(callerMaxLevel(['NURSE', 'HOSPITAL_ADMIN'])).toBe(4);
+    expect(callerMaxLevel(['NURSE', 'HOSPITAL_ADMIN'])).toBe(6);
   });
 });
 
@@ -123,10 +123,10 @@ describe('AuditLogsService (local filesystem)', () => {
         detail: '',
         level: 99 as any,
       });
-      expect(entry.level).toBe(6);
+      expect(entry.level).toBe(7);
     });
 
-    it('defaults level to 2 when omitted', async () => {
+    it('defaults level to 6 (informational) when omitted', async () => {
       const entry = await service.append({
         orgId: '1',
         actorId: 'u1',
@@ -136,7 +136,7 @@ describe('AuditLogsService (local filesystem)', () => {
         targetId: '',
         detail: '',
       });
-      expect(entry.level).toBe(2);
+      expect(entry.level).toBe(6);
     });
 
     it('never touches S3 when bucket is not configured', async () => {
@@ -166,8 +166,8 @@ describe('AuditLogsService (local filesystem)', () => {
     });
 
     it('filters out entries above the caller role ceiling', async () => {
-      const visible = makeRow({ action: 'VISIBLE', level: '2' });
-      const hidden = makeRow({ action: 'HIDDEN', level: '4' });
+      const visible = makeRow({ action: 'VISIBLE', level: '5' }); // notice — within NURSE ceiling (5)
+      const hidden = makeRow({ action: 'HIDDEN', level: '6' });   // informational — above NURSE ceiling
       (fsp.readFile as jest.Mock).mockResolvedValue(makeCsv(visible, hidden));
 
       const { entries } = await service.listNewestFirst('1', ['NURSE']);
@@ -187,7 +187,7 @@ describe('AuditLogsService (local filesystem)', () => {
     it('includes maxLevel in the result', async () => {
       (fsp.readFile as jest.Mock).mockResolvedValue(makeCsv());
       const { maxLevel } = await service.listNewestFirst('1', ['HOSPITAL_ADMIN']);
-      expect(maxLevel).toBe(4);
+      expect(maxLevel).toBe(6);
     });
 
     it('handles legacy string level values', async () => {
@@ -195,7 +195,7 @@ describe('AuditLogsService (local filesystem)', () => {
       (fsp.readFile as jest.Mock).mockResolvedValue(makeCsv(row));
 
       const { entries } = await service.listNewestFirst('1', ['SUPER_ADMIN']);
-      expect(entries[0].level).toBe(2);
+      expect(entries[0].level).toBe(6); // INFO → informational (6) in RFC 5424
     });
   });
 });

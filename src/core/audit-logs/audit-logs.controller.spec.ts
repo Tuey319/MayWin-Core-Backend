@@ -153,14 +153,14 @@ describe('AuditLogsController', () => {
       );
     });
 
-    it('defaults level to 2 when DTO omits it', async () => {
-      mockService.append.mockResolvedValue(makeEntry({ level: 2 }));
+    it('defaults level to 6 (informational) when DTO omits it', async () => {
+      mockService.append.mockResolvedValue(makeEntry({ level: 6 }));
       const { level: _l, ...dtoNoLevel } = dto;
 
       await controller.create(makeReq(), dtoNoLevel as any);
 
       expect(mockService.append).toHaveBeenCalledWith(
-        expect.objectContaining({ level: 2 }),
+        expect.objectContaining({ level: 6 }),
       );
     });
   });

@@ -1,13 +1,14 @@
 import { IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from 'class-validator';
 
-/** Winston-style numeric log level stored as integer 0–6.
- *  0=error 1=warn 2=info 3=http 4=verbose 5=debug 6=silly
+/** RFC 5424 (Syslog) numeric severity level, stored as integer 0–7.
+ *  0=emergency 1=alert 2=critical 3=error 4=warning 5=notice 6=informational 7=debug
+ *  Lower number = higher severity (same convention as syslog).
  */
 export type LogLevel = number;
 
-export const LEVEL_NAMES = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'] as const;
+export const LEVEL_NAMES = ['emergency', 'alert', 'critical', 'error', 'warning', 'notice', 'informational', 'debug'] as const;
 export const LEVEL_MIN = 0;
-export const LEVEL_MAX = 6;
+export const LEVEL_MAX = 7;
 
 export class CreateAuditLogDto {
   @IsString()
