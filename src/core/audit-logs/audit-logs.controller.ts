@@ -18,7 +18,6 @@ import { CreateAuditLogDto } from './dto/create-audit-log.dto';
 export class AuditLogsController {
   constructor(private readonly auditLogs: AuditLogsService) {}
 
-  /** Extract caller roles from the JWT user object. */
   private callerRoles(req: Request): string[] {
     const user = (req as any).user ?? {};
     const roles = Array.isArray(user.roles) ? user.roles : [];
@@ -26,22 +25,29 @@ export class AuditLogsController {
     return roles;
   }
 
+  private callerOrgId(req: Request): string {
+    const user = (req as any).user ?? {};
+    return String(user.organizationId ?? 'unknown');
+  }
+
   @Get('/audit-logs')
   async list(
     @Req() req: Request,
     @Query('export') exportType: string | undefined,
+    @Query('orgId') orgIdOverride: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ) {
     const roles = this.callerRoles(req);
+    const orgId = orgIdOverride ?? this.callerOrgId(req);
 
     if ((exportType ?? '').toLowerCase() === 'csv') {
-      const csv = await this.auditLogs.readRawCsv();
+      const csv = await this.auditLogs.readRawCsv(orgId);
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="audit-logs-${Date.now()}.csv"`);
       return csv;
     }
 
-    const { entries, maxLevel } = await this.auditLogs.listNewestFirst(roles);
+    const { entries, maxLevel } = await this.auditLogs.listNewestFirst(orgId, roles);
     return { ok: true, logs: entries, maxLevel };
   }
 
@@ -50,8 +56,10 @@ export class AuditLogsController {
     const user = (req as any).user ?? {};
     const actorId = dto.actorId ?? String(user.sub ?? user.id ?? 'unknown');
     const actorName = dto.actorName ?? String(user.fullName ?? user.name ?? user.email ?? 'Unknown');
+    const orgId = String(user.organizationId ?? 'unknown');
 
     const log = await this.auditLogs.append({
+      orgId,
       actorId,
       actorName,
       action: dto.action,

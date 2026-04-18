@@ -176,6 +176,7 @@ export class StaffService {
     const created = this.mapWorkerToStaff(worker);
 
     await this.auditLogs.append({
+      orgId: String(context.organizationId),
       actorId: actor.actorId,
       actorName: actor.actorName,
       action: 'CREATE_STAFF',
@@ -217,6 +218,7 @@ export class StaffService {
     const updated = this.mapWorkerToStaff(saved);
 
     await this.auditLogs.append({
+      orgId: String(organizationId),
       actorId: actor.actorId,
       actorName: actor.actorName,
       action: 'UPDATE_STAFF',
@@ -240,6 +242,7 @@ export class StaffService {
     await this.workersRepo.remove(worker);
 
     await this.auditLogs.append({
+      orgId: String(organizationId),
       actorId: actor.actorId,
       actorName: actor.actorName,
       action: 'DELETE_STAFF',
@@ -275,6 +278,7 @@ export class StaffService {
     const saved = await this.workersRepo.save(worker);
 
     await this.auditLogs.append({
+      orgId: String(organizationId),
       actorId: actor.actorId,
       actorName: actor.actorName,
       action: 'LINK_USER',
@@ -360,6 +364,7 @@ export class StaffService {
     });
 
     await this.auditLogs.append({
+      orgId: String(organizationId),
       actorId: actor.actorId,
       actorName: actor.actorName,
       action: 'CREATE_WEB_ACCOUNT',
@@ -422,6 +427,7 @@ export class StaffService {
     );
 
     await this.auditLogs.append({
+      orgId: String(organizationId),
       actorId: actor.actorId,
       actorName: actor.actorName,
       action: 'GENERATE_LINE_TOKEN',

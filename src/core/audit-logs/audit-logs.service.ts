@@ -42,12 +42,10 @@ export function callerMaxLevel(roles: string[]): number {
   return max;
 }
 
-const S3_KEY = ['logs', 'audit-logs.csv'];
-
 @Injectable()
 export class AuditLogsService {
   private readonly logger = new Logger(AuditLogsService.name);
-  private readonly localPath = path.join(process.env.AUDIT_LOG_DIR ?? '/tmp', 'audit-logs.csv');
+  private readonly logDir = process.env.AUDIT_LOG_DIR ?? '/tmp';
   private readonly header = [
     'timestamp',
     'actorId',
@@ -65,18 +63,28 @@ export class AuditLogsService {
     return !!(process.env.MAYWIN_ARTIFACTS_BUCKET?.trim());
   }
 
-  private async readFromS3(): Promise<string> {
-    const raw = await this.s3.getText(S3_KEY);
+  private s3Key(orgId: string): string[] {
+    return ['logs', orgId, 'audit-logs.csv'];
+  }
+
+  private localPath(orgId: string): string {
+    return path.join(this.logDir, orgId, 'audit-logs.csv');
+  }
+
+  private async readFromS3(orgId: string): Promise<string> {
+    const raw = await this.s3.getText(this.s3Key(orgId));
     if (raw != null) return raw;
     return `${toCsvLine(this.header)}\n`;
   }
 
-  private async writeToS3(csv: string): Promise<void> {
-    await this.s3.putText(S3_KEY, csv, 'text/csv; charset=utf-8');
+  private async writeToS3(orgId: string, csv: string): Promise<void> {
+    await this.s3.putText(this.s3Key(orgId), csv, 'text/csv; charset=utf-8');
   }
 
-  private async ensureLocalFile() {
-    await ensureCsvFile(this.localPath, this.header);
+  private async ensureLocalFile(orgId: string): Promise<void> {
+    const filePath = this.localPath(orgId);
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await ensureCsvFile(filePath, this.header);
   }
 
   private fromRow(row: string[]): AuditLogEntry {
@@ -99,9 +107,9 @@ export class AuditLogsService {
   }
 
   /** Return entries the caller is allowed to see, newest first, plus their ceiling. */
-  async listNewestFirst(callerRoles: string[] = []): Promise<{ entries: AuditLogEntry[]; maxLevel: number }> {
+  async listNewestFirst(orgId: string, callerRoles: string[] = []): Promise<{ entries: AuditLogEntry[]; maxLevel: number }> {
     const maxLvl = callerMaxLevel(callerRoles.length ? callerRoles : ['SUPER_ADMIN']);
-    const raw = await this.readRawCsv();
+    const raw = await this.readRawCsv(orgId);
     const rows = parseCsv(raw);
     const entries = rows
       .slice(1)
@@ -112,6 +120,7 @@ export class AuditLogsService {
   }
 
   async append(entry: {
+    orgId: string;
     actorId: string;
     actorName: string;
     action: string;
@@ -120,6 +129,7 @@ export class AuditLogsService {
     detail: string;
     level?: LogLevel;
   }): Promise<AuditLogEntry> {
+    const { orgId } = entry;
     const lvl = Math.max(LEVEL_MIN, Math.min(LEVEL_MAX, entry.level ?? 2));
     const payload: AuditLogEntry = {
       timestamp: new Date().toISOString(),
@@ -144,20 +154,20 @@ export class AuditLogsService {
     ])}\n`;
 
     if (this.useS3) {
-      const existing = await this.readFromS3();
-      await this.writeToS3(existing + line);
-      this.logger.debug(`Audit log appended to S3 (${S3_KEY.join('/')})`);
+      const existing = await this.readFromS3(orgId);
+      await this.writeToS3(orgId, existing + line);
+      this.logger.debug(`Audit log appended to S3 (${this.s3Key(orgId).join('/')})`);
     } else {
-      await this.ensureLocalFile();
-      await fs.appendFile(this.localPath, line, 'utf8');
+      await this.ensureLocalFile(orgId);
+      await fs.appendFile(this.localPath(orgId), line, 'utf8');
     }
 
     return payload;
   }
 
-  async readRawCsv(): Promise<string> {
-    if (this.useS3) return this.readFromS3();
-    await this.ensureLocalFile();
-    return fs.readFile(this.localPath, 'utf8');
+  async readRawCsv(orgId: string): Promise<string> {
+    if (this.useS3) return this.readFromS3(orgId);
+    await this.ensureLocalFile(orgId);
+    return fs.readFile(this.localPath(orgId), 'utf8');
   }
 }
