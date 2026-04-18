@@ -97,29 +97,23 @@ jobs:
             --region ${{ env.AWS_REGION }} \
             --image-uri ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:http-latest
 
-      - name: Wait for Lambda update
+      - name: Wait for Lambda update and verify
+        timeout-minutes: 5
         run: |
-          echo "Waiting for Lambda update..."
-          sleep 10
-
-      - name: Check Lambda deployment status
-        run: |
-          aws lambda get-function-configuration \
+          echo "Waiting for Lambda update to complete..."
+          aws lambda wait function-updated \
             --function-name ${{ env.LAMBDA_FUNCTION }} \
-            --region ${{ env.AWS_REGION }} \
-            --query "{State:State,LastUpdateStatus:LastUpdateStatus}" \
-            --output table
+            --region ${{ env.AWS_REGION }}
 
-      - name: Verify Lambda function
-        run: |
           STATUS=$(aws lambda get-function-configuration \
             --function-name ${{ env.LAMBDA_FUNCTION }} \
             --region ${{ env.AWS_REGION }} \
             --query 'LastUpdateStatus' \
             --output text)
-          
+
+          echo "Final status: $STATUS"
           if [ "$STATUS" != "Successful" ]; then
-            echo "Lambda update failed or still in progress"
+            echo "Lambda update failed"
             exit 1
           fi
           echo "Lambda update successful!"
