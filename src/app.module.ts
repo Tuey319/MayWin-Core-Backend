@@ -1,9 +1,10 @@
 // src/app.module.ts
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
 import { RolesGuard } from '@/common/guards/roles.guard';
+import { HttpLoggerMiddleware } from '@/common/middleware/http-logger.middleware';
 
 import { AuthModule } from './core/auth/auth.module';
 import { HealthModule } from './core/health/health.module';
@@ -79,4 +80,8 @@ import { ExportOptionsModule } from '@/core/export-options/export-options.module
     ExportOptionsModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(HttpLoggerMiddleware).forRoutes('*');
+  }
+}
