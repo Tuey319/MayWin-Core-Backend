@@ -146,7 +146,7 @@ export class AuthService {
 
     if (!user) {
       // PDPA §27, ISO 27001:2022 A.8.15 — log failed login attempt (no user details)
-      await this.auditLogs.append({ actorId: 'anonymous', actorName: email,
+      await this.auditLogs.append({ orgId: 'unknown', actorId: 'anonymous', actorName: email,
         action: 'LOGIN_FAILED', targetType: 'user', targetId: email,
         detail: 'User not found' }).catch(() => {});
       throw new UnauthorizedException('Invalid credentials');
@@ -155,7 +155,7 @@ export class AuthService {
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) {
       // PDPA §27, ISO 27001:2022 A.8.15 — log failed login attempt
-      await this.auditLogs.append({ actorId: String(user.id), actorName: user.email,
+      await this.auditLogs.append({ orgId: String(user.organization_id ?? 'unknown'), actorId: String(user.id), actorName: user.email,
         action: 'LOGIN_FAILED', targetType: 'user', targetId: String(user.id),
         detail: 'Invalid password' }).catch(() => {});
       throw new UnauthorizedException('Invalid credentials');
@@ -263,7 +263,7 @@ export class AuthService {
     const accessToken = this.signFull(user, roles, unitIds);
 
     // PDPA §27, ISO 27001:2022 A.8.15 — log successful authentication
-    await this.auditLogs.append({ actorId: String(user.id), actorName: user.email,
+    await this.auditLogs.append({ orgId: String(user.organization_id ?? 'unknown'), actorId: String(user.id), actorName: user.email,
       action: 'LOGIN_SUCCESS', targetType: 'user', targetId: String(user.id),
       detail: 'OTP verified — session issued' }).catch(() => {});
 

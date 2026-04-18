@@ -56,7 +56,7 @@ export class AvailabilityService {
     return result;
   }
 
-  async upsert(unitId: string, entries: Entry[], actor?: { actorId: string; actorName: string }) {
+  async upsert(unitId: string, entries: Entry[], actor?: { actorId: string; actorName: string; orgId?: string }) {
     // Invalidate cache for the date range covered by this upsert
     if (entries.length > 0) {
       const dates = entries.map((e) => e.date).sort();
@@ -102,6 +102,7 @@ export class AvailabilityService {
     // PDPA §27, ISO 27001:2022 A.8.15 — audit log every bulk availability mutation
     if (actor) {
       await this.auditLogs.append({
+        orgId: actor.orgId ?? 'unknown',
         actorId: actor.actorId,
         actorName: actor.actorName,
         action: 'UPDATE_AVAILABILITY',

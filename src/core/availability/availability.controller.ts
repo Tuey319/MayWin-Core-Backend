@@ -33,6 +33,7 @@ export class AvailabilityController {
     const actor = {
       actorId: String(req.user?.sub ?? req.user?.id ?? 'unknown'),
       actorName: String(req.user?.fullName ?? req.user?.email ?? 'Unknown'),
+      orgId: String(req.user?.organizationId ?? 'unknown'),
     };
     return this.availability.upsert(unitId, dto.entries, actor);
   }
