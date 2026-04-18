@@ -1,7 +1,7 @@
 // src/core/staff/staff.service.ts
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { IsNull, QueryFailedError, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { PatchStaffDto } from './dto/patch-staff.dto';
@@ -18,6 +18,7 @@ type StaffRow = {
   name: string;
   employeeId: string;
   lineId: string;
+  primaryUnitId: string | null;
   position: 'nurse' | 'head_nurse' | 'scheduler' | 'admin';
   email: string;
   status: 'active' | 'inactive';
@@ -49,6 +50,7 @@ export class StaffService {
       name: worker.full_name,
       employeeId: worker.worker_code ?? '',
       lineId: worker.line_id ?? '',
+      primaryUnitId: worker.primary_unit_id ?? null,
       position: (attrs.position as StaffRow['position']) ?? 'nurse',
       email: (attrs.email as string) ?? '',
       status: worker.is_active ? 'active' : 'inactive',
@@ -158,20 +160,28 @@ export class StaffService {
     const email = dto.email?.trim().toLowerCase() || null;
     const unitId = dto.unitId != null ? dto.unitId : context.unitId;
 
-    const worker = await this.workersRepo.save(
-      this.workersRepo.create({
-        organization_id: String(context.organizationId),
-        primary_unit_id: unitId != null ? String(unitId) : null,
-        full_name: dto.name,
-        worker_code: dto.employeeId,
-        employment_type: this.mapPositionToEmploymentType(dto.position),
-        weekly_hours: null,
-        line_id: dto.lineId?.trim() || null,
-        is_active: (dto.status ?? 'active') === 'active',
-        linked_user_id: null,
-        attributes: { ...(email ? { email } : {}), position: dto.position },
-      }),
-    );
+    let worker: Worker;
+    try {
+      worker = await this.workersRepo.save(
+        this.workersRepo.create({
+          organization_id: String(context.organizationId),
+          primary_unit_id: unitId != null ? String(unitId) : null,
+          full_name: dto.name,
+          worker_code: dto.employeeId,
+          employment_type: this.mapPositionToEmploymentType(dto.position),
+          weekly_hours: null,
+          line_id: dto.lineId?.trim() || null,
+          is_active: (dto.status ?? 'active') === 'active',
+          linked_user_id: null,
+          attributes: { ...(email ? { email } : {}), position: dto.position },
+        }),
+      );
+    } catch (err) {
+      if (err instanceof QueryFailedError && (err as any).code === '23505') {
+        throw new BadRequestException('employeeId already exists in this organisation');
+      }
+      throw err;
+    }
 
     const created = this.mapWorkerToStaff(worker);
 
