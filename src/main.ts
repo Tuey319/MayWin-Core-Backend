@@ -31,3 +31,4 @@ async function bootstrap() {
   console.log(`Core Backend successfully running on http://localhost:${port}/api/v1/core`);
 }
 bootstrap();
+
