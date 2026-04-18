@@ -44,8 +44,8 @@ src/
 ├── main.ts                     # Bootstrap (port 3000, global prefix /api/v1/core)
 │
 ├── common/
-│   ├── decorators/             # @Roles() decorator
-│   └── guards/                 # JwtAuthGuard (validates Bearer JWT)
+│   ├── decorators/             # @Roles() decorator, @Public() decorator
+│   └── guards/                 # JwtAuthGuard (validates Bearer JWT), RolesGuard (global APP_GUARD)
 │
 ├── core/                       # All business logic lives here
 │   ├── auth/                   # Login, OTP 2FA, JWT issuance, signup
@@ -415,6 +415,7 @@ curl -X POST http://localhost:3000/api/v1/core/units/2/reports \
 ```
 POST /api/v1/core/units/:unitId/reports
   → JwtAuthGuard validates Bearer token
+  → RolesGuard (APP_GUARD) checks @Roles() on handler — rejects if caller is below minimum role
   → Controller extracts { organizationId, roles, unitIds } from req.user
   → @Body() is deserialized into CreateReportDto
   → Controller calls svc.createReport(ctx, unitId, dto)
@@ -443,6 +444,7 @@ POST /api/v1/core/units/:unitId/reports
    GET /api/v1/core/...
    Authorization: Bearer <jwt>
    → JwtAuthGuard validates signature
+   → RolesGuard (APP_GUARD) checks @Roles() metadata
    → req.user = { sub, organizationId, roles, unitIds }
 ```
 
@@ -454,10 +456,58 @@ POST /api/v1/core/units/:unitId/reports
 interface JwtPayload {
   sub: number;            // user ID
   organizationId: number; // org scoping — all queries filter by this
-  roles: string[];        // global roles (e.g. ['ADMIN', 'MANAGER'])
+  roles: string[];        // role codes (e.g. ['hospital_admin'])
   unitIds: number[];      // units the user has access to
 }
 ```
+
+### Role Enforcement — Global RolesGuard
+
+`RolesGuard` is registered as a global `APP_GUARD` in `src/app.module.ts`. It enforces a hierarchical role check on every request:
+
+```
+nurse < head_nurse < department_head < hospital_admin < super_admin
+```
+
+**To restrict a controller or route**, add `@Roles()` with the minimum required role:
+
+```typescript
+import { Roles } from '@/common/decorators/roles.decorator';
+
+// Entire controller requires at least head_nurse
+@Roles('head_nurse')
+@Controller('units/:unitId/schedules')
+export class SchedulesController { ... }
+
+// Individual route override — requires hospital_admin
+@Roles('hospital_admin')
+@Delete(':scheduleId')
+deleteSchedule(...) { ... }
+```
+
+A caller with a role above the declared minimum passes automatically (e.g. `hospital_admin` satisfies `@Roles('head_nurse')`).
+
+**To make a route public** (bypass both JwtAuthGuard and RolesGuard), use `@Public()`:
+
+```typescript
+import { Public } from '@/common/decorators/public.decorator';
+
+@Public()
+@Post('/auth/login')
+login(...) { ... }
+```
+
+**Active role codes** (stored in `unit_memberships.role_code` and issued in the JWT):
+
+| Role Code | Level |
+|---|---|
+| `nurse` | 1 (lowest) |
+| `head_nurse` | 2 |
+| `department_head` | 3 |
+| `hospital_admin` | 4 |
+| `super_admin` | 5 (highest) |
+
+Do not use the old codes `admin`, `scheduler`, or `viewer` — these were legacy aliases and are no longer authoritative.
 
 ### Extracting the Caller's Context
 
@@ -706,6 +756,7 @@ PUT   /export-options/me       Save/replace current user's export options
 - [ ] Create DTO in `src/core/<module>/dto/`
 - [ ] Add method to `<module>.service.ts`
 - [ ] Add route to `<module>.controller.ts`
+- [ ] Add `@Roles('<minimum-role>')` to the route handler (or the controller class if all routes share the same minimum)
 - [ ] Run `npm run build` and test with curl or Postman
 
 ### For a brand new module:
@@ -714,6 +765,7 @@ PUT   /export-options/me       Save/replace current user's export options
 - [ ] Create `<module>.controller.ts`
 - [ ] Create `<module>.service.ts`
 - [ ] Create `dto/` folder with DTO files
+- [ ] Add `@Roles()` to controller class or individual routes (use `@Public()` only for genuinely unauthenticated endpoints)
 - [ ] If new DB table needed: create entity in `src/database/entities/<domain>/`
 - [ ] Add entity to `TypeOrmModule.forFeature([...])` in module
 - [ ] Register module in `src/app.module.ts`

@@ -10,42 +10,44 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
-import { Roles } from '@/common/decorators/roles.decorator';
 import { AuditLogsService } from './audit-logs.service';
 import { CreateAuditLogDto } from './dto/create-audit-log.dto';
 
-@Roles('HOSPITAL_ADMIN')
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class AuditLogsController {
   constructor(private readonly auditLogs: AuditLogsService) {}
 
+  /** Extract caller roles from the JWT user object. */
+  private callerRoles(req: Request): string[] {
+    const user = (req as any).user ?? {};
+    const roles = Array.isArray(user.roles) ? user.roles : [];
+    if (user.role && !roles.includes(user.role)) roles.push(user.role);
+    return roles;
+  }
+
   @Get('/audit-logs')
   async list(
+    @Req() req: Request,
     @Query('export') exportType: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ) {
+    const roles = this.callerRoles(req);
+
     if ((exportType ?? '').toLowerCase() === 'csv') {
       const csv = await this.auditLogs.readRawCsv();
-      const ts = Date.now();
-
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename="audit-logs-${ts}.csv"`,
-      );
-
+      res.setHeader('Content-Disposition', `attachment; filename="audit-logs-${Date.now()}.csv"`);
       return csv;
     }
 
-    const logs = await this.auditLogs.listNewestFirst();
-    return { ok: true, logs };
+    const { entries, maxLevel } = await this.auditLogs.listNewestFirst(roles);
+    return { ok: true, logs: entries, maxLevel };
   }
 
   @Post('/audit-logs')
   async create(@Req() req: Request, @Body() dto: CreateAuditLogDto) {
     const user = (req as any).user ?? {};
-
     const actorId = dto.actorId ?? String(user.sub ?? user.id ?? 'unknown');
     const actorName = dto.actorName ?? String(user.fullName ?? user.name ?? user.email ?? 'Unknown');
 
@@ -53,9 +55,10 @@ export class AuditLogsController {
       actorId,
       actorName,
       action: dto.action,
-      targetType: dto.targetType,
-      targetId: dto.targetId,
-      detail: dto.detail,
+      targetType: dto.targetType ?? '',
+      targetId: dto.targetId ?? '',
+      detail: dto.detail ?? '',
+      level: dto.level ?? 2,
     });
 
     return { ok: true, log };

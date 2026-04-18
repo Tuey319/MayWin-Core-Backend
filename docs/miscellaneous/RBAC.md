@@ -1,6 +1,8 @@
-# RBAC Design for MayWin Core Backend
+# RBAC — MayWin Core Backend
 
-This document describes the recommended role-based access control model for the MayWin backend and how it should fit the existing JWT, organization, and unit-scoped authorization flow.
+> **Status (2026-04-17):** Backend RBAC is **fully implemented**. `RolesGuard` is no longer a no-op — it is registered as a global `APP_GUARD` and enforces role requirements declared via `@Roles()` decorators on controllers. See the Implementation section for usage. The original design notes below are retained for context.
+
+This document describes the role-based access control model for the MayWin backend and how it fits the existing JWT, organization, and unit-scoped authorization flow.
 
 ## Goals
 
@@ -11,42 +13,37 @@ This document describes the recommended role-based access control model for the 
 
 ## Current State
 
-The backend already has most of the building blocks:
+Backend RBAC is now fully implemented:
 
 - JWT authentication is implemented in `src/core/auth`.
-- The JWT payload already carries `roles` and `unitIds`.
-- Organization, site, and unit services already perform manual role/org checks.
-- A `@Roles(...)` decorator exists in `src/common/decorators/roles.decorator.ts`.
-- `src/common/guards/roles.guard.ts` currently returns `true` for every request, so it does not enforce anything yet.
-
-The main gap is that RBAC is not enforced centrally. Today, authorization is split between:
-
-- `JwtAuthGuard` for authentication.
-- Service-level checks like `roles.includes('ADMIN')`.
-- Per-method org/unit filters in the service layer.
-
-That works, but it is easy to drift over time.
+- The JWT payload carries `roles` and `unitIds`.
+- `RolesGuard` in `src/common/guards/roles.guard.ts` is a **functional hierarchical guard** registered globally via `APP_GUARD`. It reads `@Roles()` metadata from route handlers and enforces the role hierarchy: `nurse < head_nurse < department_head < hospital_admin < super_admin`. It no longer returns `true` unconditionally.
+- Controllers use `@Roles(...)` decorators to declare the minimum role required for each route.
+- Organization, site, and unit services retain their existing service-level org/unit ownership checks as a second enforcement layer.
 
 ## Canonical Roles
 
-Use these backend role codes as the source of truth:
+The active backend role codes stored in `unit_memberships.role_code` and carried in the JWT `roles` array:
 
-| Role | Meaning | Typical Access |
+| Role Code | Meaning | Typical Access |
 |---|---|---|
-| `ADMIN` | System-wide administrator | Cross-org access, bootstrap, full admin control |
-| `ORG_ADMIN` | Organization administrator | Organization-wide admin within own tenant |
-| `UNIT_MANAGER` | Unit-level manager | Unit configuration, scheduling, staff operations |
-| `NURSE` | Nursing staff member | Self-service, own availability, own schedule, inbox |
+| `nurse` | Nursing staff member | Self-service, own availability, own schedule, inbox |
+| `head_nurse` | Ward-level manager | Unit scheduling, staff management within a ward |
+| `department_head` | Cross-ward manager | Visibility across wards within a department |
+| `hospital_admin` | Hospital-wide admin | Full hospital access, user management, audit logs |
+| `super_admin` | System-wide administrator | Cross-org access, bootstrap, full admin control |
 
-UI label mapping:
+**These five are the active codes.** The old codes `admin`, `scheduler`, and `viewer` were legacy aliases; they are no longer used as authoritative role codes in either the database or the JWT.
 
-| UI Label | Backend Role |
+UI label mapping (from `src/lib/roles.js`):
+
+| UI Label | Backend Role Code |
 |---|---|
-| Admin | `ADMIN` |
-| Head Nurse | `UNIT_MANAGER` |
-| Nurse | `NURSE` |
-
-If the UI later adds more labels, they should still map to one of the canonical backend role codes.
+| Super Admin | `super_admin` |
+| Hospital Admin | `hospital_admin` |
+| Department Head | `department_head` |
+| Head Nurse | `head_nurse` |
+| Nurse | `nurse` |
 
 ## Authorization Model
 
@@ -103,18 +100,25 @@ Recommended rule:
 
 ### Controller Layer
 
-Use `@Roles(...)` on routes that are clearly restricted by role.
+`RolesGuard` is registered globally as `APP_GUARD`, so you do not need to add `@UseGuards(RolesGuard)` manually. Use `@Roles(...)` on controllers or individual route handlers to declare the minimum required role.
 
 Example:
 
 ```ts
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN', 'ORG_ADMIN')
+// Minimum role: hospital_admin
+@Roles('hospital_admin')
 @Post('/organizations')
 createOrganization() {}
+
+// Minimum role: head_nurse (head_nurse, department_head, hospital_admin, super_admin all pass)
+@Roles('head_nurse')
+@Post('/units/:unitId/schedules')
+createSchedule() {}
 ```
 
-This is best for coarse policy decisions.
+The guard enforces the hierarchy: a caller with role `hospital_admin` satisfies `@Roles('head_nurse')` because `hospital_admin > head_nurse`. Callers below the declared minimum role receive a `403 Forbidden`.
+
+Routes decorated with `@Public()` bypass the guard entirely (used for `/auth/login`, `/auth/verify-otp`, `/auth/signup`).
 
 ### Service Layer
 
@@ -184,17 +188,17 @@ These are the main backend files that should eventually participate in RBAC:
 
 ## Implementation Plan
 
-### Phase 1: Make Roles Enforceable
+### Phase 1: Make Roles Enforceable — **COMPLETE**
 
-- Implement `RolesGuard` so it reads route metadata from `@Roles(...)`.
-- Apply `RolesGuard` together with `JwtAuthGuard` on restricted controllers.
-- Keep the existing service-layer organization checks.
+- `RolesGuard` rewritten to read route metadata from `@Roles(...)` and enforce the role hierarchy.
+- `RolesGuard` registered globally as `APP_GUARD` — no per-controller `@UseGuards` needed.
+- Controllers annotated with `@Roles()` decorators.
+- Existing service-layer organization checks retained.
 
 ### Phase 2: Standardize Policies
 
-- Decide which controllers are `ADMIN` only.
-- Decide which controllers are `ORG_ADMIN` or `UNIT_MANAGER` allowed.
-- Add `@Roles(...)` annotations to the obvious admin routes.
+- Audit all controllers to confirm correct `@Roles()` minimum levels.
+- Ensure list endpoints always filter by tenant unless the caller is `super_admin`.
 
 ### Phase 3: Tighten Resource Ownership
 
