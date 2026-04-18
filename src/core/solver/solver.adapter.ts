@@ -218,7 +218,8 @@ export class SolverAdapter {
       demand[date] = {};
       for (const sc of shifts) {
         const rule = (normalized?.coverageRules ?? []).find(
-          (r: any) => String(r.shiftCode) === sc && String(r.dayType) === dayType,
+          (r: any) => String(r.shiftCode) === sc &&
+            (String(r.dayType) === dayType || String(r.dayType).toUpperCase() === 'ALL'),
         );
         demand[date][sc] = rule?.minWorkers != null ? Number(rule.minWorkers) : 0;
       }
