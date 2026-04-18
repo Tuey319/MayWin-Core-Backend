@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
 import { RolesGuard } from '@/common/guards/roles.guard';
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { HttpLoggerMiddleware } from '@/common/middleware/http-logger.middleware';
 
 import { AuthModule } from './core/auth/auth.module';
@@ -36,9 +37,10 @@ import { ExportOptionsModule } from '@/core/export-options/export-options.module
 
 @Module({
   providers: [
-    // RolesGuard is registered globally so @Roles() works on every controller
-    // without needing @UseGuards(RolesGuard) per file.
-    // JwtAuthGuard is still applied per-controller (explicit opt-in).
+    // JwtAuthGuard runs first globally — sets request.user for all routes.
+    // Routes that don't need auth use @Public() to skip it.
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    // RolesGuard runs second — request.user is already set by JwtAuthGuard.
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
   imports: [

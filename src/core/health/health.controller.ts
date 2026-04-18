@@ -1,19 +1,20 @@
 // src/core/health/health.controller.ts
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { Public } from '@/common/decorators/public.decorator';
 import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { access, constants } from 'fs/promises';
 import * as path from 'path';
 
 @Controller()
 export class HealthController {
-  /** Public ping — load balancers / uptime monitors. */
+  @Public()
   @Get('health')
   health() {
     return { status: 'ok', service: 'core-backend', time: new Date().toISOString() };
   }
 
-  /** Public build info. */
+  @Public()
   @Get('info')
   info() {
     return {

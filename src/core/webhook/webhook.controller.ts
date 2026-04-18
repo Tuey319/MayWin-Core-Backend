@@ -1,5 +1,6 @@
 // src/core/webhook/webhook.controller.ts
 import { Controller, Post, Body, Logger, Req, HttpCode } from '@nestjs/common';
+import { Public } from '@/common/decorators/public.decorator';
 import type { Request } from 'express';
 import * as crypto from 'crypto';
 import { WebhookService } from './webhook.service';
@@ -36,6 +37,7 @@ export class WebhookController {
     return hash === signature;
   }
 
+  @Public()
   @Post()
   @HttpCode(200)
   async handleLineWebhook(@Req() req: Request, @Body() body: any) {

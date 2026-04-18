@@ -9,6 +9,7 @@ import { LogoutDto } from './dto/logout.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { PatchUsernameDto } from './dto/patch-username.dto';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { Public } from '@/common/decorators/public.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -19,6 +20,7 @@ export class AuthController {
    * Returns { requires2FA: true, otpToken } — NOT a usable JWT.
    * The client must call /auth/verify-otp with the OTP from email.
    */
+  @Public()
   @Post('login')
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto.email, dto.password);
@@ -29,12 +31,13 @@ export class AuthController {
    * Validates the OTP sent to email + the pending token from /auth/login.
    * Returns { accessToken, user } on success.
    */
+  @Public()
   @Post('verify-otp')
   async verifyOtp(@Body() dto: VerifyOtpDto) {
     return this.authService.verifyOtp(dto.otpToken, dto.otp);
   }
 
-  // POST /auth/signup
+  @Public()
   @Post('signup')
   async signup(@Body() dto: SignupDto) {
     return this.authService.signup(dto);
