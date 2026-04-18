@@ -1,22 +1,13 @@
 // src/core/health/health.controller.ts
 import { Controller, Get, UseGuards } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
-import { S3ArtifactsService } from '@/database/buckets/s3-artifacts.service';
+import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { access, constants } from 'fs/promises';
 import * as path from 'path';
 
-type CheckResult = Record<string, any> & { ok: boolean };
-
 @Controller()
 export class HealthController {
-  constructor(
-    @InjectDataSource() private readonly dataSource: DataSource,
-    private readonly s3: S3ArtifactsService,
-  ) {}
-
-  /** Public ping — used by load balancers / uptime monitors. */
+  /** Public ping — load balancers / uptime monitors. */
   @Get('health')
   health() {
     return { status: 'ok', service: 'core-backend', time: new Date().toISOString() };
@@ -32,20 +23,18 @@ export class HealthController {
     };
   }
 
-  /** Full system health — super-admin only. */
+  /** Full system health — JWT-authenticated. */
   @UseGuards(JwtAuthGuard)
   @Get('health/system')
   async systemHealth() {
-    const [database, s3, solver, mail, line] = await Promise.all([
+    const [database, s3, solver] = await Promise.all([
       this.checkDatabase(),
       this.checkS3(),
       this.checkSolver(),
-      Promise.resolve(this.checkMail()),
-      Promise.resolve(this.checkLine()),
     ]);
 
     const mem = process.memoryUsage();
-    const toMb = (n: number) => Math.round(n / 1024 / 1024);
+    const mb = (n: number) => Math.round(n / 1024 / 1024);
 
     return {
       checkedAt: new Date().toISOString(),
@@ -54,48 +43,67 @@ export class HealthController {
         platform: process.platform,
         uptimeSeconds: Math.floor(process.uptime()),
         environment: process.env.NODE_ENV ?? 'development',
-        memory: {
-          heapUsedMb: toMb(mem.heapUsed),
-          heapTotalMb: toMb(mem.heapTotal),
-          rssMb: toMb(mem.rss),
-        },
+        buildTime: process.env.BUILD_TIME ?? 'unknown',
+        memory: { heapUsedMb: mb(mem.heapUsed), heapTotalMb: mb(mem.heapTotal), rssMb: mb(mem.rss) },
       },
-      checks: { database, s3, solver, mail, line },
+      checks: {
+        database,
+        s3,
+        solver,
+        mail: this.checkMail(),
+        line: this.checkLine(),
+      },
     };
   }
 
-  // ── Individual checks ──────────────────────────────────────────────────────
+  // ── Checks ────────────────────────────────────────────────────────────────
 
-  private async checkDatabase(): Promise<CheckResult> {
-    const start = Date.now();
+  private async checkDatabase(): Promise<Record<string, any>> {
+    const host = process.env.DB_HOST;
+    const port = process.env.DB_PORT;
+    const user = process.env.DB_USER;
+    const name = process.env.DB_NAME;
+    const configured = !!(host && port && user && name);
+    if (!configured) return { ok: false, configured: false, error: 'DB env vars missing' };
+
+    // Live ping via raw pg
     try {
-      await this.dataSource.query('SELECT 1');
-      return { ok: true, latencyMs: Date.now() - start };
+      const { Client } = await import('pg');
+      const client = new Client({
+        host,
+        port: Number(port),
+        user,
+        password: process.env.DB_PASSWORD,
+        database: name,
+        ssl: process.env.PGSSLMODE === 'require' ? { rejectUnauthorized: false } : undefined,
+        connectionTimeoutMillis: 3000,
+      });
+      const start = Date.now();
+      await client.connect();
+      await client.query('SELECT 1');
+      await client.end();
+      return { ok: true, host, latencyMs: Date.now() - start };
     } catch (err: any) {
-      return { ok: false, error: err?.message ?? String(err) };
+      return { ok: false, host, error: err?.message ?? String(err) };
     }
   }
 
-  private async checkS3(): Promise<CheckResult> {
+  private async checkS3(): Promise<Record<string, any>> {
     const bucket = process.env.MAYWIN_ARTIFACTS_BUCKET?.trim();
     if (!bucket) {
-      return {
-        ok: false,
-        configured: false,
-        error: 'MAYWIN_ARTIFACTS_BUCKET not set — audit logs stored in /tmp (lost on cold start)',
-      };
+      return { ok: false, configured: false, error: 'MAYWIN_ARTIFACTS_BUCKET not set — logs lost on cold start' };
     }
-    const start = Date.now();
     try {
-      // getText returns null on NoSuchKey, throws on auth/network errors
-      await this.s3.getText(['health-ping']);
+      const s3 = new S3Client({ region: process.env.AWS_REGION ?? 'ap-southeast-1' });
+      const start = Date.now();
+      await s3.send(new HeadBucketCommand({ Bucket: bucket }));
       return { ok: true, configured: true, bucket, latencyMs: Date.now() - start };
     } catch (err: any) {
       return { ok: false, configured: true, bucket, error: err?.message ?? String(err) };
     }
   }
 
-  private async checkSolver(): Promise<CheckResult> {
+  private async checkSolver(): Promise<Record<string, any>> {
     const cliPath = process.env.SOLVER_CLI_PATH?.trim() ?? 'src/core/solver/solver_cli.py';
     const absPath = path.isAbsolute(cliPath) ? cliPath : path.resolve(process.cwd(), cliPath);
     const pythonCmd = process.env.SOLVER_PYTHON?.trim() ?? (process.platform === 'win32' ? 'py' : 'python3');
@@ -103,11 +111,11 @@ export class HealthController {
       await access(absPath, constants.R_OK);
       return { ok: true, pythonCmd, cliPath: absPath };
     } catch {
-      return { ok: false, pythonCmd, cliPath: absPath, error: 'Solver CLI not found at path' };
+      return { ok: false, pythonCmd, cliPath: absPath, error: 'CLI not found at path' };
     }
   }
 
-  private checkMail(): CheckResult {
+  private checkMail(): Record<string, any> {
     const host = process.env.SMTP_HOST;
     const user = process.env.SMTP_USER;
     const pass = process.env.SMTP_PASS;
@@ -115,7 +123,7 @@ export class HealthController {
     return { ok: configured, configured, host: host ?? null, userSet: !!user };
   }
 
-  private checkLine(): CheckResult {
+  private checkLine(): Record<string, any> {
     const hasSecret = !!process.env.LINE_CHANNEL_SECRET;
     const hasToken = !!process.env.LINE_CHANNEL_ACCESS_TOKEN;
     return { ok: hasSecret && hasToken, channelSecretSet: hasSecret, accessTokenSet: hasToken };
