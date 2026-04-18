@@ -35,6 +35,7 @@ function makeDeps() {
     userRoleRepo: { find: jest.fn() },
     roleRepo: { find: jest.fn() },
     otpRepo: { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn(), delete: jest.fn() },
+    workerRepo: { findOne: jest.fn(), find: jest.fn(), save: jest.fn() },
     jwtService: { sign: jest.fn().mockReturnValue('jwt-token'), verify: jest.fn() },
     mailService: { sendOtp: jest.fn().mockResolvedValue(undefined), sendWelcome: jest.fn().mockResolvedValue(undefined) },
   };
@@ -48,6 +49,7 @@ function makeSvc(overrides: Partial<ReturnType<typeof makeDeps>> = {}) {
     d.userRoleRepo as any,
     d.roleRepo as any,
     d.otpRepo as any,
+    d.workerRepo as any,
     d.jwtService as any,
     d.mailService as any,
   );
@@ -68,7 +70,7 @@ describe('AuthController', () => {
 describe('AuthService', () => {
   it('should be defined', () => {
     const svc = new AuthService(
-      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
     );
     expect(svc).toBeDefined();
   });
