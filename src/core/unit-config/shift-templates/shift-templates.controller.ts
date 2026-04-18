@@ -1,14 +1,13 @@
 // src/core/unit-config/shift-templates/shift-templates.controller.ts
 import { Body, Controller, Delete, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
-import { RolesGuard } from '@/common/guards/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { ShiftTemplatesService } from './shift-templates.service';
 import { CreateShiftTemplateDto } from './dto/create-shift-template.dto';
 import { UpdateShiftTemplateDto } from './dto/update-shift-template.dto';
 
-@Roles('UNIT_MANAGER', 'ORG_ADMIN')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('HOSPITAL_ADMIN')
+@UseGuards(JwtAuthGuard)
 @Controller()
 export class ShiftTemplatesController {
   constructor(private readonly service: ShiftTemplatesService) {}

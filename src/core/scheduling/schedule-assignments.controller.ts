@@ -1,15 +1,13 @@
 // src/core/scheduling/schedule-assignments.controller.ts
-// src/core/scheduling/schedule-assignments.controller.ts
 import { Body, Controller, Param, Patch, Req, UseGuards } from '@nestjs/common';
 
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
-import { RolesGuard } from '@/common/guards/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { SchedulesService } from './schedules.service';
 import { PatchAssignmentDto } from './dto/patch-assignment.dto';
 
-@Roles('UNIT_MANAGER', 'ORG_ADMIN')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('HEAD_NURSE')
+@UseGuards(JwtAuthGuard)
 @Controller()
 export class ScheduleAssignmentsController {
   constructor(private readonly schedules: SchedulesService) {}

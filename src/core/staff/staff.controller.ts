@@ -13,13 +13,12 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
-import { RolesGuard } from '@/common/guards/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { StaffService } from './staff.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { PatchStaffDto } from './dto/patch-staff.dto';
 
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard)
 @Controller()
 export class StaffController {
   constructor(private readonly staff: StaffService) { }
@@ -41,8 +40,7 @@ export class StaffController {
     };
   }
 
-  // Read access: admins and unit managers (ISO 27001 A.9.4.1)
-  @Roles('ORG_ADMIN', 'UNIT_MANAGER', 'ADMIN')
+  @Roles('HEAD_NURSE')
   @Get('/staff')
   list(@Req() req: Request) {
     const user = (req as any).user ?? {};
@@ -50,26 +48,25 @@ export class StaffController {
     return this.staff.list(this.context(req).organizationId, roles);
   }
 
-  @Roles('ORG_ADMIN', 'UNIT_MANAGER', 'ADMIN')
+  @Roles('HEAD_NURSE')
   @Get('/staff/:id')
   getById(@Param('id') id: string, @Req() req: Request) {
     return this.staff.getById(id, this.context(req).organizationId);
   }
 
-  // Write access: admins only (ISO 27001 A.9.4.1)
-  @Roles('ORG_ADMIN', 'ADMIN')
+  @Roles('HEAD_NURSE')
   @Post('/staff')
   create(@Body() dto: CreateStaffDto, @Req() req: Request) {
     return this.staff.create(dto, this.actor(req), this.context(req));
   }
 
-  @Roles('ORG_ADMIN', 'UNIT_MANAGER', 'ADMIN')
+  @Roles('HEAD_NURSE')
   @Patch('/staff/:id')
   patch(@Param('id') id: string, @Body() dto: PatchStaffDto, @Req() req: Request) {
     return this.staff.patch(id, dto, this.actor(req), this.context(req).organizationId);
   }
 
-  @Roles('ORG_ADMIN', 'ADMIN')
+  @Roles('HOSPITAL_ADMIN')
   @Delete('/staff/:id')
   remove(@Param('id') id: string, @Req() req: Request) {
     return this.staff.remove(id, this.actor(req), this.context(req).organizationId);
@@ -78,8 +75,8 @@ export class StaffController {
   /**
    * POST /staff/:id/create-account
    * Create a new web login account for an existing worker that has no linked user.
-   * Uses the email stored in worker.attributes.email and sends a welcome email.
    */
+  @Roles('HOSPITAL_ADMIN')
   @Post('/staff/:id/create-account')
   createWebAccount(@Param('id') id: string, @Req() req: Request) {
     return this.staff.createWebAccount(id, this.context(req).organizationId, this.actor(req));
@@ -90,6 +87,7 @@ export class StaffController {
    * Link an existing user account to this worker.
    * Body: { userId: number }
    */
+  @Roles('HOSPITAL_ADMIN')
   @Post('/staff/:id/link-user')
   linkUser(
     @Param('id') id: string,
@@ -101,9 +99,9 @@ export class StaffController {
 
   /**
    * POST /staff/:id/link-token
-   * Generate a one-time LINE invite code for a nurse. Admin/manager only.
+   * Generate a one-time LINE invite code for a nurse.
    */
-  @Roles('ORG_ADMIN', 'UNIT_MANAGER', 'ADMIN')
+  @Roles('HEAD_NURSE')
   @Post('/staff/:id/link-token')
   generateLinkToken(@Param('id') id: string, @Req() req: Request) {
     return this.staff.generateLinkToken(id, this.context(req).organizationId, this.actor(req));

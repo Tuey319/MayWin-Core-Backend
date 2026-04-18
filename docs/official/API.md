@@ -2213,50 +2213,124 @@ Entry point for running a full schedule workflow. Behavior depends on `ORCHESTRA
 
 ## Audit Logs
 
+Audit logs are **scoped per organization**. Every read and write is automatically isolated to the caller's `organizationId` from the JWT. Logs are stored as CSV — either at `logs/{orgId}/audit-logs.csv` in S3 (when `MAYWIN_ARTIFACTS_BUCKET` is set) or at `/tmp/{orgId}/audit-logs.csv` locally.
+
+Entries returned are filtered by the caller's role — higher roles see more sensitive entries (see level table below).
+
+---
+
 ### `GET /audit-logs`
 
-Lists audit log entries (newest first).
+Lists audit log entries for the caller's organization, newest first. Entries are filtered to the maximum level allowed by the caller's role.
 
 **Query params**
 
 | Param | Type | Notes |
 |---|---|---|
-| `export` | `"csv"` | Returns full log as CSV download |
+| `export` | `"csv"` | Returns the raw CSV file as a download instead of JSON |
+| `orgId` | string | Override which org's log to read. **SUPER_ADMIN only** — ignored for all other roles. |
 
 **Response — 200 OK (JSON)**
 ```json
 {
+  "ok": true,
+  "maxLevel": 3,
   "logs": [
     {
-      "id": "log-1",
-      "actor": "user@example.com",
-      "action": "staff.deactivate",
-      "target": "EMP069",
       "timestamp": "2026-03-01T10:00:00.000Z",
-      "attributes": {}
+      "actorId": "42",
+      "actorName": "Admin User",
+      "action": "CREATE_STAFF",
+      "targetType": "staff",
+      "targetId": "EMP069",
+      "detail": "Created nurse สมชาย ใจดี (somchai@example.com)",
+      "level": 3
     }
   ]
 }
 ```
 
-**Response — 200 OK (CSV)** — streamed CSV file download when `?export=csv`.
+| Field | Notes |
+|---|---|
+| `maxLevel` | Highest log level the caller is permitted to see (based on their role) |
+| `logs` | Entries at or below `maxLevel`, sorted newest first |
+
+**Response — 200 OK (CSV)** — when `?export=csv`, returns the raw CSV file as an attachment:
+```
+Content-Type: text/csv; charset=utf-8
+Content-Disposition: attachment; filename="audit-logs-<timestamp>.csv"
+```
+
+**Role → max visible level**
+
+| Role | Max level |
+|------|-----------|
+| `NURSE` | 2 (info) |
+| `UNIT_MANAGER` / `HEAD_NURSE` | 3 (http) |
+| `ORG_ADMIN` / `HOSPITAL_ADMIN` | 4 (verbose) |
+| `SUPER_ADMIN` | 6 (all) |
+
+**Log levels**
+
+| Level | Label | Typical use |
+|-------|-------|-------------|
+| 0 | error | System errors |
+| 1 | warn | Warnings |
+| 2 | info | Read actions visible to all staff |
+| 3 | http | Staff mutations (create/update/delete) |
+| 4 | verbose | Auth and account-level actions |
+| 5 | debug | Debug events |
+| 6 | silly | Internal/system only |
+
+**Errors:** `401`
 
 ---
 
 ### `POST /audit-logs`
 
-Appends a new audit log entry. Actor is derived from the JWT.
+Manually appends an audit log entry for the caller's organization. `actorId` and `actorName` are derived from the JWT if not provided in the body.
 
 **Request**
 ```json
 {
-  "action": "staff.deactivate",
-  "target": "EMP069",
-  "attributes": {}
+  "action": "CREATE_STAFF",
+  "targetType": "staff",
+  "targetId": "EMP069",
+  "detail": "Created nurse สมชาย ใจดี",
+  "level": 3,
+  "actorId": "42",
+  "actorName": "Admin User"
 }
 ```
 
-**Response — 201 Created** — `{ "log": { ... } }`
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `action` | string | yes | Event identifier e.g. `CREATE_STAFF`, `DELETE_STAFF` |
+| `targetType` | string | no | Resource type e.g. `"staff"` |
+| `targetId` | string | no | Resource identifier e.g. employee code |
+| `detail` | string | no | Human-readable description |
+| `level` | 0–6 | no | Default `2`. Use the level table above. |
+| `actorId` | string | no | Defaults to JWT `sub` |
+| `actorName` | string | no | Defaults to JWT `fullName` / `email` |
+
+**Response — 200 OK**
+```json
+{
+  "ok": true,
+  "log": {
+    "timestamp": "2026-03-01T10:00:00.000Z",
+    "actorId": "42",
+    "actorName": "Admin User",
+    "action": "CREATE_STAFF",
+    "targetType": "staff",
+    "targetId": "EMP069",
+    "detail": "Created nurse สมชาย ใจดี",
+    "level": 3
+  }
+}
+```
+
+**Errors:** `401`
 
 ---
 
@@ -2377,9 +2451,10 @@ The Next.js BFF proxies browser requests to this backend. Quick reference:
 | `GET` | `/api/staff/:id` | `GET /staff/:id` |
 | `PATCH` | `/api/staff/:id` | `PATCH /staff/:id` |
 | `DELETE` | `/api/staff/:id` | `DELETE /staff/:id` |
-| `GET` | `/api/audit-logs` | `GET /audit-logs` |
-| `GET` | `/api/audit-logs?export=csv` | `GET /audit-logs?export=csv` |
-| `POST` | `/api/audit-logs` | `POST /audit-logs` |
+| `GET` | `/api/audit-logs` | `GET /audit-logs` — scoped to caller's org |
+| `GET` | `/api/audit-logs?export=csv` | `GET /audit-logs?export=csv` — org-scoped CSV download |
+| `GET` | `/api/audit-logs?orgId=X` | `GET /audit-logs?orgId=X` — SUPER_ADMIN only |
+| `POST` | `/api/audit-logs` | `POST /audit-logs` — appended to caller's org log |
 | `GET` | `/api/hospital` | `GET /organizations` + `GET /units` |
 | `PUT` | `/api/hospital` | `PUT /organizations` |
 | `GET` | `/api/hospital/containers` | `GET /organizations/:orgId/schedule-containers` |

@@ -130,19 +130,18 @@ export class StaffService {
   }
 
   /**
-   * Create staff = create Worker + User (web login) + link them + assign unit role.
-   * Sends a welcome email with temporary password.
+   * Create a Worker record only. No User account is created here.
+   * Email is stored in attributes for later use via createWebAccount or the
+   * BFF's /api/users + link-user flow when the admin explicitly creates a login.
    */
   async create(
     dto: CreateStaffDto,
     actor: { actorId: string; actorName: string },
     context: { organizationId: number; unitId: number | null },
   ) {
-    if (!dto.name || !dto.employeeId || !dto.position || !dto.email) {
-      throw new BadRequestException('name, employeeId, position, email are required');
+    if (!dto.name || !dto.employeeId || !dto.position) {
+      throw new BadRequestException('name, employeeId and position are required');
     }
-
-    const email = dto.email.trim().toLowerCase();
 
     // Guard: employee ID unique per org
     const exists = await this.workersRepo.findOne({
@@ -153,27 +152,9 @@ export class StaffService {
     });
     if (exists) throw new BadRequestException('employeeId already exists in this organisation');
 
-    // Guard: email unique in users table
-    const userExists = await this.userRepo.findOne({ where: { email } });
-    if (userExists) throw new BadRequestException('An account with this email already exists');
-
-    // 1. Generate temp password + create User
-    const tempPassword = this.generateTempPassword();
-    const passwordHash = await bcrypt.hash(tempPassword, 10);
-
-    const user = await this.userRepo.save(
-      this.userRepo.create({
-        organization_id: String(context.organizationId),
-        email,
-        password_hash: passwordHash,
-        full_name: dto.name,
-        is_active: true,
-        attributes: { role_hint: dto.position },
-      }),
-    );
-
-    // 2. Create Worker record linked to the User
+    const email = dto.email?.trim().toLowerCase() || null;
     const unitId = dto.unitId != null ? dto.unitId : context.unitId;
+
     const worker = await this.workersRepo.save(
       this.workersRepo.create({
         organization_id: String(context.organizationId),
@@ -184,41 +165,22 @@ export class StaffService {
         weekly_hours: null,
         line_id: dto.lineId?.trim() || null,
         is_active: (dto.status ?? 'active') === 'active',
-        linked_user_id: user.id,
-        attributes: { email, position: dto.position },
+        linked_user_id: null,
+        attributes: { ...(email ? { email } : {}), position: dto.position },
       }),
     );
-
-    // 3. Assign role in unit_memberships (per-unit role)
-    if (unitId != null) {
-      const existingMembership = await this.membershipRepo.findOne({
-        where: { unit_id: String(unitId), user_id: user.id },
-      });
-      if (!existingMembership) {
-        await this.membershipRepo.save(
-          this.membershipRepo.create({
-            unit_id: String(unitId),
-            user_id: user.id,
-            role_code: this.mapPositionToRoleCode(dto.position),
-          }),
-        );
-      }
-    }
-
-    // 4. Send welcome email (non-blocking)
-    this.mailService.sendWelcome(email, dto.name, tempPassword).catch((err) => {
-      console.warn(`[STAFF] Welcome email failed for ${email}:`, err?.message);
-    });
 
     const created = this.mapWorkerToStaff(worker);
 
     await this.auditLogs.append({
+      orgId: String(context.organizationId),
       actorId: actor.actorId,
       actorName: actor.actorName,
       action: 'CREATE_STAFF',
       targetType: 'staff',
       targetId: created.employeeId,
-      detail: `Created ${dto.position} ${dto.name} (${email}) with web account`,
+      detail: `Created ${dto.position} ${dto.name}${email ? ` (${email})` : ''}`,
+      level: 3,
     });
 
     return { ok: true, staff: created };
@@ -253,12 +215,14 @@ export class StaffService {
     const updated = this.mapWorkerToStaff(saved);
 
     await this.auditLogs.append({
+      orgId: String(organizationId),
       actorId: actor.actorId,
       actorName: actor.actorName,
       action: 'UPDATE_STAFF',
       targetType: 'staff',
       targetId: updated.employeeId,
       detail: `Updated staff ${updated.name} (${updated.employeeId})`,
+      level: 3,
     });
 
     return { ok: true, staff: updated };
@@ -275,11 +239,13 @@ export class StaffService {
     await this.workersRepo.remove(worker);
 
     await this.auditLogs.append({
+      orgId: String(organizationId),
       actorId: actor.actorId,
       actorName: actor.actorName,
       action: 'DELETE_STAFF',
       targetType: 'staff',
       targetId: removed.employeeId,
+      level: 3,
       detail: `Deleted staff ${removed.name} (${removed.employeeId})`,
     });
 
@@ -309,11 +275,13 @@ export class StaffService {
     const saved = await this.workersRepo.save(worker);
 
     await this.auditLogs.append({
+      orgId: String(organizationId),
       actorId: actor.actorId,
       actorName: actor.actorName,
       action: 'LINK_USER',
       targetType: 'staff',
       targetId: saved.worker_code ?? workerId,
+      level: 3,
       detail: `Linked user ${userId} to worker ${workerId} (${saved.full_name})`,
     });
 
@@ -393,11 +361,13 @@ export class StaffService {
     });
 
     await this.auditLogs.append({
+      orgId: String(organizationId),
       actorId: actor.actorId,
       actorName: actor.actorName,
       action: 'CREATE_WEB_ACCOUNT',
       targetType: 'staff',
       targetId: worker.worker_code ?? workerId,
+      level: 3,
       detail: `Created web account for ${worker.full_name} (${email})`,
     });
 
@@ -454,11 +424,13 @@ export class StaffService {
     );
 
     await this.auditLogs.append({
+      orgId: String(organizationId),
       actorId: actor.actorId,
       actorName: actor.actorName,
       action: 'GENERATE_LINE_TOKEN',
       targetType: 'staff',
       targetId: worker.worker_code ?? workerId,
+      level: 3,
       detail: `Generated LINE link token for ${worker.full_name}, expires ${expiresAt.toISOString()}`,
     });
 

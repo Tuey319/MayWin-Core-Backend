@@ -12,7 +12,6 @@ import {
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
-import { RolesGuard } from '@/common/guards/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { SchedulesService } from './schedules.service';
 
@@ -20,7 +19,8 @@ import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { GetCurrentScheduleQuery } from './dto/get-current-schedule.query';
 import { GetScheduleHistoryQuery } from './dto/get-history.query';
 
-@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('HEAD_NURSE')
+@UseGuards(JwtAuthGuard)
 @Controller()
 export class SchedulesController {
   constructor(private readonly schedules: SchedulesService) {}
@@ -31,7 +31,7 @@ export class SchedulesController {
   }
 
   /**
-   * Purpose: Create a schedule “container” for a unit + date horizon (no solver run yet).
+   * Purpose: Create a schedule "container" for a unit + date horizon (no solver run yet).
    */
   @Roles('UNIT_MANAGER', 'ORG_ADMIN')
   @Post('/units/:unitId/schedules')
