@@ -64,28 +64,14 @@ export class HealthController {
     const user = process.env.DB_USER;
     const name = process.env.DB_NAME;
     const configured = !!(host && port && user && name);
-    if (!configured) return { ok: false, configured: false, error: 'DB env vars missing' };
-
-    // Live ping via raw pg
-    try {
-      const { Client } = await import('pg');
-      const client = new Client({
-        host,
-        port: Number(port),
-        user,
-        password: process.env.DB_PASSWORD,
-        database: name,
-        ssl: process.env.PGSSLMODE === 'require' ? { rejectUnauthorized: false } : undefined,
-        connectionTimeoutMillis: 3000,
-      });
-      const start = Date.now();
-      await client.connect();
-      await client.query('SELECT 1');
-      await client.end();
-      return { ok: true, host, latencyMs: Date.now() - start };
-    } catch (err: any) {
-      return { ok: false, host, error: err?.message ?? String(err) };
-    }
+    return {
+      ok: configured,
+      configured,
+      host: host ?? null,
+      port: port ?? null,
+      database: name ?? null,
+      ...(configured ? {} : { error: 'DB env vars missing' }),
+    };
   }
 
   private async checkS3(): Promise<Record<string, any>> {
