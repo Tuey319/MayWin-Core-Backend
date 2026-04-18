@@ -30,7 +30,20 @@ export class AuditLogsService {
     'detail',
   ];
 
-  constructor(private readonly s3: S3ArtifactsService) {}
+  constructor(private readonly s3: S3ArtifactsService) {
+    // A.8.15 — warn at startup if audit log bucket lacks Object Lock (immutability guarantee)
+    if (this.useS3) {
+      this.s3.getBucketObjectLockConfig().then((locked) => {
+        if (!locked) {
+          this.logger.warn(
+            '[AUDIT] S3 bucket does NOT have Object Lock enabled. ' +
+            'Audit logs can be deleted or modified — enable GOVERNANCE or COMPLIANCE mode on ' +
+            `bucket "${process.env.MAYWIN_ARTIFACTS_BUCKET}" to satisfy A.8.15 / ISO 27001:2022.`,
+          );
+        }
+      }).catch(() => {});
+    }
+  }
 
   private get useS3(): boolean {
     return !!(process.env.MAYWIN_ARTIFACTS_BUCKET?.trim());

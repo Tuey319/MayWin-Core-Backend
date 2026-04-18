@@ -3,6 +3,7 @@ import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerStorageRedisService } from './common/throttler/throttler-storage-redis.service';
 
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 
@@ -44,8 +45,16 @@ import { ExportOptionsModule } from '@/core/export-options/export-options.module
       isGlobal: true,
       ttl: 5 * 60 * 1000, // 5 minutes default TTL (ms)
     }),
-    // Rate limiting — 60 req/min/IP globally (ISO 27001:2022 — 8.6, 8.20)
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]),
+    // Rate limiting — 60 req/min/IP globally; Redis-backed when REDIS_URL is set (A.8.5, R-11)
+    ThrottlerModule.forRootAsync({
+      useFactory: () => {
+        const redisUrl = process.env.REDIS_URL?.trim();
+        return {
+          throttlers: [{ ttl: 60000, limit: 60 }],
+          ...(redisUrl ? { storage: new ThrottlerStorageRedisService(redisUrl) } : {}),
+        };
+      },
+    }),
 
     DatabaseModule,
     AuthModule,

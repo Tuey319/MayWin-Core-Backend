@@ -5,6 +5,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  GetObjectLockConfigurationCommand,
   NoSuchKey,
 } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
@@ -93,6 +94,18 @@ export class S3ArtifactsService {
       Bucket: ref.bucket,
       Key: ref.key,
     }));
+  }
+
+  /** Returns true if the bucket has S3 Object Lock enabled (A.8.15 audit log integrity). */
+  async getBucketObjectLockConfig(): Promise<boolean> {
+    const bucket = this.bucket;
+    if (!bucket) return false;
+    try {
+      const res = await this.s3.send(new GetObjectLockConfigurationCommand({ Bucket: bucket }));
+      return res.ObjectLockConfiguration?.ObjectLockEnabled === 'Enabled';
+    } catch {
+      return false;
+    }
   }
 
   /**
