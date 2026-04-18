@@ -35,7 +35,7 @@ function makeDeps() {
     userRoleRepo: { find: jest.fn() },
     roleRepo: { find: jest.fn() },
     otpRepo: { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn(), delete: jest.fn() },
-    workerRepo: { findOne: jest.fn(), find: jest.fn(), save: jest.fn() },
+    workerRepo: { findOne: jest.fn(), find: jest.fn(), create: jest.fn().mockReturnValue({}), save: jest.fn().mockResolvedValue({}) },
     jwtService: { sign: jest.fn().mockReturnValue('jwt-token'), verify: jest.fn() },
     mailService: { sendOtp: jest.fn().mockResolvedValue(undefined), sendWelcome: jest.fn().mockResolvedValue(undefined) },
   };
