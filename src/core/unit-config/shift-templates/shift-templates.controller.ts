@@ -1,5 +1,5 @@
 // src/core/unit-config/shift-templates/shift-templates.controller.ts
-import { Body, Controller, Delete, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { ShiftTemplatesService } from './shift-templates.service';
@@ -11,6 +11,12 @@ import { UpdateShiftTemplateDto } from './dto/update-shift-template.dto';
 @Controller()
 export class ShiftTemplatesController {
   constructor(private readonly service: ShiftTemplatesService) {}
+
+  @Get('/units/:unitId/shift-templates')
+  list(@Req() req: any, @Param('unitId') unitId: string, @Query('includeInactive') includeInactive?: string) {
+    const orgId = String(req.user?.organizationId);
+    return this.service.list(orgId, unitId, includeInactive === 'true');
+  }
 
   @Post('/units/:unitId/shift-templates')
   create(@Req() req: any, @Param('unitId') unitId: string, @Body() dto: CreateShiftTemplateDto) {

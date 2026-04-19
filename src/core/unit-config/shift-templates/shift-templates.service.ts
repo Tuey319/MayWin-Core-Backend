@@ -14,6 +14,13 @@ export class ShiftTemplatesService {
     private readonly repo: Repository<ShiftTemplate>,
   ) {}
 
+  async list(orgId: string, unitId: string, includeInactive = false) {
+    const where: any = { organization_id: orgId, unit_id: unitId };
+    if (!includeInactive) where.is_active = true;
+    const rows = await this.repo.find({ where, order: { code: 'ASC' } });
+    return { shiftTemplates: rows.map((r) => this.toApi(r)) };
+  }
+
   async create(orgId: string, unitId: string, dto: CreateShiftTemplateDto) {
     const existing = await this.repo.findOne({
       where: {
