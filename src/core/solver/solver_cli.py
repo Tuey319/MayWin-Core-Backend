@@ -907,6 +907,10 @@ def solve(req: SolveRequest) -> SolveResponse:
         if result2 in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             return pack_solution(req, emergency, solver2, "EMERGENCY_OPTIMAL" if result2 == cp_model.OPTIMAL else "EMERGENCY_FEASIBLE")
 
+    rules_obj = req.rules or Rules()
+    sample_days = req.days[:3] if req.days else []
+    demand_sample = {d: req.demand.get(d, {}) for d in sample_days}
+
     return SolveResponse(
         status="INFEASIBLE",
         objective_value=None,
@@ -915,6 +919,18 @@ def solve(req: SolveRequest) -> SolveResponse:
         nurse_stats=[],
         details={
             "message": "No feasible schedule found. 100% coverage cannot be guaranteed unless emergency overrides are allowed and there is enough total nurse capacity to cover all demand slots.",
+            "debug": {
+                "nurses": len(req.nurses),
+                "days": len(req.days),
+                "shifts": req.shifts,
+                "allow_emergency_overrides": rules_obj.allow_emergency_overrides,
+                "guarantee_full_coverage": rules_obj.guarantee_full_coverage,
+                "min_days_off_per_week": rules_obj.min_days_off_per_week,
+                "enable_min_total_days_off": rules_obj.enable_min_total_days_off,
+                "min_total_days_off": rules_obj.min_total_days_off,
+                "max_shifts_per_day": rules_obj.max_shifts_per_day,
+                "demand_sample": demand_sample,
+            },
         },
     )
 
