@@ -42,6 +42,9 @@ export function callerMaxLevel(roles: string[]): number {
   return max;
 }
 
+const MAX_LOG_BYTES = 50 * 1024 * 1024; // 50 MB
+const RETENTION_DAYS = 30;
+
 @Injectable()
 export class AuditLogsService {
   private readonly logger = new Logger(AuditLogsService.name);
@@ -82,6 +85,62 @@ export class AuditLogsService {
 
   private localPath(orgId: string): string {
     return path.join(this.logDir, orgId, 'audit-logs.csv');
+  }
+
+  private rotatedPath(orgId: string): string {
+    const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    return path.join(this.logDir, orgId, `audit-logs-${date}.csv`);
+  }
+
+  // Rotate active log to dated file when it exceeds MAX_LOG_BYTES.
+  // Then delete rotated files older than RETENTION_DAYS.
+  private async maybeRotate(orgId: string): Promise<void> {
+    const active = this.localPath(orgId);
+    let stat: Awaited<ReturnType<typeof fs.stat>>;
+    try {
+      stat = await fs.stat(active);
+    } catch {
+      return; // file doesn't exist yet
+    }
+
+    if (stat.size < MAX_LOG_BYTES) return;
+
+    const dest = this.rotatedPath(orgId);
+    try {
+      await fs.rename(active, dest);
+      this.logger.log(`[AUDIT] Rotated log for org ${orgId} → ${path.basename(dest)}`);
+    } catch (err: any) {
+      this.logger.warn(`[AUDIT] Rotation failed: ${err.message}`);
+      return;
+    }
+
+    // Purge rotated files older than RETENTION_DAYS
+    await this.purgeOldLogs(orgId);
+  }
+
+  private async purgeOldLogs(orgId: string): Promise<void> {
+    const dir = path.join(this.logDir, orgId);
+    let files: string[];
+    try {
+      files = await fs.readdir(dir);
+    } catch {
+      return;
+    }
+
+    const cutoff = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    for (const file of files) {
+      if (!/^audit-logs-\d{4}-\d{2}-\d{2}\.csv$/.test(file)) continue;
+      const filePath = path.join(dir, file);
+      try {
+        const { mtime } = await fs.stat(filePath);
+        if (mtime.getTime() < cutoff) {
+          await fs.unlink(filePath);
+          this.logger.log(`[AUDIT] Deleted expired log ${file} for org ${orgId}`);
+        }
+      } catch {
+        // ignore individual file errors
+      }
+    }
   }
 
   private async readFromS3(orgId: string): Promise<string> {
@@ -171,6 +230,7 @@ export class AuditLogsService {
       await this.writeToS3(orgId, existing + line);
       this.logger.debug(`Audit log appended to S3 (${this.s3Key(orgId).join('/')})`);
     } else {
+      await this.maybeRotate(orgId);
       await this.ensureLocalFile(orgId);
       await fs.appendFile(this.localPath(orgId), line, 'utf8');
     }

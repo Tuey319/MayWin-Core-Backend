@@ -22,6 +22,7 @@ import { JwtPayload } from './types/jwt-payload';
 import { SignupDto } from './dto/signup.dto';
 import { MailService } from '@/core/mail/mail.service';
 import { AuditLogsService } from '@/core/audit-logs/audit-logs.service';
+import { TokenBlocklistService } from './token-blocklist.service';
 
 @Injectable()
 export class AuthService {
@@ -49,6 +50,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
     private readonly auditLogs: AuditLogsService,
+    private readonly blocklist: TokenBlocklistService,
   ) { }
 
   // ── Helpers ─────────────────────────────────────────────────────────────
@@ -159,23 +161,6 @@ export class AuthService {
         action: 'LOGIN_FAILED', targetType: 'user', targetId: String(user.id),
         detail: 'Invalid password' }).catch(() => {});
       throw new UnauthorizedException('Invalid credentials');
-    }
-
-    // OTP bypass: set AUTH_DISABLE_OTP=true to skip 2FA and return JWT directly
-    if ((process.env.AUTH_DISABLE_OTP ?? '').toLowerCase() === 'true') {
-      const { unitIds, roles } = await this.buildContext(user.id, user.attributes ?? {});
-      const accessToken = this.signFull(user, roles, unitIds);
-      return {
-        accessToken,
-        user: {
-          id: user.id,
-          email: user.email,
-          fullName: user.full_name,
-          organizationId: Number(user.organization_id),
-          roles,
-          unitIds,
-        },
-      };
     }
 
     // Generate + persist OTP (invalidate any existing unused ones)
@@ -367,7 +352,14 @@ export class AuthService {
     return { user: { id: saved.id, email: saved.email, fullName: saved.full_name } };
   }
 
-  async logout(_jwtUser: any, _dto: { deviceId?: string }) {
+  // ISO 27001:2022 A.9.4.2 — add token to Redis blocklist for remainder of its TTL
+  async logout(jwtUser: any, _dto: { deviceId?: string }) {
+    const sub: number = jwtUser?.sub;
+    const iat: number = jwtUser?.iat;
+    const exp: number = jwtUser?.exp;
+    if (sub && iat && exp) {
+      await this.blocklist.block(sub, iat, exp);
+    }
     return { ok: true };
   }
 }
