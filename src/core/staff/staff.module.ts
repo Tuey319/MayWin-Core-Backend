@@ -9,12 +9,13 @@ import { Worker } from '@/database/entities/workers/worker.entity';
 import { User } from '@/database/entities/users/user.entity';
 import { UnitMembership } from '@/database/entities/users/unit-membership.entity';
 import { LineLinkToken } from '@/database/entities/workers/line-link-token.entity';
+import { WorkerUnitMembership } from '@/database/entities/workers/worker-unit.entity';
 
 @Module({
   imports: [
     AuditLogsModule,
     MailModule,
-    TypeOrmModule.forFeature([Worker, User, UnitMembership, LineLinkToken]),
+    TypeOrmModule.forFeature([Worker, User, UnitMembership, LineLinkToken, WorkerUnitMembership]),
   ],
   controllers: [StaffController],
   providers: [StaffService],

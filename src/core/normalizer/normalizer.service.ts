@@ -106,22 +106,34 @@ export class NormalizerService {
     const constraints = await this.resolveConstraintProfile(job);
 
     // 4) Workers in this unit (active)
+    // Include workers from worker_unit_memberships OR those whose primary_unit_id matches,
+    // because staff creation only sets primary_unit_id and may not insert a membership row.
     const memberships = await this.workerUnitRepo.find({
       where: { unit_id: unit_id as any } as any,
     });
 
-    const workerIds = [...new Set(memberships.map((m) => m.worker_id))];
+    const membershipWorkerIds = [...new Set(memberships.map((m) => m.worker_id))];
 
-    const workerRows = workerIds.length
-      ? await this.workerRepo.find({
-          where: {
-            id: In(workerIds as any),
-            organization_id: organization_id as any,
-            is_active: true as any,
-          } as any,
-          order: { id: 'ASC' as any },
-        })
-      : [];
+    const whereConditions: any[] = [
+      {
+        primary_unit_id: unit_id as any,
+        organization_id: organization_id as any,
+        is_active: true as any,
+      },
+    ];
+
+    if (membershipWorkerIds.length) {
+      whereConditions.push({
+        id: In(membershipWorkerIds as any),
+        organization_id: organization_id as any,
+        is_active: true as any,
+      });
+    }
+
+    const workerRows = await this.workerRepo.find({
+      where: whereConditions,
+      order: { id: 'ASC' as any },
+    });
 
     // Deterministic nurseCode per worker
     const nurseCodeByWorkerId: Record<string, string> = {};

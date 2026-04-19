@@ -11,6 +11,7 @@ import { EmploymentType, Worker } from '@/database/entities/workers/worker.entit
 import { User } from '@/database/entities/users/user.entity';
 import { UnitMembership } from '@/database/entities/users/unit-membership.entity';
 import { LineLinkToken } from '@/database/entities/workers/line-link-token.entity';
+import { WorkerUnitMembership } from '@/database/entities/workers/worker-unit.entity';
 
 type StaffRow = {
   id: string;
@@ -36,6 +37,8 @@ export class StaffService {
     private readonly membershipRepo: Repository<UnitMembership>,
     @InjectRepository(LineLinkToken)
     private readonly lineLinkTokenRepo: Repository<LineLinkToken>,
+    @InjectRepository(WorkerUnitMembership)
+    private readonly workerUnitRepo: Repository<WorkerUnitMembership>,
     private readonly auditLogs: AuditLogsService,
     private readonly mailService: MailService,
   ) { }
@@ -184,6 +187,18 @@ export class StaffService {
     }
 
     const created = this.mapWorkerToStaff(worker);
+
+    // Ensure worker_unit_memberships entry exists so the normalizer can find this worker
+    if (unitId != null) {
+      const existingMembership = await this.workerUnitRepo.findOne({
+        where: { worker_id: worker.id, unit_id: String(unitId) },
+      });
+      if (!existingMembership) {
+        await this.workerUnitRepo.save(
+          this.workerUnitRepo.create({ worker_id: worker.id, unit_id: String(unitId), role_code: null }),
+        );
+      }
+    }
 
     await this.auditLogs.append({
       orgId: String(context.organizationId),
