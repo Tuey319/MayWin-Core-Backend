@@ -8,6 +8,7 @@ import { Worker, EmploymentType } from '../src/database/entities/workers/worker.
 import { User } from '../src/database/entities/users/user.entity';
 import { UnitMembership } from '../src/database/entities/users/unit-membership.entity';
 import { LineLinkToken } from '../src/database/entities/workers/line-link-token.entity';
+import { WorkerUnitMembership } from '../src/database/entities/workers/worker-unit.entity';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 describe('StaffController & StaffService', () => {
@@ -17,6 +18,7 @@ describe('StaffController & StaffService', () => {
   let mockUsersRepo: any;
   let mockMembershipRepo: any;
   let mockLineLinkTokenRepo: any;
+  let mockWorkerUnitRepo: any;
   let mockAuditLogsService: any;
   let mockMailService: any;
 
@@ -52,6 +54,12 @@ describe('StaffController & StaffService', () => {
       save: jest.fn(),
     };
 
+    mockWorkerUnitRepo = {
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockImplementation((v: any) => v),
+      save: jest.fn().mockResolvedValue({}),
+    };
+
     mockMailService = {
       sendWelcome: jest.fn().mockResolvedValue(undefined),
     };
@@ -75,6 +83,10 @@ describe('StaffController & StaffService', () => {
         {
           provide: getRepositoryToken(LineLinkToken),
           useValue: mockLineLinkTokenRepo,
+        },
+        {
+          provide: getRepositoryToken(WorkerUnitMembership),
+          useValue: mockWorkerUnitRepo,
         },
         {
           provide: AuditLogsService,
