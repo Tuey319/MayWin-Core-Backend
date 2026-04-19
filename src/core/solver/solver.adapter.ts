@@ -57,14 +57,14 @@ export class SolverAdapter {
     const plan = opts?.plan ?? 'A_STRICT';
     const timeLimitSeconds = opts?.timeLimitSeconds ?? 30;
 
-    // Detect NormalizedInput.v1 (rich objects from NormalizerService)
+    // Detect NormalizedInput.v1 (rich objects from NormalizerService).
+    // Only check structural shape — nurses/shifts may be empty arrays.
     const looksLikeNormalizedInput =
       input?.horizon?.days &&
       Array.isArray(input?.horizon?.days) &&
       Array.isArray(input?.nurses) &&
-      input?.nurses?.[0]?.code &&
       Array.isArray(input?.shifts) &&
-      input?.shifts?.[0]?.code;
+      input?.version === 'v1';
 
     const pythonReq = looksLikeNormalizedInput
       ? this.toSolveRequest(input, timeLimitSeconds)

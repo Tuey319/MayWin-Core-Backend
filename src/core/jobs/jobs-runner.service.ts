@@ -112,6 +112,18 @@ export class JobsRunnerService {
       // Save meta for downstream preview/apply convenience
       await this.mergeJobAttributes(jobId, { normalizerMeta: meta });
 
+      // Pre-flight: fail fast with a clear message if no nurses or shifts
+      const nurseCount = Array.isArray(payload.nurses) ? payload.nurses.length : 0;
+      const shiftCount = Array.isArray(payload.shifts) ? payload.shifts.length : 0;
+      if (nurseCount === 0 || shiftCount === 0) {
+        const missing = nurseCount === 0 && shiftCount === 0
+          ? 'no nurses or shift templates'
+          : nurseCount === 0 ? 'no nurses assigned to this unit' : 'no shift templates configured for this unit';
+        const err = new Error(`Cannot generate schedule: ${missing}. Please add workers to the unit and configure shift templates before running the solver.`);
+        (err as any).code = 'SOLVER_NO_DATA';
+        throw err;
+      }
+
       // 3) SOLVING with fallback plans
       const {
         output: solverOutput,
