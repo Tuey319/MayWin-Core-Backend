@@ -13,32 +13,31 @@ export class ShiftTemplatesController {
   constructor(private readonly service: ShiftTemplatesService) {}
 
   @Get('/units/:unitId/shift-templates')
-  list(@Req() req: any, @Param('unitId') unitId: string, @Query('includeInactive') includeInactive?: string) {
-    const orgId = String(req.user?.organizationId);
+  async list(@Param('unitId') unitId: string, @Query('includeInactive') includeInactive?: string) {
+    const orgId = await this.service.resolveOrgId(unitId);
     return this.service.list(orgId, unitId, includeInactive === 'true');
   }
 
   @Post('/units/:unitId/shift-templates')
-  create(@Req() req: any, @Param('unitId') unitId: string, @Body() dto: CreateShiftTemplateDto) {
-    const orgId = String(req.user?.organizationId);
+  async create(@Param('unitId') unitId: string, @Body() dto: CreateShiftTemplateDto) {
+    const orgId = await this.service.resolveOrgId(unitId);
     return this.service.create(orgId, unitId, dto);
   }
 
   @Patch('/units/:unitId/shift-templates/:id')
-  update(
-    @Req() req: any,
+  async update(
     @Param('unitId') unitId: string,
     @Param('id') id: string,
     @Body() dto: UpdateShiftTemplateDto,
   ) {
-    const orgId = String(req.user?.organizationId);
+    const orgId = await this.service.resolveOrgId(unitId);
     return this.service.update(orgId, unitId, id, dto);
   }
 
   // soft delete
   @Delete('/units/:unitId/shift-templates/:id')
-  deactivate(@Req() req: any, @Param('unitId') unitId: string, @Param('id') id: string) {
-    const orgId = String(req.user?.organizationId);
+  async deactivate(@Param('unitId') unitId: string, @Param('id') id: string) {
+    const orgId = await this.service.resolveOrgId(unitId);
     return this.service.deactivate(orgId, unitId, id);
   }
 }

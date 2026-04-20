@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DeepPartial, Repository } from 'typeorm';
 
 import { ShiftTemplate } from '@/database/entities/scheduling/shift-template.entity';
+import { Unit } from '@/database/entities/core/unit.entity';
 import { CreateShiftTemplateDto } from './dto/create-shift-template.dto';
 import { UpdateShiftTemplateDto } from './dto/update-shift-template.dto';
 
@@ -12,7 +13,15 @@ export class ShiftTemplatesService {
   constructor(
     @InjectRepository(ShiftTemplate)
     private readonly repo: Repository<ShiftTemplate>,
+    @InjectRepository(Unit)
+    private readonly unitRepo: Repository<Unit>,
   ) {}
+
+  async resolveOrgId(unitId: string): Promise<string> {
+    const unit = await this.unitRepo.findOne({ where: { id: unitId as any } });
+    if (!unit) throw new NotFoundException(`Unit not found: ${unitId}`);
+    return String(unit.organization_id);
+  }
 
   async list(orgId: string, unitId: string, includeInactive = false) {
     const where: any = { organization_id: orgId, unit_id: unitId };
