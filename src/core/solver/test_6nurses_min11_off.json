@@ -1,0 +1,226 @@
+{
+  "nurses": [
+    "N1",
+    "N2",
+    "N3",
+    "N4",
+    "N5",
+    "N6"
+  ],
+  "days": [
+    "2026-04-01",
+    "2026-04-02",
+    "2026-04-03",
+    "2026-04-04",
+    "2026-04-05",
+    "2026-04-06",
+    "2026-04-07",
+    "2026-04-08",
+    "2026-04-09",
+    "2026-04-10",
+    "2026-04-11",
+    "2026-04-12",
+    "2026-04-13",
+    "2026-04-14",
+    "2026-04-15",
+    "2026-04-16",
+    "2026-04-17",
+    "2026-04-18",
+    "2026-04-19",
+    "2026-04-20",
+    "2026-04-21",
+    "2026-04-22",
+    "2026-04-23",
+    "2026-04-24",
+    "2026-04-25",
+    "2026-04-26",
+    "2026-04-27",
+    "2026-04-28",
+    "2026-04-29",
+    "2026-04-30"
+  ],
+  "shifts": [
+    "morning",
+    "evening",
+    "night"
+  ],
+  "demand": {
+    "2026-04-01": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-02": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-03": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-04": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-05": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-06": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-07": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-08": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-09": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-10": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-11": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-12": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-13": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-14": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-15": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-16": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-17": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-18": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-19": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-20": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-21": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-22": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-23": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-24": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-25": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-26": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-27": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-28": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-29": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    },
+    "2026-04-30": {
+      "morning": 3,
+      "evening": 3,
+      "night": 2
+    }
+  },
+  "time_limit_sec": 15,
+  "num_search_workers": 4,
+  "random_seed": 42,
+  "rules": {
+    "guarantee_full_coverage": true,
+    "allow_emergency_overrides": true,
+    "max_shifts_per_day": 1,
+    "min_days_off_per_week": 2,
+    "max_nights_per_week": 2,
+    "forbid_night_to_morning": true,
+    "allow_second_shift_same_day_in_emergency": true,
+    "enable_min_total_days_off": true,
+    "min_total_days_off": 8,
+    "enable_shift_type_limit": true,
+    "max_shift_per_type": {
+      "morning": 10,
+      "evening": 10,
+      "night": 10
+    },
+    "enable_consecutive_night_limit": true,
+    "max_consecutive_night_shifts": 3,
+    "goal_minimize_staff_cost": true,
+    "goal_maximize_preference_satisfaction": false,
+    "goal_balance_workload": false,
+    "goal_balance_night_workload": false,
+    "goal_reduce_undesirable_shifts": false
+  }
+}

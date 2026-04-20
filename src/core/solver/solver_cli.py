@@ -482,7 +482,6 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
                 else:
                     extra_nights = model.NewIntVar(0, 0, f"night_over_{n}_{w}")
                     model.Add(nights_this <= rules.max_nights_per_week)
-                setattr(extra_nights, "_meta", (n, w))
 
     # Weekly days off
     if rules.min_days_off_per_week > 0:
