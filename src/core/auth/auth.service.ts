@@ -273,14 +273,10 @@ export class AuthService {
     const exists = await this.userRepo.findOne({ where: { email } });
     if (exists) throw new BadRequestException('Email already exists');
 
-    if (!dto.organizationId) {
-      throw new BadRequestException('organizationId is required for signup (for now)');
-    }
-
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
     const user = this.userRepo.create({
-      organization_id: String(dto.organizationId),
+      organization_id: dto.organizationId ? String(dto.organizationId) : null,
       email,
       password_hash: passwordHash,
       full_name: dto.fullName,
@@ -315,7 +311,7 @@ export class AuthService {
       if (!existingWorker) {
         await this.workerRepo.save(
           this.workerRepo.create({
-            organization_id: String(dto.organizationId),
+            organization_id: dto.organizationId ? String(dto.organizationId) : null,
             primary_unit_id: String(dto.unitId),
             full_name: dto.fullName,
             worker_code: `U${saved.id}`,
