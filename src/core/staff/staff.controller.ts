@@ -24,11 +24,13 @@ import { PatchStaffDto } from './dto/patch-staff.dto';
 export class StaffController {
   constructor(private readonly staff: StaffService) { }
 
-  private context(req: Request): { organizationId: number; unitId: number | null } {
+  private context(req: Request): { organizationId: number | null; unitId: number | null } {
     const user = (req as any).user ?? {};
     const unitIds = Array.isArray(user.unitIds) ? user.unitIds : [];
+    const rawOrg = user.organizationId;
+    const orgNum = rawOrg != null ? Number(rawOrg) : null;
     return {
-      organizationId: Number(user.organizationId ?? 0),
+      organizationId: orgNum && orgNum > 0 ? orgNum : null,
       unitId: unitIds.length > 0 ? Number(unitIds[0]) : null,
     };
   }

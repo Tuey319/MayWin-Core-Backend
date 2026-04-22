@@ -105,16 +105,11 @@ export class StaffService {
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
 
-  async list(organizationId: number, callerRoles: string[] = []) {
-    // organizationId = 0 means the user's organization_id column is NULL in the DB
-    // (Number(null) = 0). This happens for super_admin accounts that aren't tied to a
-    // single hospital. The BFF already enforced worker.read permission, so any caller
-    // here is authorised. Return all workers rather than silently returning nothing.
-    // Same bypass applies if the JWT role explicitly identifies a super_admin.
+  async list(organizationId: number | null, callerRoles: string[] = []) {
     const isSuperAdmin = callerRoles.some(
       (r) => r.toLowerCase() === 'super_admin' || r.toUpperCase() === 'SUPER_ADMIN',
     );
-    const hasNoOrg = !organizationId || organizationId === 0;
+    const hasNoOrg = !organizationId;
 
     if (hasNoOrg || isSuperAdmin) {
       const workers = await this.workersRepo.find({ order: { organization_id: 'ASC', id: 'ASC' } });
@@ -128,7 +123,7 @@ export class StaffService {
     return { ok: true, staff: workers.map((w) => this.mapWorkerToStaff(w)) };
   }
 
-  async getById(id: string, organizationId: number) {
+  async getById(id: string, organizationId: number | null) {
     this.validateId(id);
     const worker = await this.workersRepo.findOne({
       where: { id: id as any, organization_id: String(organizationId) as any },
@@ -145,7 +140,7 @@ export class StaffService {
   async create(
     dto: CreateStaffDto,
     actor: { actorId: string; actorName: string },
-    context: { organizationId: number; unitId: number | null },
+    context: { organizationId: number | null; unitId: number | null },
   ) {
     if (!dto.name || !dto.employeeId || !dto.position) {
       throw new BadRequestException('name, employeeId and position are required');
@@ -154,7 +149,7 @@ export class StaffService {
     // Guard: employee ID unique per org
     const exists = await this.workersRepo.findOne({
       where: {
-        organization_id: String(context.organizationId) as any,
+        organization_id: context.organizationId ? String(context.organizationId) : (null as any),
         worker_code: dto.employeeId,
       },
     });
@@ -167,7 +162,7 @@ export class StaffService {
     try {
       worker = await this.workersRepo.save(
         this.workersRepo.create({
-          organization_id: String(context.organizationId),
+          organization_id: context.organizationId ? String(context.organizationId) : null,
           primary_unit_id: unitId != null ? String(unitId) : null,
           full_name: dto.name,
           worker_code: dto.employeeId,
@@ -218,7 +213,7 @@ export class StaffService {
     id: string,
     dto: PatchStaffDto,
     actor: { actorId: string; actorName: string },
-    organizationId: number,
+    organizationId: number | null,
   ) {
     this.validateId(id);
     const worker = await this.workersRepo.findOne({
@@ -256,7 +251,7 @@ export class StaffService {
     return { ok: true, staff: updated };
   }
 
-  async remove(id: string, actor: { actorId: string; actorName: string }, organizationId: number) {
+  async remove(id: string, actor: { actorId: string; actorName: string }, organizationId: number | null) {
     this.validateId(id);
     const worker = await this.workersRepo.findOne({
       where: { id: id as any, organization_id: String(organizationId) as any },
@@ -285,7 +280,7 @@ export class StaffService {
   async linkUser(
     workerId: string,
     userId: number,
-    organizationId: number,
+    organizationId: number | null,
     actor: { actorId: string; actorName: string },
   ) {
     this.validateId(workerId);
@@ -325,7 +320,7 @@ export class StaffService {
    */
   async createWebAccount(
     workerId: string,
-    organizationId: number,
+    organizationId: number | null,
     actor: { actorId: string; actorName: string },
   ) {
     this.validateId(workerId);
@@ -410,7 +405,7 @@ export class StaffService {
    */
   async generateLinkToken(
     workerId: string,
-    organizationId: number,
+    organizationId: number | null,
     actor: { actorId: string; actorName: string },
   ) {
     this.validateId(workerId);
