@@ -73,8 +73,8 @@ export class NormalizerService {
     // 1) Shift templates (unit-specific + global (unit_id IS NULL)), active only
     const shiftRows = await this.shiftRepo.find({
       where: [
-        { organization_id: organization_id as any, unit_id: unit_id as any, is_active: true } as any,
-        { organization_id: organization_id as any, unit_id: IsNull(), is_active: true } as any,
+        { unit_id: unit_id as any, is_active: true } as any,
+        { unit_id: IsNull(), is_active: true } as any,
       ],
       order: { code: 'ASC' as any },
     });
@@ -117,7 +117,6 @@ export class NormalizerService {
     const whereConditions: any[] = [
       {
         primary_unit_id: unit_id as any,
-        organization_id: organization_id as any,
         is_active: true as any,
       },
     ];
@@ -125,7 +124,6 @@ export class NormalizerService {
     if (membershipWorkerIds.length) {
       whereConditions.push({
         id: In(membershipWorkerIds as any),
-        organization_id: organization_id as any,
         is_active: true as any,
       });
     }
