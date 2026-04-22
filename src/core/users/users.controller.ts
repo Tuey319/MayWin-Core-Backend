@@ -6,7 +6,7 @@ import { PatchUserDto } from './dto/patch-user.dto';
 import { AssignRoleDto } from './dto/assign-role.dto';
 import { AssignMembershipDto } from './dto/assign-membership.dto';
 
-@Roles('HEAD_NURSE')
+@Roles('SCHEDULER')
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class UsersController {

@@ -7,7 +7,7 @@ import { Roles } from '@/common/decorators/roles.decorator';
 import { SFNClient, StartExecutionCommand } from '@aws-sdk/client-sfn';
 import { NodeHttpHandler } from '@aws-sdk/node-http-handler';
 
-@Roles('HEAD_NURSE')
+@Roles('SCHEDULER')
 @UseGuards(JwtAuthGuard)
 @Controller('/orchestrator')
 export class OrchestratorController {

@@ -6,7 +6,7 @@ import { CoverageRulesService } from './coverage-rules.service';
 import { CoverageRuleItemDto } from './dto/coverage-rule-item.dto';
 import { ReplaceCoverageRulesDto } from './dto/replace-coverage-rules.dto';
 
-@Roles('HEAD_NURSE')
+@Roles('SCHEDULER')
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class CoverageRulesController {

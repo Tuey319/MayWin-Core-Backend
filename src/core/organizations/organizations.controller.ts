@@ -25,7 +25,7 @@ export class OrganizationsController {
   // ── Organization tree ───────────────────────────────────────────────────────
 
   /** GET /organizations — returns the authenticated user's organization */
-  @Roles('DEPARTMENT_HEAD')
+  @Roles('MANAGER')
   @Get('/organizations')
   list(@Req() req: Request) {
     const u = (req as any).user ?? {};
@@ -35,7 +35,7 @@ export class OrganizationsController {
   }
 
   /** GET /organizations/me */
-  @Roles('DEPARTMENT_HEAD')
+  @Roles('MANAGER')
   @Get('/organizations/me')
   me(@Req() req: Request) {
     const orgId = Number((req as any).user?.organizationId);
@@ -43,7 +43,7 @@ export class OrganizationsController {
   }
 
   /** GET /organizations/:orgId */
-  @Roles('DEPARTMENT_HEAD')
+  @Roles('MANAGER')
   @Get('/organizations/:orgId')
   getById(@Req() req: Request, @Param('orgId') orgId: string) {
     const u = (req as any).user ?? {};
@@ -52,14 +52,14 @@ export class OrganizationsController {
   }
 
   /** POST /organizations (bootstrapping only — SUPER_ADMIN) */
-  @Roles('SUPER_ADMIN')
+  @Roles('super_admin')
   @Post('/organizations')
   create(@Body() dto: CreateOrganizationDto) {
     return this.svc.create(dto);
   }
 
   /** PUT /organizations — save full org tree (upsert via patch of caller's org) */
-  @Roles('HOSPITAL_ADMIN')
+  @Roles('ADMIN')
   @Put('/organizations')
   put(@Req() req: Request, @Body() dto: PatchOrganizationDto) {
     const u = (req as any).user ?? {};
@@ -68,7 +68,7 @@ export class OrganizationsController {
   }
 
   /** PATCH /organizations/:orgId */
-  @Roles('HOSPITAL_ADMIN')
+  @Roles('ADMIN')
   @Patch('/organizations/:orgId')
   patch(@Req() req: Request, @Param('orgId') orgId: string, @Body() dto: PatchOrganizationDto) {
     const u = (req as any).user ?? {};
@@ -77,7 +77,7 @@ export class OrganizationsController {
   }
 
   /** DELETE /organizations/:orgId */
-  @Roles('SUPER_ADMIN')
+  @Roles('super_admin')
   @Delete('/organizations/:orgId')
   delete(@Req() req: Request, @Param('orgId') orgId: string) {
     const u = (req as any).user ?? {};
@@ -88,14 +88,14 @@ export class OrganizationsController {
   // ── Schedule containers ─────────────────────────────────────────────────────
 
   /** GET /organizations/:orgId/schedule-containers */
-  @Roles('HEAD_NURSE')
+  @Roles('SCHEDULER')
   @Get('/organizations/:orgId/schedule-containers')
   listContainers(@Param('orgId') orgId: string) {
     return this.containers.list(orgId);
   }
 
   /** POST /organizations/:orgId/schedule-containers */
-  @Roles('HEAD_NURSE')
+  @Roles('SCHEDULER')
   @Post('/organizations/:orgId/schedule-containers')
   createContainer(
     @Param('orgId') orgId: string,
@@ -107,7 +107,7 @@ export class OrganizationsController {
   }
 
   /** PUT /organizations/:orgId/schedule-containers/:id */
-  @Roles('HEAD_NURSE')
+  @Roles('SCHEDULER')
   @Put('/organizations/:orgId/schedule-containers/:id')
   updateContainer(
     @Param('orgId') orgId: string,
@@ -118,7 +118,7 @@ export class OrganizationsController {
   }
 
   /** DELETE /organizations/:orgId/schedule-containers/:id */
-  @Roles('HEAD_NURSE')
+  @Roles('SCHEDULER')
   @Delete('/organizations/:orgId/schedule-containers/:id')
   deleteContainer(@Param('orgId') orgId: string, @Param('id') id: string) {
     return this.containers.delete(orgId, id);
@@ -127,14 +127,14 @@ export class OrganizationsController {
   // ── Constraint profiles ─────────────────────────────────────────────────────
 
   /** GET /organizations/:orgId/constraint-profiles */
-  @Roles('HEAD_NURSE')
+  @Roles('SCHEDULER')
   @Get('/organizations/:orgId/constraint-profiles')
   listProfiles(@Param('orgId') orgId: string) {
     return this.profiles.listByOrg(orgId);
   }
 
   /** POST /organizations/:orgId/constraint-profiles */
-  @Roles('HEAD_NURSE')
+  @Roles('SCHEDULER')
   @Post('/organizations/:orgId/constraint-profiles')
   createProfile(
     @Param('orgId') orgId: string,
@@ -144,7 +144,7 @@ export class OrganizationsController {
   }
 
   /** PUT /organizations/:orgId/constraint-profiles/:id */
-  @Roles('HEAD_NURSE')
+  @Roles('SCHEDULER')
   @Put('/organizations/:orgId/constraint-profiles/:id')
   updateProfile(
     @Param('orgId') orgId: string,
@@ -155,7 +155,7 @@ export class OrganizationsController {
   }
 
   /** DELETE /organizations/:orgId/constraint-profiles/:id */
-  @Roles('HEAD_NURSE')
+  @Roles('SCHEDULER')
   @Delete('/organizations/:orgId/constraint-profiles/:id')
   deleteProfile(@Param('orgId') orgId: string, @Param('id') id: string) {
     return this.profiles.deleteForOrg(orgId, id);

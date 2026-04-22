@@ -6,7 +6,7 @@ import { ShiftTemplatesService } from './shift-templates.service';
 import { CreateShiftTemplateDto } from './dto/create-shift-template.dto';
 import { UpdateShiftTemplateDto } from './dto/update-shift-template.dto';
 
-@Roles('HOSPITAL_ADMIN')
+@Roles('ADMIN')
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class ShiftTemplatesController {

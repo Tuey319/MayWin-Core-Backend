@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   ParseIntPipe,
@@ -40,7 +41,7 @@ export class StaffController {
     };
   }
 
-  @Roles('HEAD_NURSE')
+  @Roles('SCHEDULER')
   @Get('/staff')
   list(@Req() req: Request) {
     const user = (req as any).user ?? {};
@@ -48,25 +49,37 @@ export class StaffController {
     return this.staff.list(this.context(req).organizationId, roles);
   }
 
-  @Roles('HEAD_NURSE')
+  @Roles('SCHEDULER')
   @Get('/staff/:id')
   getById(@Param('id') id: string, @Req() req: Request) {
     return this.staff.getById(id, this.context(req).organizationId);
   }
 
-  @Roles('HEAD_NURSE')
+  @Roles('SCHEDULER')
   @Post('/staff')
   create(@Body() dto: CreateStaffDto, @Req() req: Request) {
+    const user = (req as any).user ?? {};
+    const userRoles: string[] = Array.isArray(user.roles) ? user.roles.map((r: string) => r.toLowerCase()) : [];
+    const isUnrestricted = userRoles.some(r => r === 'admin' || r === 'super_admin');
+
+    if (!isUnrestricted && dto.unitId != null) {
+      const unitIds: (string | number)[] = Array.isArray(user.unitIds) ? user.unitIds : [];
+      const allowed = unitIds.map(String);
+      if (!allowed.includes(String(dto.unitId))) {
+        throw new ForbiddenException('You can only create staff for your own unit');
+      }
+    }
+
     return this.staff.create(dto, this.actor(req), this.context(req));
   }
 
-  @Roles('HEAD_NURSE')
+  @Roles('SCHEDULER')
   @Patch('/staff/:id')
   patch(@Param('id') id: string, @Body() dto: PatchStaffDto, @Req() req: Request) {
     return this.staff.patch(id, dto, this.actor(req), this.context(req).organizationId);
   }
 
-  @Roles('HOSPITAL_ADMIN')
+  @Roles('ADMIN')
   @Delete('/staff/:id')
   remove(@Param('id') id: string, @Req() req: Request) {
     return this.staff.remove(id, this.actor(req), this.context(req).organizationId);
@@ -77,7 +90,7 @@ export class StaffController {
    * Create a new web login account for an existing worker that has no linked user.
    * Uses the email stored in worker.attributes.email and sends a welcome email.
    */
-  @Roles('HOSPITAL_ADMIN')
+  @Roles('ADMIN')
   @Post('/staff/:id/create-account')
   createWebAccount(@Param('id') id: string, @Req() req: Request) {
     return this.staff.createWebAccount(id, this.context(req).organizationId, this.actor(req));
@@ -88,7 +101,7 @@ export class StaffController {
    * Link an existing user account to this worker.
    * Body: { userId: number }
    */
-  @Roles('HOSPITAL_ADMIN')
+  @Roles('ADMIN')
   @Post('/staff/:id/link-user')
   linkUser(
     @Param('id') id: string,
@@ -103,7 +116,7 @@ export class StaffController {
    * Generate a one-time LINE invite code for a nurse.
    * Returns { token, expiresAt, instruction }
    */
-  @Roles('HEAD_NURSE')
+  @Roles('SCHEDULER')
   @Post('/staff/:id/link-token')
   generateLinkToken(@Param('id') id: string, @Req() req: Request) {
     return this.staff.generateLinkToken(id, this.context(req).organizationId, this.actor(req));

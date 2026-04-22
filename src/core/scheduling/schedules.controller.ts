@@ -19,7 +19,7 @@ import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { GetCurrentScheduleQuery } from './dto/get-current-schedule.query';
 import { GetScheduleHistoryQuery } from './dto/get-history.query';
 
-@Roles('HEAD_NURSE')
+@Roles('SCHEDULER')
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class SchedulesController {

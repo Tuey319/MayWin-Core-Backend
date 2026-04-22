@@ -23,56 +23,56 @@ export class UnitsController {
   }
 
   // GET /units
-  @Roles('HEAD_NURSE')
+  @Roles('SCHEDULER')
   @Get('/units')
   list(@Req() req: Request, @Query() q: ListUnitsQueryDto) {
     return this.svc.list(this.ctx(req), q);
   }
 
   // GET /units/:unitId
-  @Roles('HEAD_NURSE')
+  @Roles('SCHEDULER')
   @Get('/units/:unitId')
   get(@Req() req: Request, @Param('unitId') unitId: string) {
     return this.svc.getById(this.ctx(req), unitId);
   }
 
   // POST /units
-  @Roles('HOSPITAL_ADMIN')
+  @Roles('ADMIN')
   @Post('/units')
   create(@Req() req: Request, @Body() dto: CreateUnitDto) {
     return this.svc.create(this.ctx(req), dto);
   }
 
   // PATCH /units/:unitId
-  @Roles('HOSPITAL_ADMIN')
+  @Roles('ADMIN')
   @Patch('/units/:unitId')
   patch(@Req() req: Request, @Param('unitId') unitId: string, @Body() dto: PatchUnitDto) {
     return this.svc.patch(this.ctx(req), unitId, dto);
   }
 
   // POST /units/:unitId/deactivate
-  @Roles('HOSPITAL_ADMIN')
+  @Roles('ADMIN')
   @Post('/units/:unitId/deactivate')
   deactivate(@Req() req: Request, @Param('unitId') unitId: string) {
     return this.svc.deactivate(this.ctx(req), unitId);
   }
 
   // DELETE /units/:unitId
-  @Roles('HOSPITAL_ADMIN')
+  @Roles('ADMIN')
   @Delete('/units/:unitId')
   delete(@Req() req: Request, @Param('unitId') unitId: string) {
     return this.svc.delete(this.ctx(req), unitId);
   }
 
   // GET /units/:unitId/members
-  @Roles('HEAD_NURSE')
+  @Roles('SCHEDULER')
   @Get('/units/:unitId/members')
   listMembers(@Req() req: Request, @Param('unitId') unitId: string) {
     return this.svc.listMembers(this.ctx(req), unitId);
   }
 
   // POST /units/:unitId/members
-  @Roles('HOSPITAL_ADMIN')
+  @Roles('ADMIN')
   @Post('/units/:unitId/members')
   addMember(
     @Req() req: Request,
@@ -83,7 +83,7 @@ export class UnitsController {
   }
 
   // DELETE /units/:unitId/members/:userId
-  @Roles('HOSPITAL_ADMIN')
+  @Roles('ADMIN')
   @Delete('/units/:unitId/members/:userId')
   removeMember(@Req() req: Request, @Param('unitId') unitId: string, @Param('userId') userId: string) {
     return this.svc.removeMember(this.ctx(req), unitId, userId);

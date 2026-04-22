@@ -6,7 +6,7 @@ import { ConstraintProfilesService } from './constraint-profiles.service';
 import { CreateConstraintProfileDto } from './dto/create-constraint-profile.dto';
 import { UpdateConstraintProfileDto } from './dto/update-constraint-profile.dto';
 
-@Roles('HEAD_NURSE')
+@Roles('SCHEDULER')
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class ConstraintProfilesController {

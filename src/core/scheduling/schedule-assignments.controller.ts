@@ -6,7 +6,7 @@ import { Roles } from '@/common/decorators/roles.decorator';
 import { SchedulesService } from './schedules.service';
 import { PatchAssignmentDto } from './dto/patch-assignment.dto';
 
-@Roles('HEAD_NURSE')
+@Roles('SCHEDULER')
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class ScheduleAssignmentsController {

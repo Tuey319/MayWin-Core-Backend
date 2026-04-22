@@ -8,10 +8,10 @@ import { ROLES_KEY } from '../decorators/roles.decorator';
  * The array index is the "level" used for comparison.
  */
 const ROLE_HIERARCHY = [
-  'nurse',
-  'head_nurse',
-  'department_head',
-  'hospital_admin',
+  'viewer',
+  'scheduler',
+  'manager',
+  'admin',
   'super_admin',
 ] as const;
 
@@ -30,7 +30,7 @@ function userMaxLevel(roles: string[]): number {
 /**
  * Guards routes decorated with @Roles('ROLE_NAME').
  *
- * Semantics: @Roles('HEAD_NURSE') means the caller must be HEAD_NURSE **or higher**
+ * Semantics: @Roles('SCHEDULER') means the caller must be SCHEDULER **or higher**
  * in the role hierarchy.  Endpoints without @Roles() are not restricted by this guard.
  *
  * Registration: registered globally via APP_GUARD in AppModule so it applies to every
