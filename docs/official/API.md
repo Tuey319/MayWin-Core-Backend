@@ -121,7 +121,7 @@ All endpoints require `Authorization: Bearer <accessToken>` unless marked **Publ
 | `fullName` | string | yes | |
 | `organizationId` | numeric string | no | Links user to an organization |
 | `unitId` | numeric string | no | Assigns to unit immediately; also auto-creates a Worker record |
-| `roleCode` | string | no | Default: `"NURSE"` — used when `unitId` is provided |
+| `roleCode` | string | no | Used when `unitId` is provided. Must be a valid role code: `ADMIN`, `MANAGER`, `SCHEDULER`, `VIEWER`, `super_admin` |
 | `attributes` | object | no | |
 
 **Response — 200 OK** — same shape as verify-otp
@@ -923,10 +923,10 @@ Get a single user with their roles and unit memberships.
     "organizationId": "18",
     "isActive": true,
     "roles": [
-      { "roleId": "2", "roleCode": "NURSE", "roleName": "Nurse" }
+      { "roleId": "2", "roleCode": "MANAGER", "roleName": "Manager" }
     ],
     "memberships": [
-      { "unitId": "15", "roleCode": "NURSE" }
+      { "unitId": "15", "roleCode": "MANAGER" }
     ],
     "createdAt": "2026-04-22T12:56:30.225Z"
   }
@@ -968,11 +968,13 @@ Assign a role to a user. No-op if already assigned.
 
 **Request** — provide `roleId` or `roleCode`, not both.
 ```json
-{ "roleCode": "NURSE" }
+{ "roleCode": "MANAGER" }
 ```
 ```json
-{ "roleId": "2" }
+{ "roleId": "3" }
 ```
+
+Valid `roleCode` values: `ADMIN`, `MANAGER`, `SCHEDULER`, `VIEWER`, `super_admin`
 
 **Response — 200 OK** — `{ "user": { ... } }` with updated `roles` array
 
@@ -1005,7 +1007,7 @@ Assign a user to a unit. If the membership already exists, updates the `roleCode
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `unitId` | string | **yes** | |
-| `roleCode` | string | no | Default: `"NURSE"` |
+| `roleCode` | string | no | Must be a valid role code: `ADMIN`, `MANAGER`, `SCHEDULER`, `VIEWER`, `super_admin` |
 
 **Response — 200 OK** — `{ "user": { ... } }` with updated `memberships` array
 
@@ -1025,6 +1027,16 @@ Remove a user from a unit.
 
 ## Roles
 
+Available roles in the system:
+
+| id | code | name | Description |
+|---|---|---|---|
+| `1` | `ADMIN` | Administrator | Full access |
+| `2` | `MANAGER` | Manager | Operational management |
+| `3` | `SCHEDULER` | Scheduler | Can create and run schedules |
+| `4` | `VIEWER` | Viewer | Read-only |
+| `5` | `super_admin` | Super Administrator | Full platform access — dev/ops only |
+
 ### `GET /roles`
 
 Lists all system roles.
@@ -1032,11 +1044,12 @@ Lists all system roles.
 **Response — 200 OK**
 ```json
 {
-  "roles": [
-    { "id": "1", "code": "ADMIN", "name": "Administrator" },
-    { "id": "2", "code": "ORG_ADMIN", "name": "Organization Admin" },
-    { "id": "3", "code": "UNIT_MANAGER", "name": "Unit Manager" },
-    { "id": "4", "code": "NURSE", "name": "Nurse" }
+  "items": [
+    { "id": "1", "code": "ADMIN", "name": "Administrator", "description": "Full access" },
+    { "id": "2", "code": "MANAGER", "name": "Manager", "description": "Operational management" },
+    { "id": "3", "code": "SCHEDULER", "name": "Scheduler", "description": "Can create and run schedules" },
+    { "id": "4", "code": "VIEWER", "name": "Viewer", "description": "Read-only" },
+    { "id": "5", "code": "super_admin", "name": "Super Administrator", "description": "Full platform access — dev/ops only" }
   ]
 }
 ```
