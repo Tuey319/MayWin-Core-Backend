@@ -243,7 +243,7 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
         for r in coverage_rules:
             if not isinstance(r, dict):
                 continue
-            if dt is not None and r.get("dayType") != dt:
+            if dt is not None and r.get("dayType") not in (dt, "ALL"):
                 continue
 
             sc = r.get("shiftCode")
