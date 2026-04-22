@@ -288,7 +288,7 @@ export class AuthService {
 
     // optional: attach membership immediately
     if (dto.unitId) {
-      const roleCode = (dto.roleCode ?? 'NURSE').trim();
+      const roleCode = (dto.roleCode ?? 'VIEWER').trim();
 
       const existingMembership = await this.unitMembershipRepo.findOne({
         where: { unit_id: String(dto.unitId), user_id: saved.id },
