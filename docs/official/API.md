@@ -104,11 +104,11 @@ All endpoints require `Authorization: Bearer <accessToken>` unless marked **Publ
 **Request**
 ```json
 {
-  "organizationId": "1",
-  "unitId": "2",
   "email": "newuser@example.com",
   "password": "securepassword",
   "fullName": "Jane Smith",
+  "organizationId": "1",
+  "unitId": "2",
   "roleCode": "NURSE",
   "attributes": {}
 }
@@ -116,17 +116,17 @@ All endpoints require `Authorization: Bearer <accessToken>` unless marked **Publ
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `organizationId` | numeric string | yes | |
-| `unitId` | numeric string | no | Assigns to unit immediately |
 | `email` | string | yes | |
 | `password` | string | yes | Min 6 chars |
 | `fullName` | string | yes | |
-| `roleCode` | string | no | Default: `"NURSE"` |
+| `organizationId` | numeric string | no | Links user to an organization |
+| `unitId` | numeric string | no | Assigns to unit immediately; also auto-creates a Worker record |
+| `roleCode` | string | no | Default: `"NURSE"` — used when `unitId` is provided |
 | `attributes` | object | no | |
 
 **Response — 200 OK** — same shape as verify-otp
 
-**Errors:** `400` email exists or validation error
+**Errors:** `400` email already exists or validation error
 
 ---
 
@@ -873,6 +873,156 @@ Removes a user from a unit.
 
 ---
 
+## Users
+
+Manage user accounts. Requires `HEAD_NURSE` role or above.
+
+### `GET /users`
+
+Lists all users. Use query params to filter.
+
+**Query params**
+
+| Param | Type | Notes |
+|---|---|---|
+| `pending` | `"true"` | Only users with no roles assigned yet |
+| `noOrg` | `"true"` | Only users with no `organizationId` |
+| `organizationId` | string | Filter by org |
+
+**Response — 200 OK**
+```json
+{
+  "users": [
+    {
+      "id": "26",
+      "email": "tueychirayu@gmail.com",
+      "fullName": "Tue",
+      "organizationId": null,
+      "isActive": true,
+      "roles": [],
+      "memberships": [],
+      "createdAt": "2026-04-22T12:56:30.225Z"
+    }
+  ]
+}
+```
+
+---
+
+### `GET /users/:id`
+
+Get a single user with their roles and unit memberships.
+
+**Response — 200 OK**
+```json
+{
+  "user": {
+    "id": "26",
+    "email": "tueychirayu@gmail.com",
+    "fullName": "Tue",
+    "organizationId": "18",
+    "isActive": true,
+    "roles": [
+      { "roleId": "2", "roleCode": "NURSE", "roleName": "Nurse" }
+    ],
+    "memberships": [
+      { "unitId": "15", "roleCode": "NURSE" }
+    ],
+    "createdAt": "2026-04-22T12:56:30.225Z"
+  }
+}
+```
+
+**Errors:** `404` user not found
+
+---
+
+### `PATCH /users/:id`
+
+Update a user's details.
+
+**Request**
+```json
+{
+  "fullName": "Tue Chirayu",
+  "organizationId": "18",
+  "isActive": true
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `fullName` | string | no | |
+| `organizationId` | numeric string | no | Assign or change org |
+| `isActive` | boolean | no | Deactivate/reactivate account |
+
+**Response — 200 OK** — `{ "user": { ... } }`
+
+**Errors:** `404` user not found
+
+---
+
+### `POST /users/:id/roles`
+
+Assign a role to a user. No-op if already assigned.
+
+**Request** — provide `roleId` or `roleCode`, not both.
+```json
+{ "roleCode": "NURSE" }
+```
+```json
+{ "roleId": "2" }
+```
+
+**Response — 200 OK** — `{ "user": { ... } }` with updated `roles` array
+
+**Errors:** `404` user or role not found
+
+---
+
+### `DELETE /users/:id/roles/:roleId`
+
+Remove a role from a user.
+
+**Response — 200 OK** — `{ "user": { ... } }` with updated `roles` array
+
+**Errors:** `404` assignment not found
+
+---
+
+### `POST /users/:id/memberships`
+
+Assign a user to a unit. If the membership already exists, updates the `roleCode`.
+
+**Request**
+```json
+{
+  "unitId": "15",
+  "roleCode": "NURSE"
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `unitId` | string | **yes** | |
+| `roleCode` | string | no | Default: `"NURSE"` |
+
+**Response — 200 OK** — `{ "user": { ... } }` with updated `memberships` array
+
+**Errors:** `404` user not found
+
+---
+
+### `DELETE /users/:id/memberships/:unitId`
+
+Remove a user from a unit.
+
+**Response — 200 OK** — `{ "user": { ... } }` with updated `memberships` array
+
+**Errors:** `404` membership not found
+
+---
+
 ## Roles
 
 ### `GET /roles`
@@ -1197,13 +1347,137 @@ Lists all constraint profiles for a unit. Also available as `GET /units/:unitId/
 
 #### `POST /units/:unitId/constraint-profiles`
 
-Creates a unit-level constraint profile.
+Creates a unit-level constraint profile. `name` is the only required field; all others default as shown.
+
+**Request**
+```json
+{
+  "name": "May 2026 Standard",
+
+  // ── UI display ─────────────────────────────────────────────────────────────
+  "description": null,
+  "assignedTo": null,
+  "color": "primary",
+
+  // ── Sequence / rest constraints ────────────────────────────────────────────
+  "maxConsecutiveWorkDays": null,
+  "maxConsecutiveNightShifts": null,
+  "minRestHoursBetweenShifts": null,
+
+  // ── Daily / weekly limits ──────────────────────────────────────────────────
+  "maxShiftsPerDay": 1,
+  "minDaysOffPerWeek": 2,
+  "maxNightsPerWeek": 2,
+
+  // ── Shift-sequence toggles ─────────────────────────────────────────────────
+  "forbidNightToMorning": true,
+  "forbidMorningToNightSameDay": false,
+  "forbidEveningToNight": true,
+
+  // ── Coverage / emergency toggles ───────────────────────────────────────────
+  "guaranteeFullCoverage": true,
+  "allowEmergencyOverrides": true,
+  "allowSecondShiftSameDayInEmergency": true,
+  "ignoreAvailabilityInEmergency": false,
+  "allowNightCapOverrideInEmergency": true,
+  "allowRestRuleOverrideInEmergency": true,
+
+  // ── Goal toggles ───────────────────────────────────────────────────────────
+  "goalMinimizeStaffCost": true,
+  "goalMaximizePreferenceSatisfaction": true,
+  "goalBalanceWorkload": false,
+  "goalBalanceNightWorkload": false,
+  "goalReduceUndesirableShifts": true,
+
+  // ── Advanced solver options (stored in attributes JSONB) ───────────────────
+  "enableShiftTypeLimit": true,
+  "maxShiftPerType": { "morning": 9, "evening": 9, "night": 9 },
+  "shiftTypeLimitExemptNurses": [],
+  "eveningAfterMorningCountsAsOvertime": true,
+  "enableConsecutiveNightLimit": true,
+  "enableMinTotalDaysOff": true,
+  "minTotalDaysOff": 11,
+
+  // ── Objective weights ──────────────────────────────────────────────────────
+  "penaltyWeightJson": {
+    "understaff_penalty": 100,
+    "overtime_penalty": 10,
+    "preference_penalty_multiplier": 1,
+    "workload_balance_weight": 5,
+    "emergency_override_penalty": 50,
+    "same_day_second_shift_penalty": 20,
+    "weekly_night_over_penalty": 15
+  },
+  "fairnessWeightJson": {
+    "workload_balance": 1.0,
+    "night_balance": 1.0,
+    "shift_type_balance": 1.0
+  },
+  "goalPriorityJson": {
+    "coverage": 1,
+    "cost": 2,
+    "preference": 3,
+    "fairness": 4
+  },
+
+  // ── Solver tuning ──────────────────────────────────────────────────────────
+  "numSearchWorkers": 8,
+  "timeLimitSec": 20,
+
+  // ── Meta ───────────────────────────────────────────────────────────────────
+  "attributes": {},
+  "isActive": true
+}
+```
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `name` | string | **yes** | — | |
+| `description` | string \| null | no | `null` | |
+| `assignedTo` | string \| null | no | `null` | Display label for the department |
+| `color` | `"primary"` \| `"warning"` \| `"success"` | no | `"primary"` | UI accent colour |
+| `maxConsecutiveWorkDays` | integer \| null | no | `null` | null = no limit |
+| `maxConsecutiveNightShifts` | integer \| null | no | `null` | null = no limit |
+| `minRestHoursBetweenShifts` | integer \| null | no | `null` | null = no limit |
+| `maxShiftsPerDay` | integer ≥ 1 | no | `1` | |
+| `minDaysOffPerWeek` | integer ≥ 0 | no | `2` | Set `0` to disable weekly off-day floor |
+| `maxNightsPerWeek` | integer ≥ 0 | no | `2` | |
+| `forbidNightToMorning` | boolean | no | `true` | |
+| `forbidMorningToNightSameDay` | boolean | no | `false` | |
+| `forbidEveningToNight` | boolean | no | `true` | |
+| `guaranteeFullCoverage` | boolean | no | `true` | Retry in emergency mode if strict solve fails |
+| `allowEmergencyOverrides` | boolean | no | `true` | Enable Phase-2 emergency solver |
+| `allowSecondShiftSameDayInEmergency` | boolean | no | `true` | |
+| `ignoreAvailabilityInEmergency` | boolean | no | `false` | |
+| `allowNightCapOverrideInEmergency` | boolean | no | `true` | |
+| `allowRestRuleOverrideInEmergency` | boolean | no | `true` | |
+| `goalMinimizeStaffCost` | boolean | no | `true` | |
+| `goalMaximizePreferenceSatisfaction` | boolean | no | `true` | |
+| `goalBalanceWorkload` | boolean | no | `false` | |
+| `goalBalanceNightWorkload` | boolean | no | `false` | |
+| `goalReduceUndesirableShifts` | boolean | no | `true` | |
+| `enableShiftTypeLimit` | boolean | no | `true` | Stored in `attributes` JSONB |
+| `maxShiftPerType` | `{ morning, evening, night }` | no | `{9,9,9}` | Stored in `attributes` JSONB |
+| `shiftTypeLimitExemptNurses` | string[] | no | `[]` | Worker IDs exempt from shift-type cap. Stored in `attributes` JSONB |
+| `eveningAfterMorningCountsAsOvertime` | boolean | no | `true` | Stored in `attributes` JSONB |
+| `enableConsecutiveNightLimit` | boolean | no | `true` | Stored in `attributes` JSONB |
+| `enableMinTotalDaysOff` | boolean | no | `true` | Enforce `minTotalDaysOff` hard floor. Set `false` to disable. Stored in `attributes` JSONB |
+| `minTotalDaysOff` | integer ≥ 0 | no | `11` | Min off-days across the full period. Only active when `enableMinTotalDaysOff=true`. Stored in `attributes` JSONB |
+| `penaltyWeightJson` | object \| null | no | `null` | Solver penalty weights |
+| `fairnessWeightJson` | object \| null | no | `null` | Fairness balance weights |
+| `goalPriorityJson` | object \| null | no | `null` | Goal priority ordering (1=highest) |
+| `numSearchWorkers` | integer ≥ 1 | no | `8` | CP-SAT parallel workers |
+| `timeLimitSec` | number ≥ 1 | no | `20` | Solver time budget in seconds |
+| `attributes` | object | no | `{}` | Arbitrary extra metadata |
+| `isActive` | boolean | no | `true` | |
 
 **Response — 201 Created** — `{ "profile": { ... } }`
 
+---
+
 #### `PATCH /units/:unitId/constraint-profiles/:id`
 
-Partially updates a constraint profile. All fields optional.
+Partially updates a constraint profile. All fields are optional — only send what you want to change. The field table is identical to POST above except `name` is also optional.
 
 **Response — 200 OK** — `{ "profile": { ... } }`
 

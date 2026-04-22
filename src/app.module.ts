@@ -34,6 +34,7 @@ import { AuditLogsModule } from '@/core/audit-logs/audit-logs.module';
 import { ProfilesModule } from '@/core/profiles/profiles.module';
 import { DisplaySettingsModule } from '@/core/display-settings/display-settings.module';
 import { ExportOptionsModule } from '@/core/export-options/export-options.module';
+import { UsersModule } from '@/core/users/users.module';
 
 @Module({
   providers: [
@@ -80,6 +81,7 @@ import { ExportOptionsModule } from '@/core/export-options/export-options.module
     ProfilesModule,
     DisplaySettingsModule,
     ExportOptionsModule,
+    UsersModule,
   ],
 })
 export class AppModule implements NestModule {
