@@ -216,15 +216,24 @@ describe('AuthService', () => {
       } as any)).rejects.toThrow(BadRequestException);
     });
 
-    it('throws BadRequestException when organizationId is missing', async () => {
-      const { svc, userRepo } = makeSvc();
+    it('succeeds without organizationId (it is optional)', async () => {
+      const savedUser = makeUser({ id: '99', email: 'new@example.com', organization_id: null });
+      const { svc, userRepo, unitMembershipRepo, userRoleRepo, roleRepo, jwtService } = makeSvc();
       userRepo.findOne.mockResolvedValue(null);
+      userRepo.create.mockReturnValue(savedUser);
+      userRepo.save.mockResolvedValue(savedUser);
+      unitMembershipRepo.find.mockResolvedValue([]);
+      userRoleRepo.find.mockResolvedValue([]);
+      roleRepo.find.mockResolvedValue([]);
+      jwtService.sign.mockReturnValue('tok');
 
-      await expect(svc.signup({
+      const result = await svc.signup({
         email: 'new@example.com',
         password: 'pass123',
         fullName: 'Jane',
-      } as any)).rejects.toThrow(BadRequestException);
+      } as any);
+
+      expect(result.accessToken).toBeDefined();
     });
 
     it('creates user and returns accessToken on success', async () => {

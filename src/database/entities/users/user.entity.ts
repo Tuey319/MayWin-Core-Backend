@@ -6,8 +6,8 @@ export class User {
   @PrimaryGeneratedColumn('increment', { type: 'bigint' })
   id: string;
 
-  @Column({ type: 'bigint' })
-  organization_id: string;
+  @Column({ type: 'bigint', nullable: true })
+  organization_id: string | null;
 
   @Column({ type: 'text', unique: true })
   email: string;

@@ -14,8 +14,8 @@ export class Worker {
   @PrimaryGeneratedColumn('increment', { type: 'bigint' })
   id: string;
 
-  @Column({ type: 'bigint' })
-  organization_id: string;
+  @Column({ type: 'bigint', nullable: true })
+  organization_id: string | null;
 
   @Column({ type: 'bigint', nullable: true })
   primary_unit_id: string | null;
