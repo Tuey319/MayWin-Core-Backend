@@ -253,7 +253,7 @@ describe('ConstraintProfilesService', () => {
 
 describe('ShiftTemplatesService', () => {
   it('should be defined', () => {
-    const svc = new ShiftTemplatesService({} as any);
+    const svc = new ShiftTemplatesService({} as any, {} as any);
     expect(svc).toBeDefined();
   });
 
@@ -271,7 +271,7 @@ describe('ShiftTemplatesService', () => {
         create: jest.fn().mockReturnValue(template),
         save: jest.fn().mockResolvedValue(template),
       });
-      const svc = new ShiftTemplatesService(repo as any);
+      const svc = new ShiftTemplatesService(repo as any, {} as any);
 
       const dto = { code: 'MORNING', name: 'Morning Shift', startTime: '07:00', endTime: '15:00' } as any;
       const result = await svc.create('1', '20', dto);
@@ -284,7 +284,7 @@ describe('ShiftTemplatesService', () => {
     it('throws ConflictException when code already exists for the unit', async () => {
       const existing = makeShiftTemplate();
       const repo = makeRepo({ findOne: jest.fn().mockResolvedValue(existing) });
-      const svc = new ShiftTemplatesService(repo as any);
+      const svc = new ShiftTemplatesService(repo as any, {} as any);
 
       const dto = { code: 'MORNING', name: 'Duplicate', startTime: '07:00', endTime: '15:00' } as any;
       await expect(svc.create('1', '20', dto)).rejects.toThrow(ConflictException);
@@ -301,7 +301,7 @@ describe('ShiftTemplatesService', () => {
         findOne: jest.fn().mockResolvedValue(template),
         save: jest.fn().mockResolvedValue(updated),
       });
-      const svc = new ShiftTemplatesService(repo as any);
+      const svc = new ShiftTemplatesService(repo as any, {} as any);
 
       const result = await svc.update('1', '20', 'st1', { name: 'Early Morning' } as any);
 
@@ -310,7 +310,7 @@ describe('ShiftTemplatesService', () => {
 
     it('throws NotFoundException when template not found', async () => {
       const repo = makeRepo({ findOne: jest.fn().mockResolvedValue(null) });
-      const svc = new ShiftTemplatesService(repo as any);
+      const svc = new ShiftTemplatesService(repo as any, {} as any);
 
       await expect(svc.update('1', '20', 'non-existent', { name: 'X' } as any)).rejects.toThrow(NotFoundException);
     });
@@ -323,7 +323,7 @@ describe('ShiftTemplatesService', () => {
           .mockResolvedValueOnce(template)  // first call: find template to update
           .mockResolvedValueOnce(duplicate), // second call: check for duplicate code
       });
-      const svc = new ShiftTemplatesService(repo as any);
+      const svc = new ShiftTemplatesService(repo as any, {} as any);
 
       await expect(svc.update('1', '20', 'st1', { code: 'EVENING' } as any)).rejects.toThrow(ConflictException);
     });
@@ -338,7 +338,7 @@ describe('ShiftTemplatesService', () => {
         findOne: jest.fn().mockResolvedValue(template),
         save: jest.fn().mockResolvedValue({ ...template, is_active: false }),
       });
-      const svc = new ShiftTemplatesService(repo as any);
+      const svc = new ShiftTemplatesService(repo as any, {} as any);
 
       const result = await svc.deactivate('1', '20', 'st1');
 
@@ -347,7 +347,7 @@ describe('ShiftTemplatesService', () => {
 
     it('throws NotFoundException when template not found', async () => {
       const repo = makeRepo({ findOne: jest.fn().mockResolvedValue(null) });
-      const svc = new ShiftTemplatesService(repo as any);
+      const svc = new ShiftTemplatesService(repo as any, {} as any);
 
       await expect(svc.deactivate('1', '20', 'non-existent')).rejects.toThrow(NotFoundException);
     });
