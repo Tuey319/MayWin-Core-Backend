@@ -31,7 +31,7 @@ import { Worker } from '@/database/entities/workers/worker.entity';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '8h' },
+        signOptions: { expiresIn: '8h', issuer: 'maywin-api', audience: 'maywin-client' },
       }),
     }),
   ],

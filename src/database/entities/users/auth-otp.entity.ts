@@ -16,9 +16,12 @@ export class AuthOtp {
   @Column({ type: 'bigint' })
   user_id: string;
 
-  /** Raw 6-digit code (short-lived, low value — not worth bcrypt overhead) */
+  /** SHA-256 hex digest of the 6-digit OTP */
   @Column({ type: 'text' })
   otp_code: string;
+
+  @Column({ type: 'int', default: 0 })
+  attempts: number;
 
   @Column({ type: 'timestamptz' })
   expires_at: Date;

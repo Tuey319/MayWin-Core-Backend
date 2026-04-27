@@ -9,6 +9,8 @@ import { Logger } from '@nestjs/common';
 export function validateEnvironment(): void {
   const logger = new Logger('EnvValidation');
 
+  const isProd = process.env.NODE_ENV === 'production';
+
   const required: string[] = [
     'JWT_SECRET',
     'DB_HOST',
@@ -16,6 +18,10 @@ export function validateEnvironment(): void {
     'DB_PASSWORD',
     'DB_NAME',
   ];
+
+  if (isProd) {
+    required.push('REDIS_URL');
+  }
 
   const missing = required.filter((key) => !process.env[key]);
 
@@ -38,6 +44,10 @@ export function validateEnvironment(): void {
     logger.warn(
       `Missing recommended environment variables: ${missingRecommended.join(', ')}`,
     );
+  }
+
+  if (process.env.MAYWIN_SFN_ARN) {
+    logger.warn('MAYWIN_SFN_ARN is deprecated — rename it to SCHEDULE_WORKFLOW_ARN');
   }
 
   logger.log('Environment validation passed');

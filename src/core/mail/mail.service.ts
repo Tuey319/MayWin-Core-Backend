@@ -2,6 +2,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 
+function maskEmail(email: string): string {
+  return email.replace(/(.{2}).+(@.+)/, '$1***$2');
+}
+
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
@@ -46,9 +50,9 @@ export class MailService {
           </div>
         `,
       });
-      this.logger.log(`[MAIL] OTP sent to ${to}`);
+      this.logger.log(`[MAIL] OTP sent to ${maskEmail(to)}`);
     } catch (err) {
-      this.logger.error(`[MAIL] Failed to send OTP to ${to}:`, err);
+      this.logger.error(`[MAIL] Failed to send OTP to ${maskEmail(to)}:`, err);
       throw err;
     }
   }
@@ -89,9 +93,9 @@ export class MailService {
           </div>
         `,
       });
-      this.logger.log(`[MAIL] Welcome email sent to ${to}`);
+      this.logger.log(`[MAIL] Welcome email sent to ${maskEmail(to)}`);
     } catch (err) {
-      this.logger.error(`[MAIL] Failed to send welcome email to ${to}:`, err);
+      this.logger.error(`[MAIL] Failed to send welcome email to ${maskEmail(to)}:`, err);
       throw err;
     }
   }

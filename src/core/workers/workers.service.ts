@@ -18,6 +18,7 @@ import { Schedule, ScheduleStatus } from '@/database/entities/scheduling/schedul
 import { ScheduleAssignment } from '@/database/entities/scheduling/schedule-assignment.entity';
 import { ShiftTemplate } from '@/database/entities/scheduling/shift-template.entity';
 import { S3ArtifactsService } from '@/database/buckets/s3-artifacts.service';
+import { AuditLogsService } from '@/core/audit-logs/audit-logs.service';
 import { PutWorkerPreferencesDto } from './dto/put-preferences.dto';
 
 @Injectable()
@@ -38,6 +39,7 @@ export class WorkersService {
     private readonly shiftTemplatesRepo: Repository<ShiftTemplate>,
     private readonly s3Artifacts: S3ArtifactsService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
+    private readonly auditLogs: AuditLogsService,
   ) {}
 
   async listWorkers(unitId: string, search: string | null) {
@@ -86,7 +88,7 @@ export class WorkersService {
     return result;
   }
 
-  async upsertPreferences(workerId: string, dto: PutWorkerPreferencesDto) {
+  async upsertPreferences(workerId: string, dto: PutWorkerPreferencesDto, actor?: { actorId: string; actorName: string; orgId?: string }) {
     const worker = await this.workersRepo.findOne({ where: { id: workerId } });
     if (!worker) throw new NotFoundException('Worker not found');
 
@@ -120,6 +122,18 @@ export class WorkersService {
         this.cache.del(`workers:list:${unitId}:`),
         this.cache.del(`kpi:${unitId}::`),
       ]);
+    }
+
+    if (actor) {
+      await this.auditLogs.append({
+        orgId: actor.orgId ?? String(worker.organization_id ?? 'unknown'),
+        actorId: actor.actorId,
+        actorName: actor.actorName,
+        action: 'UPDATE_WORKER_PREFERENCES',
+        targetType: 'worker',
+        targetId: workerId,
+        detail: `Updated preferences for worker ${workerId}`,
+      }).catch(() => {});
     }
 
     return {

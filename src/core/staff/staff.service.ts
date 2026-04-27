@@ -1,5 +1,5 @@
 // src/core/staff/staff.service.ts
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -108,7 +108,11 @@ export class StaffService {
     );
     const hasNoOrg = !organizationId || organizationId === 0;
 
-    if (hasNoOrg || isSuperAdmin) {
+    if (hasNoOrg && !isSuperAdmin) {
+      throw new ForbiddenException('Account has no organisation assigned');
+    }
+
+    if (isSuperAdmin) {
       const workers = await this.workersRepo.find({ order: { organization_id: 'ASC', id: 'ASC' } });
       return { ok: true, staff: workers.map((w) => this.mapWorkerToStaff(w)) };
     }
@@ -236,18 +240,20 @@ export class StaffService {
     if (!worker) throw new NotFoundException('Staff not found');
 
     const removed = this.mapWorkerToStaff(worker);
-    await this.workersRepo.remove(worker);
 
+    // Audit BEFORE deletion so the record is not lost if remove() fails (PDPA §38)
     await this.auditLogs.append({
       orgId: String(organizationId),
       actorId: actor.actorId,
       actorName: actor.actorName,
-      action: 'DELETE_STAFF',
+      action: 'WORKER_DELETED',
       targetType: 'staff',
       targetId: removed.employeeId,
       level: 3,
       detail: `Deleted staff ${removed.name} (${removed.employeeId})`,
     });
+
+    await this.workersRepo.remove(worker);
 
     return { ok: true };
   }

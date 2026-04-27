@@ -1,6 +1,7 @@
 // src/core/health/health.controller.ts
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
 import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { access, constants } from 'fs/promises';
 import * as path from 'path';
@@ -23,12 +24,12 @@ export class HealthController {
     };
   }
 
-  /** Full system health — JWT-authenticated. */
+  /** Full system health — SUPER_ADMIN only (ISO 27001:2022 — 8.12, A.9.2.3). */
+  @Roles('SUPER_ADMIN')
   @UseGuards(JwtAuthGuard)
   @Get('health/system')
   async systemHealth() {
-    const [database, s3, solver] = await Promise.all([
-      this.checkDatabase(),
+    const [s3, solver] = await Promise.all([
       this.checkS3(),
       this.checkSolver(),
     ]);
@@ -39,15 +40,11 @@ export class HealthController {
     return {
       checkedAt: new Date().toISOString(),
       runtime: {
-        nodeVersion: process.version,
-        platform: process.platform,
         uptimeSeconds: Math.floor(process.uptime()),
-        environment: process.env.NODE_ENV ?? 'development',
         buildTime: process.env.BUILD_TIME ?? 'unknown',
         memory: { heapUsedMb: mb(mem.heapUsed), heapTotalMb: mb(mem.heapTotal), rssMb: mb(mem.rss) },
       },
       checks: {
-        database,
         s3,
         solver,
         mail: this.checkMail(),
@@ -58,22 +55,6 @@ export class HealthController {
 
   // ── Checks ────────────────────────────────────────────────────────────────
 
-  private async checkDatabase(): Promise<Record<string, any>> {
-    const host = process.env.DB_HOST;
-    const port = process.env.DB_PORT;
-    const user = process.env.DB_USER;
-    const name = process.env.DB_NAME;
-    const configured = !!(host && port && user && name);
-    return {
-      ok: configured,
-      configured,
-      host: host ?? null,
-      port: port ?? null,
-      database: name ?? null,
-      ...(configured ? {} : { error: 'DB env vars missing' }),
-    };
-  }
-
   private async checkS3(): Promise<Record<string, any>> {
     const bucket = process.env.MAYWIN_ARTIFACTS_BUCKET?.trim();
     if (!bucket) {
@@ -83,9 +64,9 @@ export class HealthController {
       const s3 = new S3Client({ region: process.env.AWS_REGION ?? 'ap-southeast-1' });
       const start = Date.now();
       await s3.send(new HeadBucketCommand({ Bucket: bucket }));
-      return { ok: true, configured: true, bucket, latencyMs: Date.now() - start };
+      return { ok: true, configured: true, latencyMs: Date.now() - start };
     } catch (err: any) {
-      return { ok: false, configured: true, bucket, error: err?.message ?? String(err) };
+      return { ok: false, configured: true, error: 'Bucket unreachable' };
     }
   }
 
@@ -95,9 +76,9 @@ export class HealthController {
     const pythonCmd = process.env.SOLVER_PYTHON?.trim() ?? (process.platform === 'win32' ? 'py' : 'python3');
     try {
       await access(absPath, constants.R_OK);
-      return { ok: true, pythonCmd, cliPath: absPath };
+      return { ok: true };
     } catch {
-      return { ok: false, pythonCmd, cliPath: absPath, error: 'CLI not found at path' };
+      return { ok: false, error: 'CLI not found at configured path' };
     }
   }
 

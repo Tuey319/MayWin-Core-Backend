@@ -9,7 +9,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { randomInt, timingSafeEqual } from 'crypto';
+import { createHash, randomInt, timingSafeEqual } from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 
 import { User } from '@/database/entities/users/user.entity';
@@ -167,12 +167,13 @@ export class AuthService {
     await this.otpRepo.delete({ user_id: user.id, used_at: IsNull() });
 
     const otp = this.generateOtp();
+    const otpHash = createHash('sha256').update(otp).digest('hex');
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     await this.otpRepo.save(
       this.otpRepo.create({
         user_id: user.id,
-        otp_code: otp,
+        otp_code: otpHash,
         expires_at: expiresAt,
         used_at: null,
       }),
@@ -182,7 +183,7 @@ export class AuthService {
     try {
       await this.mailService.sendOtp(user.email, user.full_name, otp);
     } catch {
-      this.logger.error(`[AUTH] Failed to deliver OTP to ${user.email}`);
+      this.logger.error(`[AUTH] Failed to deliver OTP to user ID=${user.id}`);
       throw new ServiceUnavailableException(
         'Unable to send verification code right now. Please try again later.',
       );
@@ -226,10 +227,20 @@ export class AuthService {
       throw new UnauthorizedException('Verification code has expired. Please log in again.');
     }
 
-    // Timing-safe OTP comparison to prevent timing attacks (ISO 27001 A.10.1.1)
-    const provided = Buffer.from(otp.trim().padEnd(record.otp_code.length));
-    const expected = Buffer.from(record.otp_code);
-    if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+    // Timing-safe SHA-256 comparison to prevent timing attacks (ISO 27001 A.10.1.1)
+    const providedHash = createHash('sha256').update(otp.trim()).digest('hex');
+    const providedBuf = Buffer.from(providedHash, 'hex');
+    const expectedBuf = Buffer.from(record.otp_code, 'hex');
+    const match = providedBuf.length === expectedBuf.length && timingSafeEqual(providedBuf, expectedBuf);
+
+    if (!match) {
+      record.attempts = (record.attempts ?? 0) + 1;
+      await this.otpRepo.save(record);
+      if (record.attempts >= 5) {
+        record.used_at = new Date(); // lock out by marking used
+        await this.otpRepo.save(record);
+        throw new UnauthorizedException('Too many incorrect attempts. Please log in again.');
+      }
       throw new UnauthorizedException('Incorrect verification code');
     }
 

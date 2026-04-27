@@ -3,7 +3,7 @@ import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from './common/throttler/throttler-storage-redis.service';
 import { RolesGuard } from '@/common/guards/roles.guard';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
@@ -38,9 +38,9 @@ import { ExportOptionsModule } from '@/core/export-options/export-options.module
 
 @Module({
   providers: [
+    // ThrottlerGuard must be first so @Throttle() decorators are not silently ignored
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     // RolesGuard is registered globally so @Roles() works on every controller
-    // without needing @UseGuards(RolesGuard) per file.
-    // JwtAuthGuard is still applied per-controller (explicit opt-in).
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
   imports: [

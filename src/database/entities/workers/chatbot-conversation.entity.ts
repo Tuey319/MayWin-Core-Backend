@@ -46,6 +46,9 @@ export class ChatbotConversation {
   @Column({ type: 'jsonb', default: () => `'{}'::jsonb` })
   attributes!: Record<string, any>;
 
+  @Column({ type: 'timestamptz', default: () => "NOW() + INTERVAL '90 days'" })
+  expires_at!: Date;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at!: Date;
 

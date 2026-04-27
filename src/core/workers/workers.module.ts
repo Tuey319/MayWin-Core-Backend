@@ -12,6 +12,7 @@ import { Schedule } from '@/database/entities/scheduling/schedule.entity';
 import { ScheduleAssignment } from '@/database/entities/scheduling/schedule-assignment.entity';
 import { ShiftTemplate } from '@/database/entities/scheduling/shift-template.entity';
 import { BucketsModule } from '@/database/buckets/buckets.module';
+import { AuditLogsModule } from '@/core/audit-logs/audit-logs.module';
 
 import { WorkersController } from './workers.controller';
 import { WorkersService } from './workers.service';
@@ -29,6 +30,7 @@ import { WorkersService } from './workers.service';
       ShiftTemplate,
     ]),
     BucketsModule,
+    AuditLogsModule,
   ],
   controllers: [WorkersController],
   providers: [WorkersService],

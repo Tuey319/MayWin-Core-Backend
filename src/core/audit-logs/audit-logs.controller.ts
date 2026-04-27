@@ -42,16 +42,17 @@ export class AuditLogsController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const roles = this.callerRoles(req);
-    const orgId = orgIdOverride ?? this.callerOrgId(req);
+    const isSuperAdmin = roles.some((r) => r.toLowerCase() === 'super_admin');
+    const effectiveOrgId = isSuperAdmin ? (orgIdOverride ?? this.callerOrgId(req)) : this.callerOrgId(req);
 
     if ((exportType ?? '').toLowerCase() === 'csv') {
-      const csv = await this.auditLogs.readRawCsv(orgId);
+      const csv = await this.auditLogs.readRawCsv(effectiveOrgId);
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="audit-logs-${Date.now()}.csv"`);
       return csv;
     }
 
-    const { entries, maxLevel } = await this.auditLogs.listNewestFirst(orgId, roles);
+    const { entries, maxLevel } = await this.auditLogs.listNewestFirst(effectiveOrgId, roles);
     return { ok: true, logs: entries, maxLevel };
   }
 

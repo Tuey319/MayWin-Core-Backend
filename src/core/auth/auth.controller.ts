@@ -17,9 +17,9 @@ export class AuthController {
 
   /**
    * POST /auth/login
-   * 10 attempts per 15 minutes per IP — brute force protection (ISO 27001:2022 — 8.5)
+   * 5 attempts per minute per IP — brute force protection (ISO 27001:2022 — 8.5)
    */
-  @Throttle({ default: { ttl: 900000, limit: 10 } })
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   @Post('login')
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto.email, dto.password);
@@ -27,9 +27,9 @@ export class AuthController {
 
   /**
    * POST /auth/verify-otp
-   * 10 attempts per 15 minutes per IP (ISO 27001:2022 — 8.5)
+   * 5 attempts per minute per IP (ISO 27001:2022 — 8.5)
    */
-  @Throttle({ default: { ttl: 900000, limit: 10 } })
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   @Post('verify-otp')
   async verifyOtp(@Body() dto: VerifyOtpDto) {
     return this.authService.verifyOtp(dto.otpToken, dto.otp);

@@ -21,9 +21,8 @@ export function typeOrmConfig(): TypeOrmModuleOptions {
     host = process.env.DB_HOST_OLD || host;
   }
 
-  // ISO 27001:2022 A.8.20 — enforce certificate validation in production
-  const isProd = process.env.NODE_ENV === 'production';
-  const sslConfig = { rejectUnauthorized: isProd };
+  // ISO 27001:2022 A.8.20 — always enforce certificate validation
+  const sslConfig = { rejectUnauthorized: true };
 
   return {
     type: 'postgres',
@@ -37,6 +36,8 @@ export function typeOrmConfig(): TypeOrmModuleOptions {
     extra: {
       ssl: sslConfig,
       connectionTimeoutMillis: 5000,
+      max: 20,
+      idleTimeoutMillis: 30000,
     },
 
     synchronize: false,
@@ -60,8 +61,7 @@ export function dataSourceOptions(): DataSourceOptions {
     host = process.env.DB_HOST_OLD || host;
   }
 
-  const isProd = process.env.NODE_ENV === 'production';
-  const sslConfig = { rejectUnauthorized: isProd };
+  const sslConfig = { rejectUnauthorized: true };
 
   return {
     type: 'postgres',
@@ -75,6 +75,8 @@ export function dataSourceOptions(): DataSourceOptions {
     ssl: sslConfig,
     extra: {
       ssl: sslConfig,
+      max: 20,
+      idleTimeoutMillis: 30000,
     },
 
     synchronize: false,

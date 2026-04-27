@@ -1,0 +1,14 @@
+# requirements.in — unpinned direct dependencies (DEP-002)
+# Edit this file to add/remove packages.
+# Run the command below to regenerate requirements.txt with hashes:
+#   pip install pip-tools
+#   pip-compile --generate-hashes requirements.in
+#
+# Install in CI with hash verification:
+#   pip install --require-hashes -r requirements.txt
+
+fastapi
+uvicorn[standard]
+requests
+python-dotenv
+ortools

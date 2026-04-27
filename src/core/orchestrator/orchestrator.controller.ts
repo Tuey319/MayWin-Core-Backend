@@ -1,5 +1,5 @@
 // src/core/orchestrator/orchestrator.controller.ts
-import { Body, Controller, Post, UseGuards, Logger } from '@nestjs/common';
+import { Body, Controller, Post, Req, UseGuards, Logger } from '@nestjs/common';
 import { JobsService } from '@/core/jobs/jobs.service';
 import { RunOrchestratorDto } from './dto/run-orchestrator.dto';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
@@ -35,10 +35,7 @@ export class OrchestratorController {
   }
 
   private getStateMachineArn(): string {
-    const raw =
-      process.env.SCHEDULE_WORKFLOW_ARN ??
-      process.env.MAYWIN_SFN_ARN ??
-      '';
+    const raw = process.env.SCHEDULE_WORKFLOW_ARN ?? '';
 
     const v = String(raw).trim();
 
@@ -86,19 +83,21 @@ export class OrchestratorController {
   }
 
   @Post('/run')
-  async run(@Body() body: RunOrchestratorDto) {
+  async run(@Body() body: RunOrchestratorDto, @Req() req: any) {
     const mode = this.getMode();
     const useStepFunctions = mode === 'STEP_FUNCTIONS';
 
     this.logger.log(`ORCH mode=${mode}`);
 
     const normalizedDto = this.normalizeDtoForJob(body.dto);
+    const callerOrgId = Number(req.user?.organizationId ?? 0);
 
     const res = await this.jobs.createJob(
       body.scheduleId,
       normalizedDto as any,
       body.idempotencyKey ?? null,
       { enqueueLocalRunner: !useStepFunctions },
+      callerOrgId,
     );
 
     const job = res.job;

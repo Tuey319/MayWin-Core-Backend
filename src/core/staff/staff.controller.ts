@@ -15,13 +15,17 @@ import type { Request } from 'express';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { StaffService } from './staff.service';
+import { DataSubjectService } from './data-subject.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { PatchStaffDto } from './dto/patch-staff.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class StaffController {
-  constructor(private readonly staff: StaffService) { }
+  constructor(
+    private readonly staff: StaffService,
+    private readonly dataSubject: DataSubjectService,
+  ) { }
 
   private context(req: Request): { organizationId: number; unitId: number | null } {
     const user = (req as any).user ?? {};
@@ -105,5 +109,15 @@ export class StaffController {
   @Post('/staff/:id/link-token')
   generateLinkToken(@Param('id') id: string, @Req() req: Request) {
     return this.staff.generateLinkToken(id, this.context(req).organizationId, this.actor(req));
+  }
+
+  /**
+   * DELETE /staff/:id/personal-data
+   * PDPA §33 right-to-erasure — anonymise PII for a worker (HOSPITAL_ADMIN only).
+   */
+  @Roles('HOSPITAL_ADMIN')
+  @Delete('/staff/:id/personal-data')
+  erasePersonalData(@Param('id') id: string, @Req() req: Request) {
+    return this.dataSubject.eraseWorker(id, this.actor(req).actorId);
   }
 }

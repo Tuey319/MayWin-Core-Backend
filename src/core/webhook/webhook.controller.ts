@@ -4,7 +4,9 @@ import type { Request } from 'express';
 import * as crypto from 'crypto';
 import { WebhookService } from './webhook.service';
 import { messagingApi } from '@line/bot-sdk';
+import { Public } from '@/common/decorators/public.decorator';
 
+@Public()
 @Controller('webhook')
 export class WebhookController {
   private readonly logger = new Logger(WebhookController.name);

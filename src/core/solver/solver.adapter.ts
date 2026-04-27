@@ -25,6 +25,31 @@ export interface CliSolveResponse {
   details?: any;
 }
 
+const SOLVER_ENV_ALLOWLIST = new Set([
+  'SOLVER_PYTHON',
+  'PATH',
+  'HOME',
+  'TMPDIR',
+  'PYTHONPATH',
+  'PYTHONDONTWRITEBYTECODE',
+  'LANG',
+  'LC_ALL',
+  'NODE_ENV',
+  'LOG_LEVEL',
+  'PORT',
+  'TZ',
+]);
+
+function buildSolverEnv(): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (SOLVER_ENV_ALLOWLIST.has(k) && v !== undefined) {
+      env[k] = v;
+    }
+  }
+  return env;
+}
+
 @Injectable()
 export class SolverAdapter {
   private readonly logger = new Logger(SolverAdapter.name);
@@ -76,7 +101,7 @@ export class SolverAdapter {
     const outPath = path.join(tmpDir, `out-${reqId}.json`);
 
     try {
-      await fs.writeFile(inPath, JSON.stringify(pythonReq), 'utf8');
+      await fs.writeFile(inPath, JSON.stringify(pythonReq), { encoding: 'utf8', mode: 0o600 });
 
       const py = this.getPythonCmd();
       const cli = this.getCliPath();
@@ -429,7 +454,7 @@ export class SolverAdapter {
       const child = spawn(cmd, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
-        env: process.env,
+        env: buildSolverEnv(),
       });
 
       let stdout = '';

@@ -1,8 +1,10 @@
 
 import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
+import { ChatbotCleanupService } from './chatbot-cleanup.service';
 import { ChatbotConversation } from '../../database/entities/workers/chatbot-conversation.entity';
 import { WorkerAvailability } from '../../database/entities/workers/worker-availability.entity';
 import { Worker } from '../../database/entities/workers/worker.entity';
@@ -11,11 +13,12 @@ import { WorkerPreferencesModule } from '../worker-preferences/worker-preference
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     TypeOrmModule.forFeature([ChatbotConversation, WorkerAvailability, Worker, LineLinkToken]),
     forwardRef(() => WorkerPreferencesModule),
   ],
   controllers: [WebhookController],
-  providers: [WebhookService],
+  providers: [WebhookService, ChatbotCleanupService],
   exports: [WebhookService],
 })
 export class WebhookModule { }
