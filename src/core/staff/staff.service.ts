@@ -157,6 +157,9 @@ export class StaffService {
 
     const email = dto.email?.trim().toLowerCase() || null;
     const unitId = dto.unitId != null ? dto.unitId : context.unitId;
+    if (unitId == null) {
+      throw new BadRequestException('unitId is required — provide it in the request body or ensure your account has a unit assigned');
+    }
 
     let worker: Worker;
     try {
@@ -225,6 +228,7 @@ export class StaffService {
     if (dto.employeeId != null) worker.worker_code = dto.employeeId;
     if (dto.lineId != null) worker.line_id = dto.lineId;
     if (dto.status != null) worker.is_active = dto.status === 'active';
+    if (dto.unitId != null) worker.primary_unit_id = String(dto.unitId);
 
     const attrs = { ...(worker.attributes ?? {}) };
     if (dto.email != null) attrs.email = dto.email;

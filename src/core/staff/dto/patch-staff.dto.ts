@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class PatchStaffDto {
   @IsOptional()
@@ -26,4 +26,8 @@ export class PatchStaffDto {
   @IsString()
   @IsIn(['active', 'inactive'])
   status?: 'active' | 'inactive';
+
+  @IsOptional()
+  @IsNumber()
+  unitId?: number;
 }
