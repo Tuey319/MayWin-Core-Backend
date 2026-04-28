@@ -285,7 +285,7 @@ export class WorkerPreferencesService {
         (preferences as any).maxConsecutiveNightShifts ?? (preferences as any).max_consecutive_night_shifts ?? null,
       preference_pattern_json: mergedPreferencePattern,
       days_off_pattern_json: mergedDaysOffPattern,
-      attributes: (preferences as any).attributes ?? null,
+      attributes: (preferences as any).attributes ?? existing?.attributes ?? {},
     } as any;
 
     const saved = await this.preferencesRepo.save(
