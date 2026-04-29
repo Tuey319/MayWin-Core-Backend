@@ -123,6 +123,64 @@ def _normalize_availability(src, nurse_codes, day_dates, shift_codes):
     return None
 
 
+def _normalize_overridable_availability(src, nurse_codes, day_dates, shift_codes):
+    """Build the overridable_availability map: only DAY_OFF entries (scheduled leave).
+    UNAVAILABLE/BLOCKED are hard physical restrictions and are never included here.
+    Uses two passes so that an UNAVAILABLE entry always overrides a DAY_OFF/ALL entry
+    for the same nurse+date+shift, regardless of ordering in the source list."""
+    if src is None or not isinstance(src, list):
+        return None
+
+    day_date_set = set(day_dates)
+    shift_code_set = set(shift_codes)
+    nurse_code_set = set(nurse_codes)
+
+    # Pass 1: collect all hard-blocked (UNAVAILABLE/BLOCKED) nurse+date+shift tuples.
+    hard_blocked = set()
+    for rule in src:
+        if not isinstance(rule, dict):
+            continue
+        if "type" not in rule or "date" not in rule or "shiftCode" not in rule:
+            continue
+        nurse = rule.get("nurseCode") or rule.get("nurse")
+        date = rule.get("date")
+        sc = rule.get("shiftCode")
+        typ = rule.get("type", "")
+        if not nurse or nurse not in nurse_code_set:
+            continue
+        if date not in day_date_set:
+            continue
+        if typ not in ("UNAVAILABLE", "BLOCKED"):
+            continue
+        shift_keys = shift_codes if str(sc).upper() == "ALL" else ([sc] if sc in shift_code_set else [])
+        for shiftCode in shift_keys:
+            hard_blocked.add((nurse, date, shiftCode))
+
+    # Pass 2: add DAY_OFF slots, skipping any that are hard-blocked.
+    out = {}
+    for rule in src:
+        if not isinstance(rule, dict):
+            continue
+        if "type" not in rule or "date" not in rule or "shiftCode" not in rule:
+            continue
+        nurse = rule.get("nurseCode") or rule.get("nurse")
+        date = rule.get("date")
+        sc = rule.get("shiftCode")
+        typ = rule.get("type", "")
+        if not nurse or nurse not in nurse_code_set:
+            continue
+        if date not in day_date_set:
+            continue
+        if typ != "DAY_OFF":
+            continue
+        shift_keys = shift_codes if str(sc).upper() == "ALL" else ([sc] if sc in shift_code_set else [])
+        for shiftCode in shift_keys:
+            if (nurse, date, shiftCode) not in hard_blocked:
+                out.setdefault(nurse, {}).setdefault(date, {})[shiftCode] = 0
+
+    return out if out else None
+
+
 def _normalize_preferences(src, nurse_codes, day_dates, shift_codes):
     """
     Convert preferences into Dict[nurse][day][shift] = penalty(int)
@@ -271,12 +329,23 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
     }
 
     # Optional: availability + preferences (convert list→dict if needed)
+    raw_avail = payload.get("availability")
     solve_req["availability"] = _normalize_availability(
-        payload.get("availability"),
+        raw_avail,
         nurse_codes=nurse_codes,
         day_dates=day_dates,
         shift_codes=shift_codes,
     )
+    # Only DAY_OFF entries — soft-overridable in emergency mode.
+    # UNAVAILABLE/BLOCKED (e.g. "never nights") remain hard even in emergency.
+    overridable = _normalize_overridable_availability(
+        raw_avail,
+        nurse_codes=nurse_codes,
+        day_dates=day_dates,
+        shift_codes=shift_codes,
+    )
+    if overridable:
+        solve_req["overridable_availability"] = overridable
     solve_req["preferences"] = _normalize_preferences(
         payload.get("preferences"),
         nurse_codes=nurse_codes,

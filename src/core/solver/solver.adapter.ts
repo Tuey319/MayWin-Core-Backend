@@ -227,12 +227,32 @@ export class SolverAdapter {
 
     // ── availability ─────────────────────────────────────────────────────────
     const availability: Record<string, Record<string, Record<string, number>>> = {};
+    // Only DAY_OFF entries — the subset that can be soft-overridden in emergency mode.
+    // UNAVAILABLE/BLOCKED (e.g. "never nights") remain hard even in emergency.
+    const overridableAvailability: Record<string, Record<string, Record<string, number>>> = {};
     for (const n of nurses) {
       availability[n] = {};
       for (const d of days) availability[n][d] = {};
     }
 
-    for (const row of normalized?.availability ?? []) {
+    const rawAvail: any[] = normalized?.availability ?? [];
+
+    // Pass 1: collect all hard-blocked (UNAVAILABLE/BLOCKED) nurse+date+shift combos
+    // so they can't be re-introduced as overridable by a DAY_OFF/ALL entry.
+    const hardBlocked = new Set<string>();
+    for (const row of rawAvail) {
+      const type = row?.type ? String(row.type) : null;
+      if (type !== 'UNAVAILABLE' && type !== 'BLOCKED') continue;
+      const nurse = row?.nurseCode ? String(row.nurseCode) : null;
+      const date = row?.date ? String(row.date) : null;
+      const sc = row?.shiftCode ? String(row.shiftCode) : null;
+      if (!nurse || !date || !sc) continue;
+      const shiftKeys = sc.toUpperCase() === 'ALL' ? shifts : [sc];
+      for (const shiftCode of shiftKeys) hardBlocked.add(`${nurse}|${date}|${shiftCode}`);
+    }
+
+    // Pass 2: build availability map and overridableAvailability (DAY_OFF only, minus hard-blocked).
+    for (const row of rawAvail) {
       const nurse = row?.nurseCode ? String(row.nurseCode) : null;
       const date = row?.date ? String(row.date) : null;
       const sc = row?.shiftCode ? String(row.shiftCode) : null;
@@ -242,18 +262,16 @@ export class SolverAdapter {
       if (!availability[nurse]) availability[nurse] = {};
       if (!availability[nurse][date]) availability[nurse][date] = {};
 
-      // 0 = unavailable, 1 = available (default)
-      // PREFERRED only marks the named shift as explicitly available — it does NOT block
-      // other shifts on the same day. To enforce "shift X only", add UNAVAILABLE rows
-      // for all other shifts on that day in worker_availability.
       if (type === 'UNAVAILABLE' || type === 'BLOCKED' || type === 'DAY_OFF') {
-        if (sc.toUpperCase() === 'ALL') {
-          // shift_code='ALL' means block every shift on this day
-          for (const shiftCode of shifts) {
-            availability[nurse][date][shiftCode] = 0;
+        const shiftKeys = sc.toUpperCase() === 'ALL' ? shifts : [sc];
+        for (const shiftCode of shiftKeys) {
+          availability[nurse][date][shiftCode] = 0;
+          // Only DAY_OFF slots that have no UNAVAILABLE/BLOCKED override can be soft-overridden.
+          if (type === 'DAY_OFF' && !hardBlocked.has(`${nurse}|${date}|${shiftCode}`)) {
+            overridableAvailability[nurse] ??= {};
+            overridableAvailability[nurse][date] ??= {};
+            overridableAvailability[nurse][date][shiftCode] = 0;
           }
-        } else {
-          availability[nurse][date][sc] = 0;
         }
       } else {
         // PREFERRED, AVAILABLE, or any other type → available
@@ -410,6 +428,7 @@ export class SolverAdapter {
     };
 
     if (preferences) req.preferences = preferences;
+    if (Object.keys(overridableAvailability).length > 0) req.overridable_availability = overridableAvailability;
 
     if (backupNurses.length > 0) req.backup_nurses = backupNurses;
     if (Object.keys(nurseSkills).length > 0) req.nurse_skills = nurseSkills;

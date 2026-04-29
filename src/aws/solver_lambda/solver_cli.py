@@ -96,6 +96,7 @@ class SolveRequest(BaseModel):
     max_shifts_per_nurse: Optional[Dict[str, int]] = None
 
     availability: Optional[Dict[str, Dict[str, Dict[str, int]]]] = None
+    overridable_availability: Optional[Dict[str, Dict[str, Dict[str, int]]]] = None
     preferences: Optional[Dict[str, Dict[str, Dict[str, int]]]] = None
     nurse_skills: Optional[Dict[str, List[str]]] = None
     required_skills: Optional[Dict[str, Dict[str, Dict[str, int]]]] = None
@@ -222,6 +223,14 @@ def is_available(avail, nurse, day, shift) -> bool:
     return bool(avail.get(nurse, {}).get(day, {}).get(shift, 1))
 
 
+def is_overridable(overridable_avail, nurse, day, shift) -> bool:
+    """True when the blocked slot came from a DAY_OFF row (scheduled leave) and may be
+    soft-overridden in emergency mode. UNAVAILABLE/BLOCKED rows are not in this map."""
+    if not overridable_avail:
+        return False
+    return overridable_avail.get(nurse, {}).get(day, {}).get(shift, 1) == 0
+
+
 def has_skill(nurse_skills: Dict[str, List[str]], nurse: str, skill: str) -> bool:
     return skill in (nurse_skills.get(nurse, []) or [])
 
@@ -293,6 +302,7 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
     backup_nurses = set(req.backup_nurses or [])
     demand = req.demand
     availability = req.availability or {}
+    overridable_availability = req.overridable_availability or {}
     preferences = req.preferences or {}
     nurse_skills = req.nurse_skills or {}
     required_skills = req.required_skills or {}
@@ -423,10 +433,16 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
                 avail = is_available(availability, n, d, s)
 
                 if not avail:
-                    if emergency_mode and rules.ignore_availability_in_emergency:
-                        # Soft: allow assignment via override variable (penalised in objective below)
+                    can_override = (
+                        emergency_mode
+                        and rules.ignore_availability_in_emergency
+                        and is_overridable(overridable_availability, n, d, s)
+                    )
+                    if can_override:
+                        # DAY_OFF only: soft override with penalty tracked via override variable
                         model.Add(override[(n, d, s)] == x[(n, d, s)])
                     else:
+                        # UNAVAILABLE/BLOCKED: hard — never assign
                         model.Add(x[(n, d, s)] == 0)
                         model.Add(override[(n, d, s)] == 0)
                 else:
