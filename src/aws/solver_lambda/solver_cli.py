@@ -414,7 +414,7 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
             model.Add(sum(x[(n, d, s)] for s in shifts) <= max_shifts_per_day)
 
     # ============================================================
-    # Availability (HARD — never overridden)
+    # Availability
     # ============================================================
 
     for n in nurses:
@@ -423,8 +423,12 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
                 avail = is_available(availability, n, d, s)
 
                 if not avail:
-                    model.Add(x[(n, d, s)] == 0)
-                    model.Add(override[(n, d, s)] == 0)
+                    if emergency_mode and rules.ignore_availability_in_emergency:
+                        # Soft: allow assignment via override variable (penalised in objective below)
+                        model.Add(override[(n, d, s)] == x[(n, d, s)])
+                    else:
+                        model.Add(x[(n, d, s)] == 0)
+                        model.Add(override[(n, d, s)] == 0)
                 else:
                     model.Add(override[(n, d, s)] == 0)
 
@@ -496,12 +500,19 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
     if rules.min_days_off_per_week > 0:
         for n in nurses:
             for w, dlist in weeks.items():
-                cap = max(0, len(dlist) - rules.min_days_off_per_week)
-                worked_days = [model.NewBoolVar(f"worked_{n}_{d}") for d in dlist]
-                for wd, d in zip(worked_days, dlist):
+                # Scale proportionally for partial ISO weeks at schedule boundaries
+                min_off = max(0, round(rules.min_days_off_per_week * len(dlist) / 7))
+                cap = max(0, len(dlist) - min_off)
+                worked_days_w = [model.NewBoolVar(f"worked_{n}_{d}") for d in dlist]
+                for wd, d in zip(worked_days_w, dlist):
                     model.Add(sum(x[(n, d, s)] for s in shifts) >= wd)
                     model.Add(sum(x[(n, d, s)] for s in shifts) <= max_shifts_per_day * wd)
-                model.Add(sum(worked_days) <= cap)
+                if emergency_mode and rules.allow_emergency_overrides:
+                    extra_days = model.NewIntVar(0, len(dlist), f"extra_days_{n}_{w}")
+                    model.Add(sum(worked_days_w) - cap <= extra_days)
+                    terms.append(weights.emergency_override_penalty * extra_days)
+                else:
+                    model.Add(sum(worked_days_w) <= cap)
 
     # ============================================================
     # NEW: Minimum Total Days Off (HARD)
@@ -521,9 +532,6 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
                 worked_days.append(wd)
 
             model.Add(sum(worked_days) <= len(days) - rules.min_total_days_off)
-            # Also enforce minimum unique working days = regular shifts target
-            # so nurses can't fall short by packing doubles on fewer days
-            model.Add(sum(worked_days) >= per_nurse_regular[n])
 
     # Consecutive work days
     if rules.max_consecutive_work_days is not None:
