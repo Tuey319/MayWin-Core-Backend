@@ -181,6 +181,55 @@ def _normalize_overridable_availability(src, nurse_codes, day_dates, shift_codes
     return out if out else None
 
 
+def _normalize_nurse_requests(src, nurse_codes, day_dates, shift_codes):
+    """Extract PREFERRED entries as hard nurse-requested shifts.
+    Returns Dict[nurse][date][shift] = 1, skipping any slot that is also
+    hard-blocked (UNAVAILABLE/BLOCKED wins over PREFERRED)."""
+    if src is None or not isinstance(src, list):
+        return None
+
+    day_date_set = set(day_dates)
+    shift_code_set = set(shift_codes)
+    nurse_code_set = set(nurse_codes)
+
+    # Collect hard-blocked tuples so UNAVAILABLE always overrides PREFERRED.
+    hard_blocked = set()
+    for rule in src:
+        if not isinstance(rule, dict):
+            continue
+        typ = rule.get("type", "")
+        if typ not in ("UNAVAILABLE", "BLOCKED"):
+            continue
+        nurse = rule.get("nurseCode") or rule.get("nurse")
+        date = rule.get("date")
+        sc = rule.get("shiftCode")
+        if not nurse or nurse not in nurse_code_set or date not in day_date_set:
+            continue
+        shift_keys = shift_codes if str(sc).upper() == "ALL" else ([sc] if sc in shift_code_set else [])
+        for shiftCode in shift_keys:
+            hard_blocked.add((nurse, date, shiftCode))
+
+    out = {}
+    for rule in src:
+        if not isinstance(rule, dict):
+            continue
+        typ = rule.get("type", "")
+        if typ != "PREFERRED":
+            continue
+        nurse = rule.get("nurseCode") or rule.get("nurse")
+        date = rule.get("date")
+        sc = rule.get("shiftCode")
+        if not nurse or nurse not in nurse_code_set or date not in day_date_set:
+            continue
+        if sc not in shift_code_set:
+            continue
+        if (nurse, date, sc) in hard_blocked:
+            continue
+        out.setdefault(nurse, {}).setdefault(date, {})[sc] = 1
+
+    return out if out else None
+
+
 def _normalize_preferences(src, nurse_codes, day_dates, shift_codes):
     """
     Convert preferences into Dict[nurse][day][shift] = penalty(int)
@@ -346,6 +395,14 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
     )
     if overridable:
         solve_req["overridable_availability"] = overridable
+    nurse_requests = _normalize_nurse_requests(
+        raw_avail,
+        nurse_codes=nurse_codes,
+        day_dates=day_dates,
+        shift_codes=shift_codes,
+    )
+    if nurse_requests:
+        solve_req["nurse_requests"] = nurse_requests
     solve_req["preferences"] = _normalize_preferences(
         payload.get("preferences"),
         nurse_codes=nurse_codes,

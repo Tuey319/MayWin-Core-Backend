@@ -97,6 +97,7 @@ class SolveRequest(BaseModel):
 
     availability: Optional[Dict[str, Dict[str, Dict[str, int]]]] = None
     overridable_availability: Optional[Dict[str, Dict[str, Dict[str, int]]]] = None
+    nurse_requests: Optional[Dict[str, Dict[str, Dict[str, int]]]] = None
     preferences: Optional[Dict[str, Dict[str, Dict[str, int]]]] = None
     nurse_skills: Optional[Dict[str, List[str]]] = None
     required_skills: Optional[Dict[str, Dict[str, Dict[str, int]]]] = None
@@ -429,6 +430,27 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
                         model.Add(override[(n, d, s)] == 0)
                 else:
                     model.Add(override[(n, d, s)] == 0)
+
+    # Nurse-requested shifts (PREFERRED availability entries) — hard "must assign".
+    # Skip any slot that is hard-blocked in availability to avoid infeasibility.
+    if req.nurse_requests:
+        nurse_set = set(nurses)
+        day_set = set(days)
+        shift_set = set(shifts)
+        for nr_nurse, by_date in req.nurse_requests.items():
+            if nr_nurse not in nurse_set:
+                continue
+            for nr_day, by_shift in by_date.items():
+                if nr_day not in day_set:
+                    continue
+                for nr_shift in by_shift:
+                    if nr_shift not in shift_set:
+                        continue
+                    if (nr_nurse, nr_day, nr_shift) not in x:
+                        continue
+                    if not is_available(req.availability, nr_nurse, nr_day, nr_shift):
+                        continue  # unavailability wins; don't create conflicting constraints
+                    model.Add(x[(nr_nurse, nr_day, nr_shift)] == 1)
 
     # Monthly min/max totals with overtime slack
     for n in nurses:

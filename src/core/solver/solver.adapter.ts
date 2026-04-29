@@ -230,6 +230,8 @@ export class SolverAdapter {
     // Only DAY_OFF entries — the subset that can be soft-overridden in emergency mode.
     // UNAVAILABLE/BLOCKED (e.g. "never nights") remain hard even in emergency.
     const overridableAvailability: Record<string, Record<string, Record<string, number>>> = {};
+    // PREFERRED entries (nurse shift requests) become hard "must assign" constraints.
+    const nurseRequests: Record<string, Record<string, Record<string, number>>> = {};
     for (const n of nurses) {
       availability[n] = {};
       for (const d of days) availability[n][d] = {};
@@ -273,8 +275,17 @@ export class SolverAdapter {
             overridableAvailability[nurse][date][shiftCode] = 0;
           }
         }
+      } else if (type === 'PREFERRED') {
+        // Nurse requested this specific shift → hard "must assign" constraint.
+        // Mark available and record in nurseRequests (only if not already hard-blocked).
+        availability[nurse][date][sc] = 1;
+        if (!hardBlocked.has(`${nurse}|${date}|${sc}`)) {
+          nurseRequests[nurse] ??= {};
+          nurseRequests[nurse][date] ??= {};
+          nurseRequests[nurse][date][sc] = 1;
+        }
       } else {
-        // PREFERRED, AVAILABLE, or any other type → available
+        // AVAILABLE or any other type → mark as available
         availability[nurse][date][sc] = 1;
       }
     }
@@ -429,6 +440,7 @@ export class SolverAdapter {
 
     if (preferences) req.preferences = preferences;
     if (Object.keys(overridableAvailability).length > 0) req.overridable_availability = overridableAvailability;
+    if (Object.keys(nurseRequests).length > 0) req.nurse_requests = nurseRequests;
 
     if (backupNurses.length > 0) req.backup_nurses = backupNurses;
     if (Object.keys(nurseSkills).length > 0) req.nurse_skills = nurseSkills;
