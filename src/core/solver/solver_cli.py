@@ -523,6 +523,11 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
 
             model.Add(sum(worked_days) <= len(days) - rules.min_total_days_off)
 
+            # Enforce minimum working days so nurses can't satisfy the shift-count
+            # minimum via OT double-shifts on fewer days than their regular quota.
+            if n not in backup_nurses and per_nurse_regular.get(n, 0) > 0:
+                model.Add(sum(worked_days) >= per_nurse_regular[n])
+
     # Consecutive work days
     if rules.max_consecutive_work_days is not None:
         window = rules.max_consecutive_work_days + 1
