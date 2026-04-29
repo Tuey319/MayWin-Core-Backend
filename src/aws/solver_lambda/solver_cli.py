@@ -338,7 +338,6 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
     x = {(n, d, s): model.NewBoolVar(f"x_{n}_{d}_{s}") for n in nurses for d in days for s in shifts}
     terms: List[cp_model.LinearExpr] = []
 
-    # Shift type limit — hard in Phase 1, soft penalty in Phase 2
     if rules.enable_shift_type_limit:
         exempt_nurses = set(rules.shift_type_limit_exempt_nurses or [])
 
@@ -348,33 +347,15 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
 
             if morning_label and "morning" in rules.max_shift_per_type:
                 max_m = rules.max_shift_per_type["morning"]
-                total_m = sum(x[(n, d, morning_label)] for d in days)
-                if emergency_mode:
-                    excess_m = model.NewIntVar(0, len(days), f"excess_m_{n}")
-                    model.Add(total_m - max_m <= excess_m)
-                    terms.append(weights.emergency_override_penalty * excess_m)
-                else:
-                    model.Add(total_m <= max_m)
+                model.Add(sum(x[(n, d, morning_label)] for d in days) <= max_m)
 
             if evening_label and "evening" in rules.max_shift_per_type:
                 max_e = rules.max_shift_per_type["evening"]
-                total_e = sum(x[(n, d, evening_label)] for d in days)
-                if emergency_mode:
-                    excess_e = model.NewIntVar(0, len(days), f"excess_e_{n}")
-                    model.Add(total_e - max_e <= excess_e)
-                    terms.append(weights.emergency_override_penalty * excess_e)
-                else:
-                    model.Add(total_e <= max_e)
+                model.Add(sum(x[(n, d, evening_label)] for d in days) <= max_e)
 
             if night_label and "night" in rules.max_shift_per_type:
                 max_n = rules.max_shift_per_type["night"]
-                total_n = sum(x[(n, d, night_label)] for d in days)
-                if emergency_mode:
-                    excess_n = model.NewIntVar(0, len(days), f"excess_n_{n}")
-                    model.Add(total_n - max_n <= excess_n)
-                    terms.append(weights.emergency_override_penalty * excess_n)
-                else:
-                    model.Add(total_n <= max_n)
+                model.Add(sum(x[(n, d, night_label)] for d in days) <= max_n)
 
 
     # Emergency override variable: assignment allowed even if availability/rest/night-cap would normally block it.
@@ -413,6 +394,7 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
                 model.Add(assigned == demand[d][s])
             else:
                 model.Add(assigned + under[(d, s)] >= demand[d][s])
+                model.Add(assigned <= demand[d][s])  # prevent overcoverage even in emergency
 
     # Daily shift count
     max_shifts_per_day = rules.max_shifts_per_day
