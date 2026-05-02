@@ -49,7 +49,9 @@ This two-phase design is the **safety valve** that ensures a solution always exi
 
 The nurse request seed used `UNAVAILABLE` for **leave days** and applied `ON CONFLICT DO UPDATE`, which overwrote existing `DAY_OFF` entries. This caused a **constraint escalation**:
 
-$$\text{DAY\_OFF} \xrightarrow{\text{DO UPDATE}} \text{UNAVAILABLE}$$
+```
+DAY_OFF  ──(DO UPDATE)──►  UNAVAILABLE
+```
 
 The critical consequence: emergency-mode override of leave days became **impossible**, eliminating the safety valve entirely for those slots.
 
@@ -87,9 +89,9 @@ The CP-SAT solver correctly identifies this as **INFEASIBLE** — no assignment 
 
 A day $d$ is infeasible when:
 
-$$\max\_\text{assignable}(d) < \sum_s \text{demand}_{d,s}$$
+$$\text{assignable}(d) < \sum_s \text{demand}_{d,s}$$
 
-where $\max\_\text{assignable}(d)$ accounts for per-nurse OT limits, same-day shift sequence restrictions, and hard availability blocks. When this holds and no emergency override exists to relax demand, the model has **no feasible region**.
+where $\text{assignable}(d)$ accounts for per-nurse OT limits, same-day shift sequence restrictions, and hard availability blocks. When this holds and no emergency override exists to relax demand, the model has **no feasible region**.
 
 ---
 
