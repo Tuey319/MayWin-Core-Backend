@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { AuthController } from '../src/core/auth/auth.controller';
 import { AuthService } from '../src/core/auth/auth.service';
@@ -20,10 +21,11 @@ function makeOtp(overrides: Partial<any> = {}) {
   return {
     id: 'otp1',
     user_id: '42',
-    otp_code: '123456',
+    otp_code: createHash('sha256').update('123456').digest('hex'),
     expires_at: new Date(Date.now() + 10 * 60 * 1000),
     used_at: null,
     created_at: new Date(),
+    attempts: 0,
     ...overrides,
   };
 }
@@ -35,8 +37,11 @@ function makeDeps() {
     userRoleRepo: { find: jest.fn() },
     roleRepo: { find: jest.fn() },
     otpRepo: { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn(), delete: jest.fn() },
+    workerRepo: { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() },
     jwtService: { sign: jest.fn().mockReturnValue('jwt-token'), verify: jest.fn() },
     mailService: { sendOtp: jest.fn().mockResolvedValue(undefined), sendWelcome: jest.fn().mockResolvedValue(undefined) },
+    auditLogs: { append: jest.fn().mockResolvedValue({}) },
+    blocklist: { isBlocked: jest.fn().mockResolvedValue(false), block: jest.fn().mockResolvedValue(undefined) },
   };
 }
 
@@ -48,8 +53,11 @@ function makeSvc(overrides: Partial<ReturnType<typeof makeDeps>> = {}) {
     d.userRoleRepo as any,
     d.roleRepo as any,
     d.otpRepo as any,
+    d.workerRepo as any,
     d.jwtService as any,
     d.mailService as any,
+    d.auditLogs as any,
+    d.blocklist as any,
   );
   return { svc, ...d };
 }
@@ -68,7 +76,8 @@ describe('AuthController', () => {
 describe('AuthService', () => {
   it('should be defined', () => {
     const svc = new AuthService(
-      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any, {} as any, {} as any,
     );
     expect(svc).toBeDefined();
   });
@@ -115,24 +124,24 @@ describe('AuthService', () => {
       process.env.AUTH_DISABLE_OTP = origEnv;
     });
 
-    it('returns accessToken directly when AUTH_DISABLE_OTP=true', async () => {
+    it('always requires OTP regardless of AUTH_DISABLE_OTP env (security hardening)', async () => {
       const origEnv = process.env.AUTH_DISABLE_OTP;
       process.env.AUTH_DISABLE_OTP = 'true';
 
       const bcrypt = require('bcrypt');
       const hash = await bcrypt.hash('correctpassword', 10);
       const user = makeUser({ password_hash: hash });
-      const { svc, userRepo, unitMembershipRepo, userRoleRepo, roleRepo, jwtService } = makeSvc();
+      const { svc, userRepo, otpRepo, jwtService } = makeSvc();
       userRepo.findOne.mockResolvedValue(user);
-      unitMembershipRepo.find.mockResolvedValue([]);
-      userRoleRepo.find.mockResolvedValue([]);
-      roleRepo.find.mockResolvedValue([]);
-      jwtService.sign.mockReturnValue('access-token-direct');
+      otpRepo.delete.mockResolvedValue(undefined);
+      otpRepo.create.mockReturnValue({});
+      otpRepo.save.mockResolvedValue({});
+      jwtService.sign.mockReturnValue('pending-otp-token');
 
       const result = await svc.login('user@example.com', 'correctpassword');
 
-      expect(result).toHaveProperty('accessToken', 'access-token-direct');
-      expect(result).not.toHaveProperty('requires2FA');
+      expect(result).toHaveProperty('requires2FA', true);
+      expect(result).toHaveProperty('otpToken');
 
       process.env.AUTH_DISABLE_OTP = origEnv;
     });

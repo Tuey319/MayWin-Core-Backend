@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { StaffController } from '../src/core/staff/staff.controller';
 import { StaffService } from '../src/core/staff/staff.service';
+import { DataSubjectService } from '../src/core/staff/data-subject.service';
 import { AuditLogsService } from '../src/core/audit-logs/audit-logs.service';
 import { MailService } from '../src/core/mail/mail.service';
 import { Worker, EmploymentType } from '../src/database/entities/workers/worker.entity';
@@ -83,6 +84,10 @@ describe('StaffController & StaffService', () => {
         {
           provide: MailService,
           useValue: mockMailService,
+        },
+        {
+          provide: DataSubjectService,
+          useValue: { eraseWorker: jest.fn().mockResolvedValue({ erased: true }) },
         },
       ],
     }).compile();
@@ -316,7 +321,7 @@ describe('StaffController & StaffService', () => {
       expect(result.ok).toBe(true);
       expect(mockAuditLogsService.append).toHaveBeenCalledWith(
         expect.objectContaining({
-          action: 'DELETE_STAFF',
+          action: 'WORKER_DELETED',
         }),
       );
     });

@@ -33,6 +33,7 @@ function makeSvc(overrides: Partial<any> = {}) {
   const shiftTemplatesRepo = {};
   const s3Artifacts = {};
   const cache = makeCache();
+  const auditLogs = { append: jest.fn().mockResolvedValue({}) };
 
   const svc = new WorkersService(
     workersRepo as any,
@@ -44,6 +45,7 @@ function makeSvc(overrides: Partial<any> = {}) {
     shiftTemplatesRepo as any,
     s3Artifacts as any,
     cache as any,
+    auditLogs as any,
   );
   return { svc, workersRepo, prefsRepo, cache };
 }
@@ -62,7 +64,7 @@ describe('WorkersController', () => {
 describe('WorkersService', () => {
   it('should be defined', () => {
     const svc = new WorkersService(
-      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
     );
     expect(svc).toBeDefined();
   });

@@ -40,6 +40,7 @@ function makeRow(overrides: Partial<Record<string, string>> = {}): string[] {
 const mockS3 = {
   getText: jest.fn(),
   putText: jest.fn().mockResolvedValue(undefined),
+  getBucketObjectLockConfig: jest.fn().mockResolvedValue(true),
 };
 
 // ── callerMaxLevel ────────────────────────────────────────────────────────────

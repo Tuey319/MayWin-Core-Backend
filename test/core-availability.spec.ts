@@ -31,7 +31,8 @@ function makeSvc(repoOverrides: Partial<any> = {}) {
     ...repoOverrides,
   };
   const cache = makeCache();
-  const svc = new AvailabilityService(repo as any, cache as any);
+  const auditLogs = { append: jest.fn().mockResolvedValue({}) };
+  const svc = new AvailabilityService(repo as any, cache as any, auditLogs as any);
   return { svc, repo, cache };
 }
 
@@ -48,7 +49,7 @@ describe('AvailabilityController', () => {
 
 describe('AvailabilityService', () => {
   it('should be defined', () => {
-    const svc = new AvailabilityService({} as any, {} as any);
+    const svc = new AvailabilityService({} as any, {} as any, {} as any);
     expect(svc).toBeDefined();
   });
 

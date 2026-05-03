@@ -19,6 +19,7 @@ import { ScheduleArtifact } from '../src/database/entities/orchestration/schedul
 import { S3ArtifactsService } from '../src/database/buckets/s3-artifacts.service';
 import { BadRequestException } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { AuditLogsService } from '../src/core/audit-logs/audit-logs.service';
 
 describe('Compatibility Routes', () => {
   describe('SchedulesController - GET /schedule alias', () => {
@@ -119,7 +120,7 @@ describe('Compatibility Routes', () => {
       mockRepos.assignmentsRepo.find.mockResolvedValue(mockAssignments);
       mockRepos.shiftTemplatesRepo.find.mockResolvedValue([]);
 
-      const result = await controller.getCurrentCompat('2');
+      const result = await controller.getCurrentCompat('2', {} as any);
 
       expect(result.success).toBe(true);
       expect(result.result).toHaveProperty('assignments');
@@ -129,7 +130,7 @@ describe('Compatibility Routes', () => {
     });
 
     it('should throw BadRequestException if unitId missing', async () => {
-      await expect(controller.getCurrentCompat(undefined)).rejects.toThrow(BadRequestException);
+      await expect(controller.getCurrentCompat(undefined as any, {} as any)).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -212,7 +213,7 @@ describe('Compatibility Routes', () => {
 
       mockRepos.jobsRepo.findOne.mockResolvedValue(mockJob);
 
-      const result = await controller.getScheduleJob('job-uuid-123');
+      const result = await controller.getScheduleJob('job-uuid-123', {} as any);
 
       expect(result.job).toBeDefined();
       expect(result.job.id).toBe('job-uuid-123');
@@ -232,7 +233,7 @@ describe('Compatibility Routes', () => {
 
       mockRepos.jobsRepo.findOne.mockResolvedValue(mockJob);
 
-      const result = await controller.getJob('job-uuid-456');
+      const result = await controller.getJob('job-uuid-456', {} as any);
 
       expect(result.job).toBeDefined();
       expect(result.job.id).toBe('job-uuid-456');
@@ -329,6 +330,10 @@ describe('Compatibility Routes', () => {
           {
             provide: CACHE_MANAGER,
             useValue: { get: jest.fn(), set: jest.fn(), del: jest.fn() },
+          },
+          {
+            provide: AuditLogsService,
+            useValue: { append: jest.fn().mockResolvedValue({}) },
           },
         ],
       }).compile();
