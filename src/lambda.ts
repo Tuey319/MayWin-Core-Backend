@@ -1,6 +1,6 @@
 // src/lambda.ts
 import 'reflect-metadata';
-import { Context } from 'aws-lambda';
+import type { Context } from 'aws-lambda';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
