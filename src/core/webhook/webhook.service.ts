@@ -108,6 +108,16 @@ export class WebhookService {
         return "⚠️ ขอโทษนะคะ รบกวนช่วยยืนยันโดยพิมพ์ 'ใช่' หรือ 'ไม่' อีกครั้งค่ะ";
       }
 
+      // --- PHASE 2 GUARD: Gemini disabled in production ---
+      if (process.env.NODE_ENV === 'production') {
+        this.logger.warn('[NLU] Gemini disabled in production — falling back to structured parser');
+        const extracted = this.parseStructured(text);
+        if (extracted.length > 0) {
+          return this.setupConfirmation(conversation, extracted);
+        }
+        return 'ขออภัยค่ะ ระบบ AI ปิดให้บริการชั่วคราว กรุณาติดต่อหัวหน้าพยาบาลโดยตรงค่ะ';
+      }
+
       // --- PHASE 2: Dynamic Key & Model Failover ---
       const allKeys: string[] = Object.keys(process.env)
         .filter((key) => key.startsWith('GEMINI_API_KEY'))
@@ -379,6 +389,38 @@ export class WebhookService {
       return `- วัน${formattedDate}: ${p.shift === 'leave' ? 'ขอ "ลาพัก"' : 'เข้า "เวร' + (shiftMap[p.shift] || p.shift) + '"'}`;
     });
     return `สรุปรายการที่คุณต้องการจองค่ะ:\n${summaries.join('\n')}`;
+  }
+
+  private parseStructured(message: string): { date: string; shift: string }[] {
+    const results: { date: string; shift: string }[] = [];
+
+    const monthMap: Record<string, number> = {
+      'ม.ค.': 1, 'ก.พ.': 2, 'มี.ค.': 3, 'เม.ย.': 4, 'พ.ค.': 5, 'มิ.ย.': 6,
+      'ก.ค.': 7, 'ส.ค.': 8, 'ก.ย.': 9, 'ต.ค.': 10, 'พ.ย.': 11, 'ธ.ค.': 12,
+      'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+      'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+    };
+
+    let shift = 'leave';
+    if (message.match(/เช้า|morning/i)) shift = 'morning';
+    else if (message.match(/บ่าย|afternoon/i)) shift = 'afternoon';
+    else if (message.match(/ดึก|night/i)) shift = 'night';
+    else if (message.match(/ลา|day.?off|หยุด|\boff\b/i)) shift = 'leave';
+
+    const datePattern = /(\d{1,2})\s*(พ\.ค\.|มี\.ค\.|เม\.ย\.|ม\.ค\.|ก\.พ\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/gi;
+    let match: RegExpExecArray | null;
+    const year = new Date().getFullYear();
+
+    while ((match = datePattern.exec(message)) !== null) {
+      const day = parseInt(match[1], 10);
+      const monthRaw = match[2];
+      const month = monthMap[monthRaw] ?? monthMap[monthRaw.toLowerCase()];
+      if (!month) continue;
+      const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      results.push({ date, shift });
+    }
+
+    return results;
   }
 
   private async saveToDatabase(conversation: ChatbotConversation, data: any[]) {
