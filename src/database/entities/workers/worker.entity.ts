@@ -56,6 +56,15 @@ export class Worker {
   @Column({ type: 'text', nullable: true, unique: true })
   line_id: string | null;
 
+  @Column({ type: 'boolean', default: false })
+  gemini_consent_given: boolean;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  gemini_consent_given_at: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  gemini_consent_declined_at: Date | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 

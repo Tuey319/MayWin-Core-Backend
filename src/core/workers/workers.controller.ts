@@ -2,6 +2,8 @@
 import { BadRequestException, Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { RolesGuard } from '@/common/guards/roles.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
 import { WorkersService } from './workers.service';
 
 @UseGuards(JwtAuthGuard)
@@ -12,22 +14,30 @@ export class WorkersController {
   /**
    * Purpose: List all workers in a unit (used for scheduling UI).
    * Spec: GET /units/{unitId}/workers
+   * Gemini consent fields are included only for non-nurse callers.
    */
+  @Roles('HEAD_NURSE')
   @Get('/units/:unitId/workers')
   list(
+    @Req() req: Request,
     @Param('unitId') unitId: string,
     @Query('search') search?: string,
   ) {
-    return this.workers.listWorkers(unitId, search ?? null);
+    const user = (req as any).user ?? {};
+    const callerRole = String(user.role ?? '');
+    const organizationId = String(user.organizationId ?? '');
+    return this.workers.listWorkers(unitId, search ?? null, callerRole, organizationId);
   }
 
   /**
    * Compatibility alias for BFF: GET /nurses/export?unitId=2
    */
+  @Roles('HEAD_NURSE')
   @Get('/nurses/export')
-  async exportNurses(@Query('unitId') unitId?: string) {
+  async exportNurses(@Req() req: Request, @Query('unitId') unitId?: string) {
     const targetUnitId = unitId ?? '2';
-    const result = await this.workers.listWorkers(targetUnitId, null);
+    const organizationId = String((req as any).user?.organizationId ?? '');
+    const result = await this.workers.listWorkers(targetUnitId, null, '', organizationId);
     const overallAverageSatisfaction =
       await this.workers.getOverallAverageSatisfaction(targetUnitId);
 
@@ -61,11 +71,25 @@ export class WorkersController {
   }
 
   /**
+   * GET /workers/me/consent
+   * Returns the authenticated nurse's Gemini AI consent status.
+   * No role restriction — every linked nurse can read their own consent state.
+   */
+  @Get('/workers/me/consent')
+  async getMyConsent(@Req() req: Request) {
+    const user = (req as any).user;
+    const result = await this.workers.getMyConsentStatus(Number(user.sub));
+    if (!result) return { workerId: null, geminiConsentGiven: false, geminiConsentGivenAt: null, geminiConsentDeclinedAt: null };
+    return result;
+  }
+
+  /**
    * Dashboard KPI summary for donut charts.
    * Optional date filter matches the dashboard window.
    *
    * GET /units/:unitId/kpis/summary?startDate=2026-03-09&endDate=2026-03-15
    */
+  @Roles('HEAD_NURSE')
   @Get('/units/:unitId/kpis/summary')
   getKpiSummary(
     @Param('unitId') unitId: string,

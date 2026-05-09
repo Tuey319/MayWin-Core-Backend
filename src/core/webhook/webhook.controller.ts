@@ -37,6 +37,11 @@ export class WebhookController {
     return hash === signature;
   }
 
+  private async reply(replyToken: string, messages: messagingApi.Message[]): Promise<void> {
+    if (!messages.length) return;
+    await this.client.replyMessage({ replyToken, messages });
+  }
+
   @Public()
   @Post()
   @HttpCode(200)
@@ -59,19 +64,27 @@ export class WebhookController {
 
       for (const event of events) {
         try {
-          if (event.type === 'message' && event.message.type === 'text') {
+          // ── Text messages ────────────────────────────────────────────────
+          if (event.type === 'message' && event.message?.type === 'text') {
             const userId = event.source.userId || event.source.groupId || 'unknown';
             const message = event.message.text;
             this.logger.log(`[LINE] userId: ${userId}, message: ${message}`);
 
-            const replyText = await this.webhookService.handleNurseMessage(message, userId);
+            const messages = await this.webhookService.handleNurseMessage(message, userId);
+            this.logger.log(`[REPLY] userId: ${userId}, messageCount: ${messages.length}`);
+            await this.reply(event.replyToken, messages);
+            continue;
+          }
 
-            this.logger.log(`[REPLY] userId: ${userId}, response: ${replyText}`);
+          // ── Postback events (consent buttons) ───────────────────────────
+          if (event.type === 'postback') {
+            const userId = event.source.userId || event.source.groupId || 'unknown';
+            const data: string = event.postback?.data ?? '';
+            this.logger.log(`[POSTBACK] userId: ${userId}, data: ${data}`);
 
-            await this.client.replyMessage({
-              replyToken: event.replyToken,
-              messages: [{ type: 'text', text: replyText }],
-            });
+            const messages = await this.webhookService.handlePostback(data, userId);
+            await this.reply(event.replyToken, messages);
+            continue;
           }
         } catch (error) {
           this.logger.error(`[ERROR] Processing event failed:`, error);

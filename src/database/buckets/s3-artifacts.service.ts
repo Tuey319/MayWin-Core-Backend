@@ -37,6 +37,7 @@ export class S3ArtifactsService {
       Key: key,
       Body: body,
       ContentType: 'application/json',
+      ServerSideEncryption: 'AES256',
     }));
 
     return { bucket, key };
@@ -51,6 +52,7 @@ export class S3ArtifactsService {
       Key: key,
       Body: body,
       ContentType: contentType,
+      ServerSideEncryption: 'AES256',
     }));
 
     return { bucket, key };
@@ -83,6 +85,7 @@ export class S3ArtifactsService {
       Key: key,
       Body: body,
       ContentType: contentType,
+      ServerSideEncryption: 'AES256',
     }));
 
     return { bucket, key };
