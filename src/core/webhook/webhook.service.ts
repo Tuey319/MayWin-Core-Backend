@@ -288,9 +288,8 @@ export class WebhookService {
             this.exhaustedKeys.add(apiKey);
             continue;
           }
-          // LOG: Gemini Error and ID
-          this.logger.error(`[GEMINI ERROR] UserID: ${userId} | Error: ${error.message}`);
-          throw error;
+          this.logger.error(`[GEMINI ERROR] UserID: ${userId} | Flash error: ${error.message}`);
+          // Non-quota error — try next key/model instead of aborting
         }
       }
 
@@ -306,10 +305,10 @@ export class WebhookService {
         } catch (error: any) {
           if (error.status === 429) {
             this.logger.warn(`[LIMIT] Flash Lite quota exhausted.`);
-            // Continue to next fallback
           } else {
-            throw error;
+            this.logger.error(`[GEMINI ERROR] UserID: ${userId} | Flash Lite error: ${error.message}`);
           }
+          // Continue to next fallback regardless
         }
       }
 
@@ -325,7 +324,8 @@ export class WebhookService {
           if (error.status === 429) {
             return msg.quotaExhausted;
           }
-          throw error;
+          this.logger.error(`[GEMINI ERROR] UserID: ${userId} | Gemma fallback error: ${error.message}`);
+          // Fall through to notUnderstood
         }
       }
 
@@ -526,7 +526,14 @@ export class WebhookService {
       const result = await model.generateContent(prompt);
       const resultText = result.response.text();
       this.logger.debug(`[GEMINI] Raw response: ${resultText.substring(0, 100)}...`);
-      return JSON.parse(resultText.replace(/```json|```/g, '').trim());
+      const cleaned = resultText.replace(/```json|```/g, '').trim();
+      try {
+        return JSON.parse(cleaned);
+      } catch {
+        // Model returned non-JSON (error message, explanation, etc.) — treat as no extraction
+        this.logger.warn(`[GEMINI] ${modelName} non-JSON response: ${cleaned.substring(0, 120)}`);
+        return [];
+      }
     } catch (error) {
       this.logger.error(`[ERROR] callGemini failed:`, error);
       throw error;
