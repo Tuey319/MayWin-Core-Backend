@@ -24,6 +24,11 @@ class Weights(BaseModel):
     evening_to_night_penalty: int = Field(10000, ge=0)
     shift_type_balance_penalty: int = Field(100, ge=0)
     overtime_balance_penalty: int = Field(1000, ge=0)
+    # v2: rest-pattern weights
+    isolated_rest_penalty: int = Field(1000, ge=0)
+    short_rest_block_penalty: int = Field(800, ge=0)
+    post_night_rest_penalty: int = Field(5000, ge=0)
+    rest_distribution_penalty: int = Field(2000, ge=0)
 
 class GoalPriority(BaseModel):
     coverage: int = 1
@@ -54,7 +59,6 @@ class Rules(BaseModel):
     # Rest / sequence toggles
     forbid_night_to_morning: bool = True
     forbid_morning_to_night_same_day: bool = False
-    forbid_evening_to_night: bool = True
 
     # Relax / emergency behavior
     allow_second_shift_same_day_in_emergency: bool = True
@@ -69,7 +73,7 @@ class Rules(BaseModel):
     goal_balance_night_workload: bool = False
     goal_reduce_undesirable_shifts: bool = True
 
-    # Shift type limit (NEW)
+    # Shift type limit
     enable_shift_type_limit: bool = True
     max_shift_per_type: Dict[str, int] = Field(default_factory=lambda: {
         "morning": 9,
@@ -82,6 +86,20 @@ class Rules(BaseModel):
     max_consecutive_night_shifts: int = Field(3, ge=1)
     enable_min_total_days_off: bool = True
     min_total_days_off: int = Field(11, ge=0)
+
+    # v2: rest-pattern rules
+    enable_post_night_rest: bool = True
+    post_night_rest_days: int = Field(2, ge=1)
+    enable_isolated_rest_penalty: bool = True
+    # Block size bounds:
+    #   min_rest_block_size — soft lower bound per cluster (penalise 1 and 2-day blocks)
+    #   target_rest_block_size — used in cluster-count formula (ceil(T / min) gives count)
+    #   max_consecutive_rest_days — hard upper cap per cluster
+    min_rest_block_size: int = Field(3, ge=1)
+    target_rest_block_size: int = Field(4, ge=1)
+    max_consecutive_rest_days: Optional[int] = Field(5, ge=1)
+    # Spread clusters across month. num_segs = ceil(T / min_rest_block_size), floor 3.
+    enable_rest_distribution: bool = True
 
 class SolveRequest(BaseModel):
     nurses: List[str]
@@ -96,8 +114,6 @@ class SolveRequest(BaseModel):
     max_shifts_per_nurse: Optional[Dict[str, int]] = None
 
     availability: Optional[Dict[str, Dict[str, Dict[str, int]]]] = None
-    overridable_availability: Optional[Dict[str, Dict[str, Dict[str, int]]]] = None
-    nurse_requests: Optional[Dict[str, Dict[str, Dict[str, int]]]] = None
     preferences: Optional[Dict[str, Dict[str, Dict[str, int]]]] = None
     nurse_skills: Optional[Dict[str, List[str]]] = None
     required_skills: Optional[Dict[str, Dict[str, Dict[str, int]]]] = None
@@ -139,8 +155,6 @@ class Assignment(BaseModel):
     shift: str
     nurse: str
     emergency_override: bool = False
-    shift_order: int = 1
-    is_overtime: bool = False
 
 
 class UnderstaffItem(BaseModel):
@@ -173,9 +187,9 @@ class SolveResponse(BaseModel):
 # ============================================================
 
 app = FastAPI(
-    title="Stable Nurse Scheduling API",
-    description="Full-coverage nurse scheduler with adjustable rules and emergency fallback.",
-    version="3.0.0",
+    title="Nurse Scheduling API v2 — Rest-Aware",
+    description="Nurse scheduler with post-night recovery blocks and consecutive rest-day enforcement.",
+    version="4.0.0",
 )
 
 
@@ -224,20 +238,11 @@ def is_available(avail, nurse, day, shift) -> bool:
     return bool(avail.get(nurse, {}).get(day, {}).get(shift, 1))
 
 
-def is_overridable(overridable_avail, nurse, day, shift) -> bool:
-    """True when the blocked slot came from a DAY_OFF row (scheduled leave) and may be
-    soft-overridden in emergency mode. UNAVAILABLE/BLOCKED rows are not in this map."""
-    if not overridable_avail:
-        return False
-    return overridable_avail.get(nurse, {}).get(day, {}).get(shift, 1) == 0
-
-
 def has_skill(nurse_skills: Dict[str, List[str]], nurse: str, skill: str) -> bool:
     return skill in (nurse_skills.get(nurse, []) or [])
 
 
 def shift_hours_map(shifts: List[str]) -> Dict[str, Tuple[int, int]]:
-    # Default ordering used when real hours are not supplied.
     out = {}
     for s in shifts:
         k = s.strip().lower()
@@ -246,7 +251,7 @@ def shift_hours_map(shifts: List[str]) -> Dict[str, Tuple[int, int]]:
         elif k == "evening":
             out[s] = (14, 22)
         elif k == "night":
-            out[s] = (22, 30)  # overnight handled as next-day 06:00
+            out[s] = (22, 30)
         else:
             out[s] = (0, 8)
     return out
@@ -303,7 +308,6 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
     backup_nurses = set(req.backup_nurses or [])
     demand = req.demand
     availability = req.availability or {}
-    overridable_availability = req.overridable_availability or {}
     preferences = req.preferences or {}
     nurse_skills = req.nurse_skills or {}
     required_skills = req.required_skills or {}
@@ -339,6 +343,10 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
     x = {(n, d, s): model.NewBoolVar(f"x_{n}_{d}_{s}") for n in nurses for d in days for s in shifts}
     terms: List[cp_model.LinearExpr] = []
 
+    # ============================================================
+    # HARD SHIFT TYPE LIMIT
+    # ============================================================
+
     if rules.enable_shift_type_limit:
         exempt_nurses = set(rules.shift_type_limit_exempt_nurses or [])
 
@@ -348,18 +356,36 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
 
             if morning_label and "morning" in rules.max_shift_per_type:
                 max_m = rules.max_shift_per_type["morning"]
-                model.Add(sum(x[(n, d, morning_label)] for d in days) <= max_m)
+                total_m = sum(x[(n, d, morning_label)] for d in days)
+                if emergency_mode:
+                    excess_m = model.NewIntVar(0, len(days), f"excess_m_{n}")
+                    model.Add(total_m - max_m <= excess_m)
+                    terms.append(weights.emergency_override_penalty * excess_m)
+                else:
+                    model.Add(total_m <= max_m)
 
             if evening_label and "evening" in rules.max_shift_per_type:
                 max_e = rules.max_shift_per_type["evening"]
-                model.Add(sum(x[(n, d, evening_label)] for d in days) <= max_e)
+                total_e = sum(x[(n, d, evening_label)] for d in days)
+                if emergency_mode:
+                    excess_e = model.NewIntVar(0, len(days), f"excess_e_{n}")
+                    model.Add(total_e - max_e <= excess_e)
+                    terms.append(weights.emergency_override_penalty * excess_e)
+                else:
+                    model.Add(total_e <= max_e)
 
             if night_label and "night" in rules.max_shift_per_type:
                 max_n = rules.max_shift_per_type["night"]
-                model.Add(sum(x[(n, d, night_label)] for d in days) <= max_n)
+                total_n = sum(x[(n, d, night_label)] for d in days)
+                if emergency_mode:
+                    excess_n = model.NewIntVar(0, len(days), f"excess_n_{n}")
+                    model.Add(total_n - max_n <= excess_n)
+                    terms.append(weights.emergency_override_penalty * excess_n)
+                else:
+                    model.Add(total_n <= max_n)
 
 
-    # Emergency override variable: assignment allowed even if availability/rest/night-cap would normally block it.
+    # Emergency override variable
     override = {(n, d, s): model.NewBoolVar(f"ovr_{n}_{d}_{s}") for n in nurses for d in days for s in shifts}
 
     total_assigned = {}
@@ -390,12 +416,10 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
         for s in shifts:
             assigned = sum(x[(n, d, s)] for n in nurses)
 
-            # normal coverage
             if not emergency_mode:
                 model.Add(assigned == demand[d][s])
             else:
                 model.Add(assigned + under[(d, s)] >= demand[d][s])
-                model.Add(assigned <= demand[d][s])  # prevent overcoverage even in emergency
 
     # Daily shift count
     max_shifts_per_day = rules.max_shifts_per_day
@@ -407,7 +431,20 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
             model.Add(sum(x[(n, d, s)] for s in shifts) <= max_shifts_per_day)
 
     # ============================================================
-    # Availability
+    # CANONICAL WORKED-DAY VARS
+    # Single set reused by all rest-pattern constraints below.
+    # wday[(n, i)] = 1 if nurse n works any shift on days[i].
+    # ============================================================
+    wday: Dict[Tuple[str, int], Any] = {}
+    for n in nurses:
+        for i, d in enumerate(days):
+            wd = model.NewBoolVar(f"wday_{n}_{i}")
+            model.Add(sum(x[(n, d, s)] for s in shifts) >= wd)
+            model.Add(sum(x[(n, d, s)] for s in shifts) <= max_shifts_per_day * wd)
+            wday[(n, i)] = wd
+
+    # ============================================================
+    # Availability (HARD — never overridden)
     # ============================================================
 
     for n in nurses:
@@ -416,41 +453,10 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
                 avail = is_available(availability, n, d, s)
 
                 if not avail:
-                    can_override = (
-                        emergency_mode
-                        and rules.ignore_availability_in_emergency
-                        and is_overridable(overridable_availability, n, d, s)
-                    )
-                    if can_override:
-                        # DAY_OFF only: soft override with penalty tracked via override variable
-                        model.Add(override[(n, d, s)] == x[(n, d, s)])
-                    else:
-                        # UNAVAILABLE/BLOCKED: hard — never assign
-                        model.Add(x[(n, d, s)] == 0)
-                        model.Add(override[(n, d, s)] == 0)
+                    model.Add(x[(n, d, s)] == 0)
+                    model.Add(override[(n, d, s)] == 0)
                 else:
                     model.Add(override[(n, d, s)] == 0)
-
-    # Nurse-requested shifts (PREFERRED availability entries) — hard "must assign".
-    # Skip any slot that is hard-blocked in availability to avoid infeasibility.
-    if req.nurse_requests:
-        nurse_set = set(nurses)
-        day_set = set(days)
-        shift_set = set(shifts)
-        for nr_nurse, by_date in req.nurse_requests.items():
-            if nr_nurse not in nurse_set:
-                continue
-            for nr_day, by_shift in by_date.items():
-                if nr_day not in day_set:
-                    continue
-                for nr_shift in by_shift:
-                    if nr_shift not in shift_set:
-                        continue
-                    if (nr_nurse, nr_day, nr_shift) not in x:
-                        continue
-                    if not is_available(req.availability, nr_nurse, nr_day, nr_shift):
-                        continue  # unavailability wins; don't create conflicting constraints
-                    model.Add(x[(nr_nurse, nr_day, nr_shift)] == 1)
 
     # Monthly min/max totals with overtime slack
     for n in nurses:
@@ -461,7 +467,6 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
         if rules.evening_after_morning_counts_as_overtime and morning_label and evening_label:
             extra_ot_sum = sum(extra_ot[(n, d)] for d in days)
 
-        # exact base overtime = max(0, total - regular)
         excess = model.NewIntVar(
             -len(days) * max_shifts_per_day,
             len(days) * max_shifts_per_day,
@@ -476,7 +481,6 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
         )
         model.AddMaxEquality(base_ot, [excess, 0])
 
-        # final overtime = base overtime + extra overtime from morning+evening same day
         model.Add(over[n] == base_ot + extra_ot_sum)
 
         model.Add(total >= per_nurse_min[n])
@@ -495,14 +499,6 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
             for d in days:
                 model.Add(x[(n, d, morning_label)] + x[(n, d, night_label)] <= 1)
 
-    # Evening -> Night cross-day (ALWAYS HARD — safety rule)
-    # EVENING ends 24:00 on day D, NIGHT starts 00:00 on day D+1 = 0 h rest.
-    # forbidEveningToNight being True means this is inviolable even in emergency.
-    if evening_label and night_label and rules.forbid_evening_to_night:
-        for n in nurses:
-            for i in range(len(days) - 1):
-                model.Add(x[(n, days[i], evening_label)] + x[(n, days[i + 1], night_label)] <= 1)
-
     # Weekly night cap
     if night_label:
         for n in nurses:
@@ -514,63 +510,30 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
                 else:
                     extra_nights = model.NewIntVar(0, 0, f"night_over_{n}_{w}")
                     model.Add(nights_this <= rules.max_nights_per_week)
-                setattr(extra_nights, "_meta", (n, w))
 
-    # Weekly days off
+    # Weekly days off — uses canonical wday vars
     if rules.min_days_off_per_week > 0:
         for n in nurses:
             for w, dlist in weeks.items():
-                # Scale proportionally for partial ISO weeks at schedule boundaries
-                min_off = max(0, round(rules.min_days_off_per_week * len(dlist) / 7))
-                cap = max(0, len(dlist) - min_off)
-                worked_days_w = [model.NewBoolVar(f"worked_{n}_{d}") for d in dlist]
-                for wd, d in zip(worked_days_w, dlist):
-                    model.Add(sum(x[(n, d, s)] for s in shifts) >= wd)
-                    model.Add(sum(x[(n, d, s)] for s in shifts) <= max_shifts_per_day * wd)
-                if emergency_mode and rules.allow_emergency_overrides:
-                    extra_days = model.NewIntVar(0, len(dlist), f"extra_days_{n}_{w}")
-                    model.Add(sum(worked_days_w) - cap <= extra_days)
-                    terms.append(weights.emergency_override_penalty * extra_days)
-                else:
-                    model.Add(sum(worked_days_w) <= cap)
+                cap = max(0, len(dlist) - rules.min_days_off_per_week)
+                week_day_indices = [i for i, d in enumerate(days) if d in set(dlist)]
+                model.Add(sum(wday[(n, i)] for i in week_day_indices) <= cap)
 
     # ============================================================
-    # NEW: Minimum Total Days Off (HARD)
+    # Minimum Total Days Off (HARD) — uses canonical wday vars
     # ============================================================
 
     if rules.enable_min_total_days_off and rules.min_total_days_off <= len(days):
         for n in nurses:
-            worked_days = []
+            model.Add(sum(wday[(n, i)] for i in range(len(days))) <= len(days) - rules.min_total_days_off)
 
-            for d in days:
-                wd = model.NewBoolVar(f"worked_total_{n}_{d}")
-
-                # wd = 1 if nurse works any shift that day
-                model.Add(sum(x[(n, d, s)] for s in shifts) >= wd)
-                model.Add(sum(x[(n, d, s)] for s in shifts) <= max_shifts_per_day * wd)
-
-                worked_days.append(wd)
-
-            model.Add(sum(worked_days) <= len(days) - rules.min_total_days_off)
-
-            # Enforce minimum working days so nurses can't satisfy the shift-count
-            # minimum via OT double-shifts on fewer days than their regular quota.
-            if n not in backup_nurses and per_nurse_regular.get(n, 0) > 0:
-                model.Add(sum(worked_days) >= per_nurse_regular[n])
-
-    # Consecutive work days
+    # Consecutive work days — uses canonical wday vars
     if rules.max_consecutive_work_days is not None:
         window = rules.max_consecutive_work_days + 1
         if window <= len(days):
             for n in nurses:
-                worked = []
-                for d in days:
-                    wd = model.NewBoolVar(f"worked_day_{n}_{d}")
-                    model.Add(sum(x[(n, d, s)] for s in shifts) >= wd)
-                    model.Add(sum(x[(n, d, s)] for s in shifts) <= max_shifts_per_day * wd)
-                    worked.append(wd)
                 for i in range(len(days) - window + 1):
-                    model.Add(sum(worked[i:i + window]) <= rules.max_consecutive_work_days)
+                    model.Add(sum(wday[(n, i + j)] for j in range(window)) <= rules.max_consecutive_work_days)
 
     if night_label and rules.enable_consecutive_night_limit and rules.max_consecutive_night_shifts is not None:
         max_consec = rules.max_consecutive_night_shifts
@@ -583,6 +546,70 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
                         sum(x[(n, days[j], night_label)] for j in range(i, i + window))
                         <= max_consec
                     )
+
+    # ============================================================
+    # MAX CONSECUTIVE REST DAYS (hard)
+    # In any window of max_consecutive_rest_days+1 days, at least
+    # 1 must be a work day. Prevents one giant rest block.
+    # ============================================================
+    if rules.max_consecutive_rest_days is not None:
+        max_cr = rules.max_consecutive_rest_days
+        window = max_cr + 1
+        if window <= len(days):
+            for n in nurses:
+                for i in range(len(days) - window + 1):
+                    model.Add(sum(wday[(n, i + j)] for j in range(window)) >= 1)
+
+    # ============================================================
+    # REST DISTRIBUTION (soft)
+    # Formula: num_segs = ceil(T / min_rest_block_size), floored at 3.
+    # Penalises each segment below its rest-day floor.
+    #
+    # Examples (T=total_days_off, mb=min_rest_block_size):
+    #   T=11, mb=3 → ceil(11/3)=4 segs, min_per_seg=2
+    #   T=8,  mb=3 → ceil(8/3) =3 segs, min_per_seg=2
+    #   T=5,  mb=3 → ceil(5/3) =2 segs (clamped→2), min_per_seg=2
+    #   T=15, mb=3 → ceil(15/3)=5 segs, min_per_seg=3
+    # ============================================================
+    if rules.enable_rest_distribution:
+        import math as _math
+        T = rules.min_total_days_off if rules.enable_min_total_days_off else max(1, len(days) // 3)
+        mb = rules.min_rest_block_size
+        max_possible_segs = max(1, T // mb)
+        raw_segs = _math.ceil(T / mb)
+        num_segs = max(3, min(raw_segs, max_possible_segs, len(days) // (mb + 1)))
+        min_per_seg = max(1, T // num_segs)
+
+        seg_bounds = [
+            (round(seg * len(days) / num_segs), round((seg + 1) * len(days) / num_segs))
+            for seg in range(num_segs)
+        ]
+
+        for n in nurses:
+            for seg_idx, (seg_start, seg_end) in enumerate(seg_bounds):
+                seg_len = seg_end - seg_start
+                if seg_len == 0:
+                    continue
+                rest_in_seg = model.NewIntVar(0, seg_len, f"rseg_{n}_{seg_idx}")
+                model.Add(rest_in_seg == sum(1 - wday[(n, i)] for i in range(seg_start, seg_end)))
+                shortfall = model.NewIntVar(0, min_per_seg, f"rsfall_{n}_{seg_idx}")
+                model.Add(shortfall >= min_per_seg - rest_in_seg)
+                terms.append(weights.rest_distribution_penalty * shortfall)
+
+    # ============================================================
+    # POST-NIGHT REST BLOCK (semi-hard soft)
+    # After night shift on day i, next post_night_rest_days days
+    # should be off. Penalty fires per worked day in recovery window.
+    # ============================================================
+    if night_label and rules.enable_post_night_rest:
+        for n in nurses:
+            for i in range(len(days)):
+                for k in range(1, rules.post_night_rest_days + 1):
+                    if i + k < len(days):
+                        viol = model.NewBoolVar(f"pnr_{n}_{i}_{k}")
+                        # viol = 1 iff night[i]=1 AND wday[i+k]=1
+                        model.Add(viol >= x[(n, days[i], night_label)] + wday[(n, i + k)] - 1)
+                        terms.append(weights.post_night_rest_penalty * viol)
 
     # Consecutive shifts across day boundary using shift order list
     if rules.max_consecutive_shifts is not None and len(shifts) > 0:
@@ -618,6 +645,35 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
                 eligible = [n for n in nurses if has_skill(nurse_skills, n, "Senior")]
                 model.Add(sum(x[(n, d, s)] for n in eligible) >= need_senior)
 
+    # ============================================================
+    # ISOLATED REST-DAY PENALTY
+    # Fires when nurse is off on day i but worked both i-1 and i+1.
+    # Pushes solver toward consecutive rest blocks.
+    # ============================================================
+    if rules.enable_isolated_rest_penalty:
+        for n in nurses:
+            for i in range(1, len(days) - 1):
+                iso = model.NewBoolVar(f"iso_{n}_{i}")
+                # iso >= worked[i-1] - wday[i] + worked[i+1] - 1
+                # fires only when wday[i-1]=1, wday[i]=0, wday[i+1]=1
+                model.Add(iso >= wday[(n, i - 1)] - wday[(n, i)] + wday[(n, i + 1)] - 1)
+                terms.append(weights.isolated_rest_penalty * iso)
+
+    # ============================================================
+    # SHORT REST BLOCK PENALTY (2-day blocks)
+    # Fires when: worked, off, off, worked — exactly 2 consecutive
+    # rest days sandwiched by work. Pushes toward ≥3-day blocks.
+    # Linearisation: short >= wday[i-1] - wday[i] - wday[i+1] + wday[i+2] - 1
+    # ============================================================
+    if rules.enable_isolated_rest_penalty and rules.min_rest_block_size >= 3:
+        for n in nurses:
+            for i in range(1, len(days) - 2):
+                short = model.NewBoolVar(f"short2_{n}_{i}")
+                model.Add(
+                    short >= wday[(n, i - 1)] - wday[(n, i)] - wday[(n, i + 1)] + wday[(n, i + 2)] - 1
+                )
+                terms.append(weights.short_rest_block_penalty * short)
+
     # Objective
     # ============================================================
     # BACKUP NURSE PENALTY
@@ -628,7 +684,7 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
                 terms.append(50000 * x[(n, d, s)])
 
     # ============================================================
-    # EVENING → NIGHT SOFT CONSTRAINT (HIGH PRIORITY)
+    # EVENING → NIGHT SOFT CONSTRAINT (same-day double shift)
     # ============================================================
 
     if evening_label and night_label:
@@ -637,26 +693,22 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
 
                 ev_nt = model.NewBoolVar(f"ev_nt_{n}_{d}")
 
-                # ev_nt = 1 if both evening and night assigned
                 model.Add(ev_nt <= x[(n, d, evening_label)])
                 model.Add(ev_nt <= x[(n, d, night_label)])
                 model.Add(ev_nt >= x[(n, d, evening_label)] + x[(n, d, night_label)] - 1)
 
-                # HIGH penalty (second priority after coverage)
                 terms.append(weights.evening_to_night_penalty * ev_nt)
 
     # ============================================================
-    # FAIRNESS IMPROVEMENTS (ADDED – does not change existing logic)
+    # FAIRNESS
     # ============================================================
 
-    # Total shifts per nurse
     total_shifts_var = {}
     for n in nurses:
         v = model.NewIntVar(0, len(days) * max_shifts_per_day, f"total_shifts_{n}")
         model.Add(v == total_assigned[n])
         total_shifts_var[n] = v
 
-    # Night shifts per nurse
     night_shifts_var = {}
     if night_label:
         for n in nurses:
@@ -664,7 +716,6 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
             model.Add(v == sum(x[(n, d, night_label)] for d in days))
             night_shifts_var[n] = v
 
-    # Workload balance variables
     max_total = model.NewIntVar(0, len(days) * max_shifts_per_day, "max_total")
     min_total = model.NewIntVar(0, len(days) * max_shifts_per_day, "min_total")
 
@@ -677,7 +728,6 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
     w = priority_scale[goal_priority.fairness] * fairness_weights.workload_balance
     terms.append(w * workload_balance)
 
-    # Night balance variables
     if night_label:
         max_night = model.NewIntVar(0, len(days), "max_night")
         min_night = model.NewIntVar(0, len(days), "min_night")
@@ -690,7 +740,7 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
 
         w = priority_scale[goal_priority.fairness] * fairness_weights.night_balance
         terms.append(w * night_balance)
-    
+
     # ============================================================
     # SHIFT TYPE BALANCE (soft)
     # ============================================================
@@ -700,7 +750,7 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
         for n in nurses:
 
             if n in backup_nurses:
-                continue  # skip backup nurses
+                continue
 
             morning_count = model.NewIntVar(0, len(days), f"morning_count_{n}")
             evening_count = model.NewIntVar(0, len(days), f"evening_count_{n}")
@@ -723,7 +773,6 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
 
             model.Add(shift_balance == max_shift_type - min_shift_type)
 
-            # small penalty so it's not too strict
             terms.append(
                 weights.shift_type_balance_penalty *
                 priority_scale[goal_priority.fairness] *
@@ -749,7 +798,6 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
 
     model.Add(overtime_balance == max_ot - min_ot)
 
-    # penalize difference so overtime is distributed fairly
     terms.append(
         weights.overtime_balance_penalty *
         priority_scale[goal_priority.fairness] *
@@ -782,7 +830,6 @@ def build_solver_model(req: SolveRequest, emergency_mode: bool = False):
             w = priority_scale[goal_priority.fairness] * fairness_weights.workload_balance
             terms.append(w * weights.workload_balance_weight * dev)
 
-    # Penalize emergency overrides heavily so they are used only when needed.
     if emergency_mode:
         for n in nurses:
             for d in days:
@@ -831,7 +878,6 @@ def pack_solution(req: SolveRequest, artifacts: dict, solver: cp_model.CpSolver,
 
     assigned_map: Dict[Tuple[str, str, str], int] = {}
     emergency_count: Counter = Counter()
-    nurse_day_shift_count: Dict[Tuple[str, str], int] = {}
 
     for n in nurses:
         for d in days:
@@ -842,14 +888,7 @@ def pack_solution(req: SolveRequest, artifacts: dict, solver: cp_model.CpSolver,
                     ev = int(solver.Value(override[(n, d, s)]))
                     if ev:
                         emergency_count[n] += 1
-                    nurse_day_shift_count[(n, d)] = nurse_day_shift_count.get((n, d), 0) + 1
-                    order = nurse_day_shift_count[(n, d)]
-                    assignments.append(Assignment(
-                        day=d, shift=s, nurse=n,
-                        emergency_override=bool(ev),
-                        shift_order=order,
-                        is_overtime=(order > 1),
-                    ))
+                    assignments.append(Assignment(day=d, shift=s, nurse=n, emergency_override=bool(ev)))
 
     if under is not None:
         for d in days:
@@ -859,7 +898,7 @@ def pack_solution(req: SolveRequest, artifacts: dict, solver: cp_model.CpSolver,
                     understaffed.append(UnderstaffItem(day=d, shift=s, missing=miss))
 
     stats: List[NurseStats] = []
-    
+
     morning_label = find_shift_name(shifts, "morning")
     evening_label = find_shift_name(shifts, "evening")
 
@@ -893,7 +932,6 @@ def pack_solution(req: SolveRequest, artifacts: dict, solver: cp_model.CpSolver,
     avg_satisfaction = round(sum(s.satisfaction for s in stats) / len(stats), 2) if stats else 0.0
     coverage_missing = sum(u.missing for u in understaffed)
 
-    # Estimate additional nurses required
     import math
 
     extra_nurses_needed = 0
@@ -945,7 +983,7 @@ def solve(req: SolveRequest) -> SolveResponse:
         if not rules.guarantee_full_coverage:
             return res
 
-    # Phase 2: emergency model to force coverage with explicit penalties.
+    # Phase 2: emergency model
     if rules.allow_emergency_overrides:
         emergency = build_solver_model(req, emergency_mode=True)
         solver2 = cp_model.CpSolver()
@@ -959,6 +997,10 @@ def solve(req: SolveRequest) -> SolveResponse:
         if result2 in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             return pack_solution(req, emergency, solver2, "EMERGENCY_OPTIMAL" if result2 == cp_model.OPTIMAL else "EMERGENCY_FEASIBLE")
 
+    rules_obj = req.rules or Rules()
+    sample_days = req.days[:3] if req.days else []
+    demand_sample = {d: req.demand.get(d, {}) for d in sample_days}
+
     return SolveResponse(
         status="INFEASIBLE",
         objective_value=None,
@@ -966,14 +1008,26 @@ def solve(req: SolveRequest) -> SolveResponse:
         understaffed=[],
         nurse_stats=[],
         details={
-            "message": "No feasible schedule found. 100% coverage cannot be guaranteed unless emergency overrides are allowed and there is enough total nurse capacity to cover all demand slots.",
+            "message": "No feasible schedule found.",
+            "debug": {
+                "nurses": len(req.nurses),
+                "days": len(req.days),
+                "shifts": req.shifts,
+                "allow_emergency_overrides": rules_obj.allow_emergency_overrides,
+                "guarantee_full_coverage": rules_obj.guarantee_full_coverage,
+                "min_days_off_per_week": rules_obj.min_days_off_per_week,
+                "enable_min_total_days_off": rules_obj.enable_min_total_days_off,
+                "min_total_days_off": rules_obj.min_total_days_off,
+                "max_shifts_per_day": rules_obj.max_shifts_per_day,
+                "demand_sample": demand_sample,
+            },
         },
     )
 
 
 @app.get("/health")
 def health() -> Dict[str, str]:
-    return {"status": "ok", "version": "3.0.0"}
+    return {"status": "ok", "version": "4.0.0"}
 
 
 # ============================================================
@@ -986,14 +1040,14 @@ if __name__ == "__main__":
     import argparse
     import traceback
 
-    parser = argparse.ArgumentParser(description="Stable Nurse Scheduling Solver")
+    parser = argparse.ArgumentParser(description="Nurse Scheduling Solver v2 — Rest-Aware")
     parser.add_argument("--cli", action="store_true", help="Run in CLI mode")
     parser.add_argument("--input", type=str, default=None)
     parser.add_argument("--output", type=str, default=None)
     args = parser.parse_args()
 
     if not args.cli:
-        print("Run as server with: uvicorn stable_nurse_solver:app --reload --port 8001", file=sys.stderr)
+        print("Run as server with: uvicorn solver_cli_v2:app --reload --port 8001", file=sys.stderr)
         sys.exit(0)
 
     try:

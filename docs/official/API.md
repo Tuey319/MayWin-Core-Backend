@@ -16,24 +16,28 @@ All endpoints require `Authorization: Bearer <accessToken>` unless marked **Publ
 4. [Organizations](#organizations)
 5. [Sites](#sites)
 6. [Units](#units)
-7. [Roles](#roles)
-8. [Unit Configuration](#unit-configuration)
+   - [Unit Members](#unit-members)
+7. [Users](#users)
+8. [Roles](#roles)
+9. [Unit Configuration](#unit-configuration)
    - [Shift Templates](#shift-templates)
    - [Constraint Profiles](#constraint-profiles)
    - [Coverage Rules](#coverage-rules)
-9. [Staff](#staff)
-10. [Workers](#workers)
-11. [Worker Availability](#worker-availability)
-12. [Worker Preferences](#worker-preferences)
-13. [Schedules](#schedules)
-14. [Schedule Assignments](#schedule-assignments)
-15. [Jobs (Solver)](#jobs-solver)
-16. [Worker Messages](#worker-messages)
-17. [Orchestrator](#orchestrator)
-18. [Webhook (LINE)](#webhook-line)
-19. [Audit Logs](#audit-logs)
-20. [Display Settings](#display-settings)
-21. [Export Options](#export-options)
+10. [Staff](#staff)
+11. [Workers](#workers)
+12. [Worker Availability](#worker-availability)
+13. [Worker Preferences](#worker-preferences)
+14. [KPI Summary](#kpi-summary)
+15. [Schedules](#schedules)
+16. [Schedule Assignments](#schedule-assignments)
+17. [Jobs (Solver)](#jobs-solver)
+18. [Worker Messages](#worker-messages)
+19. [Conversational UI (CUI)](#conversational-ui-cui)
+20. [Orchestrator](#orchestrator)
+21. [Webhook (LINE)](#webhook-line)
+22. [Audit Logs](#audit-logs)
+23. [Display Settings](#display-settings)
+24. [Export Options](#export-options)
 
 ---
 
@@ -1745,40 +1749,6 @@ Lists workers assigned to a unit.
 
 ---
 
-### `GET /units/:unitId/kpis/summary`
-
-Returns dashboard KPI metrics (satisfaction, fairness) for the unit.
-
-**Query params**
-
-| Param | Type | Notes |
-|---|---|---|
-| `startDate` | YYYY-MM-DD | Optional window start |
-| `endDate` | YYYY-MM-DD | Optional window end |
-
-**Response — 200 OK**
-```json
-{
-  "schema": "DashboardKpi.v1",
-  "unitId": "2",
-  "source": "s3_kpi",
-  "window": { "startDate": "2026-03-01", "endDate": "2026-03-31" },
-  "metrics": {
-    "satisfaction": { "average": 0.8231 },
-    "fairness": {
-      "workloadStdDev": 0.718795,
-      "workloadMin": 23,
-      "workloadMax": 26,
-      "workerCount": 30
-    }
-  }
-}
-```
-
-`source` values: `artifact_metadata`, `s3_kpi`, `solver_runs`, `latest_schedule_run`, `none`
-
----
-
 ### `GET /nurses/export`
 
 Compatibility endpoint. Returns nurse list with overall satisfaction KPI.
@@ -1975,6 +1945,42 @@ Rejects a day-off request for a specific date. Removes from both `days_off_patte
 ```
 
 **Errors:** `404` no day-off entry found for that date
+
+---
+
+## KPI Summary
+
+### `GET /units/:unitId/kpis/summary`
+
+Returns dashboard KPI metrics (satisfaction, fairness) for the unit.
+
+**Query params**
+
+| Param | Type | Notes |
+|---|---|---|
+| `startDate` | YYYY-MM-DD | Optional window start |
+| `endDate` | YYYY-MM-DD | Optional window end |
+
+**Response — 200 OK**
+```json
+{
+  "schema": "DashboardKpi.v1",
+  "unitId": "2",
+  "source": "s3_kpi",
+  "window": { "startDate": "2026-03-01", "endDate": "2026-03-31" },
+  "metrics": {
+    "satisfaction": { "average": 0.8231 },
+    "fairness": {
+      "workloadStdDev": 0.718795,
+      "workloadMin": 23,
+      "workloadMax": 26,
+      "workerCount": 30
+    }
+  }
+}
+```
+
+`source` values: `artifact_metadata`, `s3_kpi`, `solver_runs`, `latest_schedule_run`, `none`
 
 ---
 
@@ -2456,6 +2462,35 @@ Creates an anonymous/auto-generated worker chat message (used internally by the 
 
 ---
 
+---
+
+## Conversational UI (CUI)
+
+### `POST /api/cui`
+
+**Protected.** BFF route that proxies to backend `POST /chat`. Provides a natural language interface for shift preferences and scheduling questions.
+
+**Request**
+```json
+{
+  "body": "I want to work morning shift next Friday"
+}
+```
+
+**Response — 200 OK**
+```json
+{
+  "id": "msg-123",
+  "workerId": "69",
+  "body": "I want to work morning shift next Friday",
+  "direction": "OUTBOUND",
+  "status": "SENT",
+  "createdAt": "2026-05-01T04:00:00.000Z"
+}
+```
+
+---
+
 ## Orchestrator
 
 ### `POST /orchestrator/run`
@@ -2758,4 +2793,13 @@ The Next.js BFF proxies browser requests to this backend. Quick reference:
 | `PUT` | `/api/display-settings` | `PUT /display-settings/me` |
 | `GET` | `/api/export-options` | `GET /export-options/me` |
 | `PUT` | `/api/export-options` | `PUT /export-options/me` |
+| `GET` | `/api/kpis` | `GET /units/:unitId/kpis/summary` |
+| `POST` | `/api/cui` | `POST /chat` |
+| `GET` | `/api/users` | `GET /users` |
+| `POST` | `/api/users` | `POST /auth/signup` |
+| `GET` | `/api/users/:id` | `GET /users/:id` |
+| `PATCH` | `/api/users/:id` | `PATCH /users/:id` |
+| `POST` | `/api/users/:id/memberships` | `POST /users/:id/memberships` |
+| `POST` | `/api/preferences/save` | `PUT /workers/:id/preferences` (BFF loop) |
+| `GET` | `/api/system/health` | `GET /health` |
 
