@@ -393,9 +393,7 @@ export class WebhookService {
       return msg.notUnderstood;
     } catch (error: any) {
       this.logger.error(`[CRITICAL ERROR] handleNurseMessage failed:`, error);
-      // TODO: remove [DEBUG] before production
-      const errMsg = (error?.message ?? String(error)).slice(0, 150);
-      return `ขออภัยค่ะ ระบบขัดข้องชั่วคราว [DEBUG: ${errMsg}]`;
+      return 'ขออภัยค่ะ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้งค่ะ';
     }
   }
 
