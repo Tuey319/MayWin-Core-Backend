@@ -12,6 +12,7 @@ export enum ConversationState {
   IDLE = 'IDLE',
   AWAITING_CONFIRMATION = 'AWAITING_CONFIRMATION',
   PROCESSING = 'PROCESSING',
+  AWAITING_TERMS = 'AWAITING_TERMS',
 }
 
 @Entity({ schema: 'maywin_db', name: 'chatbot_conversations' })

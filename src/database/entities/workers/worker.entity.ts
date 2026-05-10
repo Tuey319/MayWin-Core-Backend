@@ -56,6 +56,9 @@ export class Worker {
   @Column({ type: 'text', nullable: true, unique: true })
   line_id: string | null;
 
+  @Column({ type: 'timestamptz', nullable: true, default: null })
+  line_terms_accepted_at: Date | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 

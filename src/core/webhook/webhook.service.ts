@@ -40,6 +40,21 @@ export class WebhookService {
     this.logger.log('WebhookService initialized');
   }
 
+  // ── Terms welcome message (hardcoded, no AI) ───────────────────────────
+  private readonly TERMS_WELCOME_MESSAGE = [
+    'สวัสดีค่ะ 👋',
+    '',
+    'ระบบ MayWin ใช้ Google Gemini AI เพื่อช่วยอ่านและเข้าใจข้อความของคุณ เช่น คำขอวันหยุดหรือกะที่ต้องการ',
+    'โดยคุณสามารถศึกษานโยบายความเป็นส่วนตัวและข้อกำหนดการใช้งานทั้งหมดที่เกี่ยวข้อง',
+    '(รวมถึง Google Privacy Policy, Gemini API Terms และ Google DPA) ได้ที่เว็บไซต์ของเรา:',
+    '',
+    '📄 นโยบายและข้อกำหนดการใช้งาน:',
+    'www.maywin.com/landing/privacy-policy',
+    '',
+    'กรุณาพิมพ์ "ยอมรับ" เพื่อยืนยันและเริ่มใช้งาน',
+    'หรือพิมพ์ "ไม่ยอมรับ" หากคุณไม่ต้องการดำเนินการต่อค่ะ',
+  ].join('\n');
+
   async handleNurseMessage(text: string, userId: string): Promise<string> {
     try {
       this.logger.log(`[INCOMING] UserID: ${userId} | Message: ${text}`);
@@ -78,6 +93,62 @@ export class WebhookService {
         });
         await this.chatbotConversationRepo.save(conversation);
       }
+
+      // ── PHASE 0.5: Terms & Conditions Gate ────────────────────────────────
+      // Only applies to linked workers. Unlinked users (no worker record) are
+      // not gated here — they'll naturally hit the "link your account first" path.
+      // Once a worker has accepted (line_terms_accepted_at IS NOT NULL) this
+      // block is skipped entirely on every subsequent message.
+      const linkedWorker = conversation.worker_id
+        ? await this.workerRepo.findOne({ where: { id: conversation.worker_id as any } })
+        : await this.workerRepo.findOne({ where: { line_id: userId } });
+
+      if (linkedWorker && !linkedWorker.line_terms_accepted_at) {
+        // Worker is linked but has NOT accepted yet
+        const input = text.trim();
+        const normalised = input.replace(/\s+/g, '');
+
+        if (normalised === 'ยอมรับ') {
+          // ✅ Accept
+          linkedWorker.line_terms_accepted_at = new Date();
+          await this.workerRepo.save(linkedWorker);
+
+          // Sync conversation worker_id in case it wasn't set yet
+          if (!conversation.worker_id) {
+            conversation.worker_id = linkedWorker.id;
+            conversation.organization_id = linkedWorker.organization_id;
+            conversation.unit_id = linkedWorker.primary_unit_id;
+          }
+          conversation.state = ConversationState.IDLE;
+          await this.chatbotConversationRepo.save(conversation);
+
+          this.logger.log(`[TERMS] Worker ${linkedWorker.id} accepted terms via LINE`);
+          return [
+            `✅ ขอบคุณค่ะ ${linkedWorker.full_name ?? 'คุณ'}!`,
+            '',
+            'คุณสามารถเริ่มใช้งานได้เลยค่ะ 😊',
+            'ตัวอย่าง: "ขอเวรเช้าวันที่ 20 มีนาคม" หรือ "ขอลาวันที่ 5 เมษายน"',
+          ].join('\n');
+        }
+
+        if (normalised === 'ไม่ยอมรับ') {
+          // ❌ Decline — stay not accepted, give a calm response
+          this.logger.log(`[TERMS] Worker ${linkedWorker.id} declined terms via LINE`);
+          return [
+            'ได้เลยค่ะ ไม่เป็นไรนะคะ 🙏',
+            '',
+            'หากเปลี่ยนใจในภายหลัง สามารถพิมพ์ "ยอมรับ" ได้เลยค่ะ',
+            'ระบบจะพร้อมใช้งานทันทีที่คุณยืนยันค่ะ',
+          ].join('\n');
+        }
+
+        // Any other input — gently re-show the consent message
+        return this.TERMS_WELCOME_MESSAGE;
+      }
+
+      // ── PHASE 0.6: Show welcome/terms for first message of an unlinked user ─
+      // If there's no linked worker at all, skip the terms gate (they need to
+      // link first). The message below is handled downstream naturally.
 
       // --- PHASE 1: Confirmation Logic ---
       if (conversation.state === ConversationState.AWAITING_CONFIRMATION) {
@@ -302,19 +373,30 @@ export class WebhookService {
 
       const isRelink = !!existingWorker; // existingWorker is same worker at this point
       if (isRelink) {
-        return [
-          `🔄 รีเฟรชการเชื่อมต่อเรียบร้อยแล้วค่ะ สวัสดีค่ะ ${name}! 😊`,
-          '',
-          'บัญชีของคุณยังคงเชื่อมต่ออยู่ตามเดิมค่ะ',
-        ].join('\n');
+        // Re-link: worker already exists — check if they've accepted terms before
+        const freshWorker = await this.workerRepo.findOne({ where: { id: linkToken.worker_id as any } });
+        if (freshWorker?.line_terms_accepted_at) {
+          return [
+            `🔄 รีเฟรชการเชื่อมต่อเรียบร้อยแล้วค่ะ สวัสดีค่ะ ${name}! 😊`,
+            '',
+            'บัญชีของคุณยังคงเชื่อมต่ออยู่ตามเดิมค่ะ',
+          ].join('\n');
+        } else {
+          return [
+            `🔄 รีเฟรชการเชื่อมต่อเรียบร้อยแล้วค่ะ`,
+            '',
+            this.TERMS_WELCOME_MESSAGE,
+          ].join('\n');
+        }
       }
 
+      // Fresh link — show terms consent before anything else
       return [
         `✅ เชื่อมต่อบัญชีเรียบร้อยแล้วค่ะ สวัสดีค่ะ ${name}! 😊`,
         '',
-        'ตั้งแต่นี้ไปคุณสามารถแจ้งความต้องการเข้าเวรได้เลยค่ะ',
-        'ตัวอย่าง: "ขอเวรเช้าวันที่ 20 มีนาคม"',
-        '          "ขอลาวันที่ 5-7 เมษายน"',
+        'ก่อนเริ่มใช้งาน กรุณาอ่านและยอมรับนโยบายการใช้งานของเราก่อนนะคะ:',
+        '',
+        this.TERMS_WELCOME_MESSAGE,
       ].join('\n');
     } catch (error) {
       this.logger.error('[LINK] handleLinkAccount failed:', error);
