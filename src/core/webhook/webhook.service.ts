@@ -55,6 +55,73 @@ export class WebhookService {
     'หรือพิมพ์ "ไม่ยอมรับ" หากคุณไม่ต้องการดำเนินการต่อค่ะ',
   ].join('\n');
 
+  private readonly MESSAGES = {
+    th: {
+      notUnderstood: 'ไม่แน่ใจว่าหมายถึงอะไรค่ะ ลองพิมพ์ "ช่วย" หรือ "help" เพื่อดูตัวอย่างค่ะ',
+      help: [
+        '🤖 สิ่งที่ MayWin ช่วยได้ค่ะ:',
+        '',
+        '📅 ขอเวร',
+        '  เช่น: "ขอเวรเช้าวันที่ 20 มีนาคม"',
+        '',
+        '🏖️ ขอลา/วันหยุด',
+        '  เช่น: "ขอลาวันที่ 10 เมษายน"',
+        '',
+        '🌐 เปลี่ยนภาษา',
+        '  พิมพ์: "change to english"',
+        '',
+        '🔗 ลงทะเบียน LINE',
+        '  พิมพ์: "ลงทะเบียน ชื่อ-นามสกุล: รหัส"',
+      ].join('\n'),
+      langChanged: 'ตั้งค่าภาษาเป็นภาษาไทยแล้วค่ะ 🇹🇭',
+      confirmationPrompt: "ข้อมูลนี้ถูกต้องไหมคะ? (พิมพ์ 'ใช่' หรือ 'ไม่')",
+      summaryHeader: 'สรุปรายการที่คุณต้องการจองค่ะ:',
+      saved: '✅ บันทึกข้อมูลเรียบร้อยแล้วค่ะ!',
+      cancelled: '❌ ยกเลิกรายการให้แล้วค่ะ',
+      confirmRetry: "⚠️ ขอโทษนะคะ รบกวนช่วยยืนยันโดยพิมพ์ 'ใช่' หรือ 'ไม่' อีกครั้งค่ะ",
+      quotaExhausted: 'ขออภัยค่ะ ขณะนี้โควต้าเต็มทุกระบบแล้ว ลองใหม่พรุ่งนี้นะคะ',
+      systemError: 'ขออภัยค่ะ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้งค่ะ',
+    },
+    en: {
+      notUnderstood: 'Not sure what you meant. Type "help" to see what I can do.',
+      help: [
+        '🤖 What MayWin can do:',
+        '',
+        '📅 Request a shift',
+        '  e.g. "Morning shift on March 20"',
+        '',
+        '🏖️ Request a day off',
+        '  e.g. "Day off on April 10"',
+        '',
+        '🌐 Change language',
+        '  Type: "เปลี่ยนเป็นภาษาไทย"',
+        '',
+        '🔗 Link account',
+        '  Type: "link account First Last: CODE"',
+      ].join('\n'),
+      langChanged: 'Language set to English 🇬🇧',
+      confirmationPrompt: "Is this correct? (type 'yes' or 'no')",
+      summaryHeader: "Here's your request:",
+      saved: '✅ Saved successfully!',
+      cancelled: '❌ Request cancelled.',
+      confirmRetry: "⚠️ Please type 'yes' or 'no' to confirm.",
+      quotaExhausted: 'Sorry, AI quota is exhausted. Please try again tomorrow.',
+      systemError: 'Sorry, a temporary error occurred. Please try again.',
+    },
+  } as const;
+
+  private isHelpCommand(text: string): boolean {
+    const t = text.trim().toLowerCase().replace(/\s+/g, ' ');
+    return /^(help|ช่วย|help me|what can you do|ช่วยด้วย|คุณทำอะไรได้บ้าง|ทำอะไรได้บ้าง|ใช้งานอย่างไร|วิธีใช้)$/.test(t);
+  }
+
+  private detectLanguageChange(text: string): 'th' | 'en' | null {
+    const t = text.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (/^(change to english|switch to english|use english|set language to english|เปลี่ยนเป็นภาษาอังกฤษ|ใช้ภาษาอังกฤษ)$/.test(t)) return 'en';
+    if (/^(change to thai|switch to thai|use thai|set language to thai|เปลี่ยนเป็นภาษาไทย|ใช้ภาษาไทย)$/.test(t)) return 'th';
+    return null;
+  }
+
   async handleNurseMessage(text: string, userId: string): Promise<string> {
     try {
       this.logger.log(`[INCOMING] UserID: ${userId} | Message: ${text}`);
@@ -150,6 +217,9 @@ export class WebhookService {
       // If there's no linked worker at all, skip the terms gate (they need to
       // link first). The message below is handled downstream naturally.
 
+      const lang: 'th' | 'en' = linkedWorker?.line_language === 'en' ? 'en' : 'th';
+      const msg = this.MESSAGES[lang];
+
       // --- PHASE 1: Confirmation Logic ---
       if (conversation.state === ConversationState.AWAITING_CONFIRMATION) {
         const input = text.trim().toLowerCase();
@@ -164,19 +234,35 @@ export class WebhookService {
           conversation.pending_data = null;
           await this.chatbotConversationRepo.save(conversation);
 
-          return `✅ บันทึกข้อมูลเรียบร้อยแล้วค่ะ!`;
+          return msg.saved;
         }
 
         if (['no', 'ไม่', 'ไม่ใช่'].includes(input)) {
-          // Reset conversation state
           conversation.state = ConversationState.IDLE;
           conversation.pending_data = null;
           await this.chatbotConversationRepo.save(conversation);
 
-          return '❌ ยกเลิกรายการให้แล้วค่ะ';
+          return msg.cancelled;
         }
 
-        return "⚠️ ขอโทษนะคะ รบกวนช่วยยืนยันโดยพิมพ์ 'ใช่' หรือ 'ไม่' อีกครั้งค่ะ";
+        // Not yes/no — treat as new request: cancel pending and fall through to Gemini
+        conversation.state = ConversationState.IDLE;
+        conversation.pending_data = null;
+        await this.chatbotConversationRepo.save(conversation);
+      }
+
+      // --- PHASE 1.5: Help & language commands (no AI needed) ---
+      if (this.isHelpCommand(text)) {
+        return msg.help;
+      }
+
+      const langChange = this.detectLanguageChange(text);
+      if (langChange !== null) {
+        if (linkedWorker) {
+          linkedWorker.line_language = langChange;
+          await this.workerRepo.save(linkedWorker);
+        }
+        return this.MESSAGES[langChange].langChanged;
       }
 
       // --- PHASE 2: Dynamic Key & Model Failover ---
@@ -194,7 +280,7 @@ export class WebhookService {
           if (extracted && extracted.length > 0) {
             // LOG: Gemini response and ID
             this.logger.log(`[GEMINI RESPONSE] UserID: ${userId} | Data:`, JSON.stringify(extracted));
-            return this.setupConfirmation(conversation, extracted);
+            return this.setupConfirmation(conversation, extracted, lang);
           }
         } catch (error: any) {
           if (error.status === 429) {
@@ -215,7 +301,7 @@ export class WebhookService {
           const extracted = await this.callGemini(primaryKey, 'gemini-2.5-flash-lite', text);
           if (extracted && extracted.length > 0) {
             this.logger.log(`[GEMINI LITE RESPONSE] UserID: ${userId} | Data:`, JSON.stringify(extracted));
-            return this.setupConfirmation(conversation, extracted);
+            return this.setupConfirmation(conversation, extracted, lang);
           }
         } catch (error: any) {
           if (error.status === 429) {
@@ -233,17 +319,18 @@ export class WebhookService {
           const extracted = await this.callGemini(primaryKey, this.GEMINI_MODEL, text);
           if (extracted && extracted.length > 0) {
             this.logger.log(`[GEMINI MODEL FALLBACK RESPONSE] UserID: ${userId} | Data:`, JSON.stringify(extracted));
-            return this.setupConfirmation(conversation, extracted);
+            return this.setupConfirmation(conversation, extracted, lang);
           }
         } catch (error: any) {
           if (error.status === 429) {
-            return 'ขออภัยค่ะ ขณะนี้โควต้าเต็มทุกระบบแล้ว ลองใหม่พรุ่งนี้นะคะ';
+            return msg.quotaExhausted;
           }
           throw error;
         }
       }
 
-      return 'ขออภัยค่ะ ระบบขัดข้องชั่วคราวเนื่องจากโควต้าเต็ม กรุณาแจ้งแอดมินหรือลองใหม่อีกครั้งพรุ่งนี้นะคะ';
+      // All models returned empty — AI couldn't extract any shift/leave data
+      return msg.notUnderstood;
     } catch (error: any) {
       this.logger.error(`[CRITICAL ERROR] handleNurseMessage failed:`, error);
       return 'ขออภัยค่ะ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้งค่ะ';
@@ -407,14 +494,16 @@ export class WebhookService {
   private async setupConfirmation(
     conversation: ChatbotConversation,
     extracted: any[],
+    lang: 'th' | 'en' = 'th',
   ): Promise<string> {
     try {
       conversation.state = ConversationState.AWAITING_CONFIRMATION;
       conversation.pending_data = extracted;
       await this.chatbotConversationRepo.save(conversation);
 
-      const thaiSummary = this.formatThaiSummary(extracted);
-      return `${thaiSummary}\n\nข้อมูลนี้ถูกต้องไหมคะ? (พิมพ์ 'ใช่' หรือ 'ไม่')`;
+      const summary = this.formatSummary(extracted, lang);
+      const prompt = this.MESSAGES[lang].confirmationPrompt;
+      return `${summary}\n\n${prompt}`;
     } catch (error) {
       this.logger.error('[ERROR] setupConfirmation failed:', error);
       throw error;
@@ -444,23 +533,31 @@ export class WebhookService {
     }
   }
 
-  private formatThaiSummary(prefs: any[]): string {
-    const shiftMap: { [key: string]: string } = {
-      morning: 'เช้า',
-      afternoon: 'บ่าย',
-      night: 'ดึก',
-      leave: 'ลาพัก/ไม่เข้าเวร'
-    };
+  private formatSummary(prefs: any[], lang: 'th' | 'en'): string {
+    const shiftMapTh: Record<string, string> = { morning: 'เช้า', afternoon: 'บ่าย', night: 'ดึก' };
+    const shiftMapEn: Record<string, string> = { morning: 'Morning', afternoon: 'Afternoon', night: 'Night' };
+    const locale = lang === 'en' ? 'en-US' : 'th-TH';
+    const header = this.MESSAGES[lang].summaryHeader;
+
     const summaries = prefs.map((p) => {
-      const dateObj = new Date(p.date);
-      const formattedDate = dateObj.toLocaleDateString('th-TH', {
+      const dateStr = new Date(p.date).toLocaleDateString(locale, {
         weekday: 'long',
         day: 'numeric',
         month: 'long',
       });
-      return `- วัน${formattedDate}: ${p.shift === 'leave' ? 'ขอ "ลาพัก"' : 'เข้า "เวร' + (shiftMap[p.shift] || p.shift) + '"'}`;
+      const prefix = lang === 'en' ? dateStr : `วัน${dateStr}`;
+      let label: string;
+      if (p.shift === 'leave') {
+        label = lang === 'en' ? 'Day off' : 'ขอ "ลาพัก"';
+      } else if (lang === 'en') {
+        label = `${shiftMapEn[p.shift] ?? p.shift} shift`;
+      } else {
+        label = `เข้า "เวร${shiftMapTh[p.shift] ?? p.shift}"`;
+      }
+      return `- ${prefix}: ${label}`;
     });
-    return `สรุปรายการที่คุณต้องการจองค่ะ:\n${summaries.join('\n')}`;
+
+    return `${header}\n${summaries.join('\n')}`;
   }
 
   private async saveToDatabase(conversation: ChatbotConversation, data: any[]) {
