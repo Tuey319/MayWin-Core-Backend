@@ -229,10 +229,10 @@ export class WebhookService {
           // Save to database
           await this.saveToDatabase(conversation, finalData);
 
-          // Reset conversation state
+          // Reset conversation state — update only `state` to avoid TypeORM JSONB-null quirks
           conversation.state = ConversationState.IDLE;
           conversation.pending_data = null;
-          await this.chatbotConversationRepo.save(conversation);
+          await this.chatbotConversationRepo.update(conversation.id, { state: ConversationState.IDLE });
 
           return msg.saved;
         }
@@ -240,15 +240,16 @@ export class WebhookService {
         if (['no', 'ไม่', 'ไม่ใช่'].includes(input)) {
           conversation.state = ConversationState.IDLE;
           conversation.pending_data = null;
-          await this.chatbotConversationRepo.save(conversation);
+          await this.chatbotConversationRepo.update(conversation.id, { state: ConversationState.IDLE });
 
           return msg.cancelled;
         }
 
-        // Not yes/no — treat as new request: cancel pending and fall through to Gemini
+        // Not yes/no — treat as new request: reset in-memory state and fall through to Gemini.
+        // Intentionally skip DB save here: setupConfirmation will persist state when Gemini
+        // succeeds; if Gemini returns nothing the stale DB row is harmless (next message retries).
         conversation.state = ConversationState.IDLE;
         conversation.pending_data = null;
-        await this.chatbotConversationRepo.save(conversation);
       }
 
       // --- PHASE 1.5: Help & language commands (no AI needed) ---
