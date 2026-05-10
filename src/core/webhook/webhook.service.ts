@@ -206,13 +206,17 @@ export class WebhookService {
           await this.workerRepo.save(linkedWorker);
 
           // Sync conversation worker_id in case it wasn't set yet
+          const convUpdate: Record<string, any> = { state: ConversationState.IDLE };
           if (!conversation.worker_id) {
             conversation.worker_id = linkedWorker.id;
             conversation.organization_id = linkedWorker.organization_id;
             conversation.unit_id = linkedWorker.primary_unit_id;
+            convUpdate.worker_id = linkedWorker.id;
+            convUpdate.organization_id = linkedWorker.organization_id;
+            convUpdate.unit_id = linkedWorker.primary_unit_id;
           }
           conversation.state = ConversationState.IDLE;
-          await this.chatbotConversationRepo.save(conversation);
+          await this.chatbotConversationRepo.update(conversation.id, convUpdate);
 
           this.logger.log(`[TERMS] Worker ${linkedWorker.id} accepted terms via LINE`);
           return [
@@ -262,6 +266,12 @@ export class WebhookService {
         if (['yes', 'ใช่', 'คับ', 'ค่ะ', 'ครับ'].includes(input)) {
           const finalData = conversation.pending_data;
 
+          if (!Array.isArray(finalData) || finalData.length === 0) {
+            await this.chatbotConversationRepo.update(conversation.id, { state: ConversationState.IDLE });
+            conversation.state = ConversationState.IDLE;
+            return msg.notUnderstood;
+          }
+
           // Save to database
           await this.saveToDatabase(conversation, finalData);
           this.logChatbot({
@@ -305,8 +315,8 @@ export class WebhookService {
       const langChange = this.detectLanguageChange(text);
       if (langChange !== null) {
         if (linkedWorker) {
+          await this.workerRepo.update(linkedWorker.id, { line_language: langChange });
           linkedWorker.line_language = langChange;
-          await this.workerRepo.save(linkedWorker);
         }
         return this.MESSAGES[langChange].langChanged;
       }
@@ -552,7 +562,10 @@ export class WebhookService {
     try {
       conversation.state = ConversationState.AWAITING_CONFIRMATION;
       conversation.pending_data = extracted;
-      await this.chatbotConversationRepo.save(conversation);
+      await this.chatbotConversationRepo.update(conversation.id, {
+        state: ConversationState.AWAITING_CONFIRMATION,
+        pending_data: extracted,
+      });
 
       const summary = this.formatSummary(extracted, lang);
       const prompt = this.MESSAGES[lang].confirmationPrompt;
@@ -567,7 +580,9 @@ export class WebhookService {
       return `${summary}\n\n${prompt}`;
     } catch (error) {
       this.logger.error('[ERROR] setupConfirmation failed:', error);
-      throw error;
+      // Don't re-throw — DB failure here means we can't persist confirmation state,
+      // but we should still respond gracefully rather than crashing the whole handler.
+      return this.MESSAGES[lang].notUnderstood;
     }
   }
 
@@ -607,7 +622,7 @@ export class WebhookService {
     const locale = lang === 'en' ? 'en-US' : 'th-TH';
     const header = this.MESSAGES[lang].summaryHeader;
 
-    const summaries = prefs.map((p) => {
+    const summaries = prefs.filter((p) => p && typeof p.date === 'string' && typeof p.shift === 'string').map((p) => {
       const dateStr = new Date(p.date).toLocaleDateString(locale, {
         weekday: 'long',
         day: 'numeric',
@@ -642,7 +657,11 @@ export class WebhookService {
           conversation.worker_id = worker.id;
           conversation.organization_id = worker.organization_id;
           conversation.unit_id = worker.primary_unit_id;
-          await this.chatbotConversationRepo.save(conversation);
+          await this.chatbotConversationRepo.update(conversation.id, {
+            worker_id: worker.id,
+            organization_id: worker.organization_id,
+            unit_id: worker.primary_unit_id,
+          });
           this.logger.log(
             `🔗 [WORKER LINKED] LineUserID: ${conversation.line_user_id} -> WorkerID: ${worker.id}`,
           );
