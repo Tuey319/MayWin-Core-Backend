@@ -14,6 +14,7 @@ import { LineLinkToken } from '../../database/entities/workers/line-link-token.e
 import { Worker } from '../../database/entities/workers/worker.entity';
 import { WorkerPreferencesService } from '../worker-preferences/worker-preferences.service';
 import { WorkerPreferencesDto } from '../worker-preferences/dto/put-worker-preferences.dto';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 
 @Injectable()
 export class WebhookService {
@@ -36,8 +37,32 @@ export class WebhookService {
     @InjectRepository(LineLinkToken)
     private lineLinkTokenRepo: Repository<LineLinkToken>,
     private readonly workerPreferencesService: WorkerPreferencesService,
+    private readonly auditLogsService: AuditLogsService,
   ) {
     this.logger.log('WebhookService initialized');
+  }
+
+  /** Fire-and-forget audit log for chatbot events. Never throws — failures are swallowed. */
+  private logChatbot(opts: {
+    orgId: string | null | undefined;
+    userId: string;
+    workerName?: string | null;
+    workerId?: string | null;
+    action: string;
+    detail: string;
+    level?: number;
+  }): void {
+    if (!opts.orgId) return;
+    this.auditLogsService.append({
+      orgId: String(opts.orgId),
+      actorId: opts.userId,
+      actorName: opts.workerName ?? `LINE:${opts.userId.slice(-6)}`,
+      action: opts.action,
+      targetType: 'CHATBOT',
+      targetId: opts.workerId ? String(opts.workerId) : opts.userId,
+      detail: opts.detail,
+      level: opts.level ?? 6,
+    }).catch((err) => this.logger.warn(`[AUDIT] chatbot log failed: ${err?.message ?? err}`));
   }
 
   // ── Terms welcome message (hardcoded, no AI) ───────────────────────────
@@ -220,6 +245,17 @@ export class WebhookService {
       const lang: 'th' | 'en' = linkedWorker?.line_language === 'en' ? 'en' : 'th';
       const msg = this.MESSAGES[lang];
 
+      const orgId = linkedWorker?.organization_id ?? conversation.organization_id;
+      this.logChatbot({
+        orgId,
+        userId,
+        workerName: linkedWorker?.full_name,
+        workerId: linkedWorker?.id,
+        action: 'CHATBOT_MESSAGE_RECEIVED',
+        detail: text.slice(0, 200),
+        level: 7,
+      });
+
       // --- PHASE 1: Confirmation Logic ---
       if (conversation.state === ConversationState.AWAITING_CONFIRMATION) {
         const input = text.trim().toLowerCase();
@@ -228,6 +264,15 @@ export class WebhookService {
 
           // Save to database
           await this.saveToDatabase(conversation, finalData);
+          this.logChatbot({
+            orgId,
+            userId,
+            workerName: linkedWorker?.full_name,
+            workerId: linkedWorker?.id,
+            action: 'CHATBOT_PREFERENCE_SAVED',
+            detail: `${Array.isArray(finalData) ? finalData.length : 0} item(s) confirmed`,
+            level: 6,
+          });
 
           // Reset conversation state — update only `state` to avoid TypeORM JSONB-null quirks
           conversation.state = ConversationState.IDLE;
@@ -290,6 +335,7 @@ export class WebhookService {
             continue;
           }
           this.logger.error(`[GEMINI ERROR] UserID: ${userId} | Flash error: ${error.message}`);
+          this.logChatbot({ orgId, userId, workerName: linkedWorker?.full_name, workerId: linkedWorker?.id, action: 'CHATBOT_GEMINI_ERROR', detail: `Flash: ${error.message}`, level: 3 });
           // Non-quota error — try next key/model instead of aborting
         }
       }
@@ -308,6 +354,7 @@ export class WebhookService {
             this.logger.warn(`[LIMIT] Flash Lite quota exhausted.`);
           } else {
             this.logger.error(`[GEMINI ERROR] UserID: ${userId} | Flash Lite error: ${error.message}`);
+            this.logChatbot({ orgId, userId, workerName: linkedWorker?.full_name, workerId: linkedWorker?.id, action: 'CHATBOT_GEMINI_ERROR', detail: `Flash Lite: ${error.message}`, level: 3 });
           }
           // Continue to next fallback regardless
         }
@@ -326,14 +373,19 @@ export class WebhookService {
             return msg.quotaExhausted;
           }
           this.logger.error(`[GEMINI ERROR] UserID: ${userId} | Gemma fallback error: ${error.message}`);
+          this.logChatbot({ orgId, userId, workerName: linkedWorker?.full_name, workerId: linkedWorker?.id, action: 'CHATBOT_GEMINI_ERROR', detail: `Gemma: ${error.message}`, level: 3 });
           // Fall through to notUnderstood
         }
       }
 
       // All models returned empty — AI couldn't extract any shift/leave data
+      this.logChatbot({ orgId, userId, workerName: linkedWorker?.full_name, workerId: linkedWorker?.id, action: 'CHATBOT_NOT_UNDERSTOOD', detail: text.slice(0, 200), level: 6 });
       return msg.notUnderstood;
     } catch (error: any) {
       this.logger.error(`[CRITICAL ERROR] handleNurseMessage failed:`, error);
+      // orgId/linkedWorker may not be defined if error happened early — log without them
+      const errOrgId = (error as any)?._orgId ?? null;
+      this.logChatbot({ orgId: errOrgId, userId, action: 'CHATBOT_SYSTEM_ERROR', detail: error?.message ?? String(error), level: 3 });
       return 'ขออภัยค่ะ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้งค่ะ';
     }
   }
@@ -504,6 +556,14 @@ export class WebhookService {
 
       const summary = this.formatSummary(extracted, lang);
       const prompt = this.MESSAGES[lang].confirmationPrompt;
+      this.logChatbot({
+        orgId: conversation.organization_id,
+        userId: conversation.line_user_id,
+        workerId: conversation.worker_id,
+        action: 'CHATBOT_CONFIRMATION_PENDING',
+        detail: `${extracted.length} item(s): ${JSON.stringify(extracted).slice(0, 200)}`,
+        level: 6,
+      });
       return `${summary}\n\n${prompt}`;
     } catch (error) {
       this.logger.error('[ERROR] setupConfirmation failed:', error);

@@ -8,11 +8,13 @@ import { WorkerAvailability } from '../../database/entities/workers/worker-avail
 import { Worker } from '../../database/entities/workers/worker.entity';
 import { LineLinkToken } from '../../database/entities/workers/line-link-token.entity';
 import { WorkerPreferencesModule } from '../worker-preferences/worker-preferences.module';
+import { AuditLogsModule } from '../audit-logs/audit-logs.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([ChatbotConversation, WorkerAvailability, Worker, LineLinkToken]),
     forwardRef(() => WorkerPreferencesModule),
+    AuditLogsModule,
   ],
   controllers: [WebhookController],
   providers: [WebhookService],
