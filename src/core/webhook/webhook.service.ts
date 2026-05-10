@@ -393,10 +393,9 @@ export class WebhookService {
       return msg.notUnderstood;
     } catch (error: any) {
       this.logger.error(`[CRITICAL ERROR] handleNurseMessage failed:`, error);
-      // orgId/linkedWorker may not be defined if error happened early — log without them
-      const errOrgId = (error as any)?._orgId ?? null;
-      this.logChatbot({ orgId: errOrgId, userId, action: 'CHATBOT_SYSTEM_ERROR', detail: error?.message ?? String(error), level: 3 });
-      return 'ขออภัยค่ะ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้งค่ะ';
+      // TODO: remove [DEBUG] before production
+      const errMsg = (error?.message ?? String(error)).slice(0, 150);
+      return `ขออภัยค่ะ ระบบขัดข้องชั่วคราว [DEBUG: ${errMsg}]`;
     }
   }
 
