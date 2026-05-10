@@ -1,10 +1,30 @@
 // src/core/webhook/webhook.controller.ts
-import { Controller, Post, Body, Logger, Req, HttpCode } from '@nestjs/common';
+import { Controller, Post, Body, Get, Logger, Req, HttpCode, HttpException, HttpStatus } from '@nestjs/common';
 import { Public } from '@/common/decorators/public.decorator';
 import type { Request } from 'express';
 import * as crypto from 'crypto';
 import { WebhookService } from './webhook.service';
 import { messagingApi } from '@line/bot-sdk';
+
+// ── In-memory autoreply gate (no DB, resets on deploy) ──────────────────────
+// autoReplyEnabled = true  → normal behaviour
+// autoReplyEnabled = false → messages are received but no bot reply is sent
+let autoReplyEnabled = true;
+let autoReplyResumeAt: Date | null = null;
+let autoReplyTimer: ReturnType<typeof setTimeout> | null = null;
+
+function enableAutoReply() {
+  autoReplyEnabled = true;
+  autoReplyResumeAt = null;
+  if (autoReplyTimer) { clearTimeout(autoReplyTimer); autoReplyTimer = null; }
+}
+
+function disableAutoReply(durationMs: number) {
+  if (autoReplyTimer) clearTimeout(autoReplyTimer);
+  autoReplyEnabled = false;
+  autoReplyResumeAt = new Date(Date.now() + durationMs);
+  autoReplyTimer = setTimeout(() => enableAutoReply(), durationMs);
+}
 
 @Controller('webhook')
 export class WebhookController {
@@ -37,6 +57,38 @@ export class WebhookController {
     return hash === signature;
   }
 
+  // ── /webhook/autoreply — GET: current state ────────────────────────────────
+  @Get('autoreply')
+  getAutoReplyStatus() {
+    const secondsRemaining = autoReplyResumeAt
+      ? Math.max(0, Math.round((autoReplyResumeAt.getTime() - Date.now()) / 1000))
+      : null;
+    return {
+      enabled: autoReplyEnabled,
+      resumeAt: autoReplyResumeAt?.toISOString() ?? null,
+      secondsRemaining,
+    };
+  }
+
+  // ── /webhook/autoreply — POST: toggle ──────────────────────────────────────
+  // Body: { enabled: boolean, durationMinutes?: number }  (1–60 min, default 10)
+  @Post('autoreply')
+  setAutoReply(@Body() body: { enabled: boolean; durationMinutes?: number }) {
+    const { enabled, durationMinutes = 10 } = body ?? {};
+    if (typeof enabled !== 'boolean') {
+      throw new HttpException('"enabled" must be a boolean', HttpStatus.BAD_REQUEST);
+    }
+    if (enabled) {
+      enableAutoReply();
+      this.logger.log('[AUTOREPLY] Auto-reply RE-ENABLED by admin');
+    } else {
+      const clampedMinutes = Math.min(60, Math.max(1, Number(durationMinutes) || 10));
+      disableAutoReply(clampedMinutes * 60 * 1000);
+      this.logger.warn(`[AUTOREPLY] Auto-reply DISABLED for ${clampedMinutes} min by admin`);
+    }
+    return this.getAutoReplyStatus();
+  }
+
   @Public()
   @Post()
   @HttpCode(200)
@@ -65,6 +117,11 @@ export class WebhookController {
             this.logger.log(`[LINE] userId: ${userId}, message: ${message}`);
 
             const replyText = await this.webhookService.handleNurseMessage(message, userId);
+
+            if (!autoReplyEnabled) {
+              this.logger.warn(`[AUTOREPLY DISABLED] Skipping reply to userId: ${userId}`);
+              continue;
+            }
 
             this.logger.log(`[REPLY] userId: ${userId}, response: ${replyText}`);
 
