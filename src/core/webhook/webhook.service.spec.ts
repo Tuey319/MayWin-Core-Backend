@@ -13,7 +13,9 @@ import { AuditLogsService } from '../audit-logs/audit-logs.service';
 
 // ── Shared fixtures ───────────────────────────────────────────────────────────
 
-const LINKED_WORKER: Partial<Worker> = {
+// Factory functions — service mutates conversation/worker objects in-place,
+// so each test must receive a fresh copy to avoid cross-test state corruption.
+const makeLinkedWorker = (): Partial<Worker> => ({
   id: '1',
   full_name: 'Test Nurse',
   organization_id: 'org1',
@@ -21,9 +23,9 @@ const LINKED_WORKER: Partial<Worker> = {
   line_id: 'U123',
   line_terms_accepted_at: new Date(),
   line_language: null,
-};
+});
 
-const IDLE_CONV: Partial<ChatbotConversation> = {
+const makeIdleConv = (): Partial<ChatbotConversation> => ({
   id: 'conv1',
   line_user_id: 'U123',
   worker_id: '1',
@@ -31,13 +33,13 @@ const IDLE_CONV: Partial<ChatbotConversation> = {
   unit_id: 'unit1',
   state: ConversationState.IDLE,
   pending_data: null,
-};
+});
 
-const AWAITING_CONV: Partial<ChatbotConversation> = {
-  ...IDLE_CONV,
+const makeAwaitingConv = (): Partial<ChatbotConversation> => ({
+  ...makeIdleConv(),
   state: ConversationState.AWAITING_CONFIRMATION,
   pending_data: [{ date: '2025-03-20', shift: 'morning' }],
-};
+});
 
 // ── Test suite ────────────────────────────────────────────────────────────────
 
@@ -67,12 +69,12 @@ describe('WebhookService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
 
-    convRepo.findOne.mockResolvedValue(IDLE_CONV);
-    convRepo.create.mockReturnValue(IDLE_CONV);
-    convRepo.save.mockResolvedValue(IDLE_CONV);
+    convRepo.findOne.mockImplementation(() => Promise.resolve(makeIdleConv()));
+    convRepo.create.mockImplementation(() => makeIdleConv());
+    convRepo.save.mockImplementation(() => Promise.resolve(makeIdleConv()));
     convRepo.update.mockResolvedValue({ affected: 1 });
 
-    workerRepo.findOne.mockResolvedValue(LINKED_WORKER);
+    workerRepo.findOne.mockImplementation(() => Promise.resolve(makeLinkedWorker()));
     workerRepo.update.mockResolvedValue({ affected: 1 });
 
     availRepo.findOne.mockResolvedValue(null);
@@ -179,7 +181,7 @@ describe('WebhookService', () => {
 
   describe('[PHASE 0.5] Terms gate', () => {
     beforeEach(() => {
-      workerRepo.findOne.mockResolvedValue({ ...LINKED_WORKER, line_terms_accepted_at: null });
+      workerRepo.findOne.mockImplementation(() => Promise.resolve({ ...makeLinkedWorker(), line_terms_accepted_at: null }));
     });
 
     it('shows terms for unaccepted worker', async () => {
@@ -208,7 +210,7 @@ describe('WebhookService', () => {
 
   describe('[PHASE 1] Confirmation', () => {
     beforeEach(() => {
-      convRepo.findOne.mockResolvedValue(AWAITING_CONV);
+      convRepo.findOne.mockImplementation(() => Promise.resolve(makeAwaitingConv()));
     });
 
     it('"ใช่" saves data and resets state', async () => {
@@ -235,7 +237,7 @@ describe('WebhookService', () => {
     });
 
     it('null pending_data on yes → notUnderstood, no crash', async () => {
-      convRepo.findOne.mockResolvedValue({ ...AWAITING_CONV, pending_data: null });
+      convRepo.findOne.mockResolvedValue({ ...makeAwaitingConv(), pending_data: null });
       const r = await service.handleNurseMessage('ใช่', 'U123');
       expect(r).not.toContain('DEBUG');
       expect(r).not.toContain('ระบบขัดข้อง');
@@ -270,7 +272,7 @@ describe('WebhookService', () => {
     });
 
     it('English user gets help card in English', async () => {
-      workerRepo.findOne.mockResolvedValue({ ...LINKED_WORKER, line_language: 'en' });
+      workerRepo.findOne.mockResolvedValue({ ...makeLinkedWorker(), line_language: 'en' });
       const r = await service.handleNurseMessage('help', 'U123');
       expect(r).toContain('Request a shift');
     });
@@ -316,7 +318,7 @@ describe('WebhookService', () => {
     });
 
     it('convRepo.update throws on state reset → notUnderstood, no crash', async () => {
-      convRepo.findOne.mockResolvedValue(AWAITING_CONV);
+      convRepo.findOne.mockImplementation(() => Promise.resolve(makeAwaitingConv()));
       convRepo.update.mockRejectedValue(new Error('DB error'));
       const r = await service.handleNurseMessage('ไม่', 'U123');
       // Phase 1 no-branch update fails → outer catch → DEBUG

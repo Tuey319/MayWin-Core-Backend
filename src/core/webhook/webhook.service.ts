@@ -408,6 +408,9 @@ export class WebhookService {
       return msg.notUnderstood;
     } catch (error: any) {
       this.logger.error(`[CRITICAL ERROR] handleNurseMessage failed:`, error);
+      if (process.env.NODE_ENV !== 'production') {
+        return `[DEBUG] Error: ${error?.message ?? String(error)}`;
+      }
       return 'ขออภัยค่ะ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้งค่ะ';
     }
   }

@@ -49,3 +49,25 @@ jobs:
           JWT_SECRET: test-secret
           JWT_EXPIRES_IN: 3600
           AUTH_DISABLE_OTP: 'true'
+          NODE_ENV: test
+
+  test-chatbot:
+    name: Chatbot unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run webhook service tests
+        run: npx jest src/core/webhook/webhook.service.spec.ts --no-coverage --forceExit
+        env:
+          NODE_ENV: test
