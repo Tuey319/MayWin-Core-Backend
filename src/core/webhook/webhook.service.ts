@@ -142,8 +142,23 @@ export class WebhookService {
 
   private detectLanguageChange(text: string): 'th' | 'en' | null {
     const t = text.trim().toLowerCase().replace(/\s+/g, ' ');
+
+    // Exact commands
     if (/^(change to english|switch to english|use english|set language to english|เปลี่ยนเป็นภาษาอังกฤษ|ใช้ภาษาอังกฤษ)$/.test(t)) return 'en';
     if (/^(change to thai|switch to thai|use thai|set language to thai|เปลี่ยนเป็นภาษาไทย|ใช้ภาษาไทย)$/.test(t)) return 'th';
+
+    // Natural casual phrases (short messages only, to avoid false positives on shift requests)
+    if (t.length <= 60) {
+      if (/(speak|talk|write|reply|respond|use|switch|change)\s+(in\s+)?english/.test(t)) return 'en';
+      if (/^(english|english please|english pls)$/.test(t)) return 'en';
+      if (/english\s+(please|pls|mode|only|now)$/.test(t)) return 'en';
+
+      if (/(speak|talk|write|reply|respond|use|switch|change)\s+(in\s+)?thai/.test(t)) return 'th';
+      if (/^(thai|thai please|thai pls)$/.test(t)) return 'th';
+      if (/thai\s+(please|pls|mode|only|now)$/.test(t)) return 'th';
+      if (/เปลี่ยนภาษา(ไทย)?|ภาษาไทย/.test(t)) return 'th';
+    }
+
     return null;
   }
 
