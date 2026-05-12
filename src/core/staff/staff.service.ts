@@ -24,6 +24,7 @@ type StaffRow = {
   email: string;
   status: 'active' | 'inactive';
   hasWebAccount: boolean;
+  isTeamLeader: boolean;
 };
 
 @Injectable()
@@ -45,7 +46,7 @@ export class StaffService {
 
   // ── Mapping ───────────────────────────────────────────────────────────────
 
-  private mapWorkerToStaff(worker: Worker): StaffRow {
+  private mapWorkerToStaff(worker: Worker, isTeamLeader = false): StaffRow {
     const attrs = (worker.attributes ?? {}) as Record<string, any>;
     return {
       id: worker.id,
@@ -58,6 +59,7 @@ export class StaffService {
       email: (attrs.email as string) ?? '',
       status: worker.is_active ? 'active' : 'inactive',
       hasWebAccount: !!worker.linked_user_id,
+      isTeamLeader,
     };
   }
 
@@ -113,14 +115,16 @@ export class StaffService {
 
     if (hasNoOrg || isSuperAdmin) {
       const workers = await this.workersRepo.find({ order: { organization_id: 'ASC', id: 'ASC' } });
-      return { ok: true, staff: workers.map((w) => this.mapWorkerToStaff(w)) };
+      const teamLeaderIds = await this.fetchTeamLeaderIds(workers.map((w) => w.id));
+      return { ok: true, staff: workers.map((w) => this.mapWorkerToStaff(w, teamLeaderIds.has(String(w.id)))) };
     }
 
     const workers = await this.workersRepo.find({
       where: { organization_id: String(organizationId) as any },
       order: { id: 'ASC' },
     });
-    return { ok: true, staff: workers.map((w) => this.mapWorkerToStaff(w)) };
+    const teamLeaderIds = await this.fetchTeamLeaderIds(workers.map((w) => w.id));
+    return { ok: true, staff: workers.map((w) => this.mapWorkerToStaff(w, teamLeaderIds.has(String(w.id)))) };
   }
 
   async getById(id: string, organizationId: number | null) {
@@ -129,7 +133,8 @@ export class StaffService {
       where: { id: id as any, organization_id: String(organizationId) as any },
     });
     if (!worker) throw new NotFoundException('Staff not found');
-    return { ok: true, staff: this.mapWorkerToStaff(worker) };
+    const teamLeaderIds = await this.fetchTeamLeaderIds([worker.id]);
+    return { ok: true, staff: this.mapWorkerToStaff(worker, teamLeaderIds.has(String(worker.id))) };
   }
 
   /**
@@ -468,5 +473,101 @@ export class StaffService {
       workerName: worker.full_name,
       instruction: `พิมพ์ในไลน์: ลงทะเบียน: ${saved.token}`,
     };
+  }
+
+  // ── Team Leader Role ──────────────────────────────────────────────────────
+
+  /** Returns a Set of worker_id strings that have role_code='TEAM_LEADER' in any unit. */
+  private async fetchTeamLeaderIds(workerIds: string[]): Promise<Set<string>> {
+    if (!workerIds.length) return new Set();
+    const rows: Array<{ worker_id: string }> = await this.workersRepo.manager.query(
+      `SELECT worker_id::text FROM maywin_db.worker_unit_memberships
+       WHERE worker_id = ANY($1::bigint[]) AND role_code = 'TEAM_LEADER'`,
+      [workerIds.map(String)],
+    );
+    return new Set(rows.map((r) => r.worker_id));
+  }
+
+  /**
+   * Toggle team leader status for a worker in a specific unit.
+   * When enabling: sets role_code='TEAM_LEADER' in worker_unit_memberships and inserts
+   * UNAVAILABLE blocks for all non-morning shifts for the next 365 days.
+   * When disabling: sets role_code='NURSE' and removes blocks with source='TEAM_LEADER_ROLE'.
+   */
+  async setTeamLeader(
+    workerId: string,
+    unitId: number,
+    enable: boolean,
+    organizationId: number | null,
+    actor: { actorId: string; actorName: string },
+    callerRoles: string[] = [],
+  ) {
+    this.validateId(workerId);
+    const isSuperAdmin = callerRoles.some(
+      (r) => r.toLowerCase() === 'super_admin' || r.toUpperCase() === 'SUPER_ADMIN',
+    );
+    const where: any = isSuperAdmin || !organizationId
+      ? { id: workerId as any }
+      : { id: workerId as any, organization_id: String(organizationId) as any };
+    const worker = await this.workersRepo.findOne({ where });
+    if (!worker) throw new NotFoundException('Staff not found');
+
+    const roleCode = enable ? 'TEAM_LEADER' : 'NURSE';
+
+    // Upsert worker_unit_memberships role_code
+    await this.workersRepo.manager.query(
+      `INSERT INTO maywin_db.worker_unit_memberships (worker_id, unit_id, role_code)
+       VALUES ($1::bigint, $2::bigint, $3)
+       ON CONFLICT (worker_id, unit_id) DO UPDATE SET role_code = EXCLUDED.role_code`,
+      [String(workerId), String(unitId), roleCode],
+    );
+
+    if (enable) {
+      // Get all non-morning shift codes for this unit (morning = earliest start_time or display_order)
+      const shifts: Array<{ code: string }> = await this.workersRepo.manager.query(
+        `SELECT code FROM maywin_db.shift_templates
+         WHERE unit_id = $1::bigint AND is_active = true
+         ORDER BY COALESCE(display_order, 999), start_time`,
+        [String(unitId)],
+      );
+
+      // First shift is morning; block the rest
+      const nonMorningShifts = shifts.slice(1).map((s) => s.code);
+
+      if (nonMorningShifts.length > 0) {
+        // Generate date series for next 365 days
+        await this.workersRepo.manager.query(
+          `INSERT INTO maywin_db.worker_availability
+             (worker_id, unit_id, date, shift_code, type, source, reason, attributes)
+           SELECT $1::bigint, $2::bigint, gs::date, unnest($3::text[]),
+                  'UNAVAILABLE', 'TEAM_LEADER_ROLE', 'Team leader: morning shifts only', '{}'::jsonb
+           FROM generate_series(CURRENT_DATE, CURRENT_DATE + INTERVAL '365 days', INTERVAL '1 day') gs
+           ON CONFLICT (worker_id, unit_id, date, shift_code)
+             DO UPDATE SET type = 'UNAVAILABLE', source = 'TEAM_LEADER_ROLE'`,
+          [String(workerId), String(unitId), nonMorningShifts],
+        );
+      }
+    } else {
+      // Remove blocks created by team leader designation
+      await this.workersRepo.manager.query(
+        `DELETE FROM maywin_db.worker_availability
+         WHERE worker_id = $1::bigint AND unit_id = $2::bigint AND source = 'TEAM_LEADER_ROLE'`,
+        [String(workerId), String(unitId)],
+      );
+    }
+
+    await this.auditLogs.append({
+      orgId: String(organizationId),
+      actorId: actor.actorId,
+      actorName: actor.actorName,
+      action: enable ? 'SET_TEAM_LEADER' : 'REMOVE_TEAM_LEADER',
+      targetType: 'staff',
+      targetId: worker.worker_code ?? workerId,
+      level: 5,
+      detail: `${enable ? 'Designated' : 'Removed'} team leader for ${worker.full_name} in unit ${unitId}`,
+    });
+
+    const teamLeaderIds = await this.fetchTeamLeaderIds([worker.id]);
+    return { ok: true, staff: this.mapWorkerToStaff(worker, teamLeaderIds.has(String(worker.id))) };
   }
 }

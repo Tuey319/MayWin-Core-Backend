@@ -1,5 +1,6 @@
 // src/core/staff/staff.controller.ts
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -122,5 +123,26 @@ export class StaffController {
   @Post('/staff/:id/link-token')
   generateLinkToken(@Param('id') id: string, @Req() req: Request) {
     return this.staff.generateLinkToken(id, this.context(req).organizationId, this.actor(req));
+  }
+
+  /**
+   * PATCH /staff/:id/team-leader
+   * Toggle team leader role for a worker in a unit.
+   * Body: { unitId: number, isTeamLeader: boolean }
+   */
+  @Roles('SCHEDULER')
+  @Patch('/staff/:id/team-leader')
+  setTeamLeader(
+    @Param('id') id: string,
+    @Body('unitId', ParseIntPipe) unitId: number,
+    @Body('isTeamLeader') isTeamLeader: boolean,
+    @Req() req: Request,
+  ) {
+    if (typeof isTeamLeader !== 'boolean') {
+      throw new BadRequestException('isTeamLeader must be a boolean');
+    }
+    const user = (req as any).user ?? {};
+    const callerRoles: string[] = Array.isArray(user.roles) ? user.roles : [];
+    return this.staff.setTeamLeader(id, unitId, isTeamLeader, this.context(req).organizationId, this.actor(req), callerRoles);
   }
 }
