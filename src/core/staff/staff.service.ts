@@ -535,14 +535,19 @@ export class StaffService {
       const nonMorningShifts = shifts.slice(1).map((s) => s.code);
 
       if (nonMorningShifts.length > 0) {
+        // Delete existing blocks first — avoids ON CONFLICT which requires a DB-level unique constraint
+        await this.workerUnitRepo.query(
+          `DELETE FROM maywin_db.worker_availability
+           WHERE worker_id = $1::bigint AND unit_id = $2::bigint AND source = 'TEAM_LEADER_ROLE'`,
+          [String(workerId), String(unitId)],
+        );
         await this.workerUnitRepo.query(
           `INSERT INTO maywin_db.worker_availability
              (worker_id, unit_id, date, shift_code, type, source, reason, attributes)
            SELECT $1::bigint, $2::bigint, gs::date, unnest($3::text[]),
-                  'UNAVAILABLE', 'TEAM_LEADER_ROLE', 'Team leader: morning shifts only', '{}'::jsonb
-           FROM generate_series(CURRENT_DATE, CURRENT_DATE + INTERVAL '365 days', INTERVAL '1 day') gs
-           ON CONFLICT (worker_id, unit_id, date, shift_code)
-             DO UPDATE SET type = 'UNAVAILABLE', source = 'TEAM_LEADER_ROLE'`,
+                  'UNAVAILABLE'::"maywin_db"."availability_type",
+                  'TEAM_LEADER_ROLE', 'Team leader: morning shifts only', '{}'::jsonb
+           FROM generate_series(CURRENT_DATE, CURRENT_DATE + INTERVAL '365 days', INTERVAL '1 day') gs`,
           [String(workerId), String(unitId), nonMorningShifts],
         );
       }
