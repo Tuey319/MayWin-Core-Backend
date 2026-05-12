@@ -390,7 +390,7 @@ export class SolverAdapter {
       evening_after_morning_counts_as_overtime: cp.eveningAfterMorningCountsAsOvertime ?? true,
       enable_consecutive_night_limit: cp.enableConsecutiveNightLimit ?? true,
       max_consecutive_night_shifts: cp.maxConsecutiveNightShifts ?? 3,
-      enable_min_total_days_off: cp.enableMinTotalDaysOff ?? true,
+      enable_min_total_days_off: cp.enableMinTotalDaysOff ?? false,
       min_total_days_off: cp.minTotalDaysOff ?? 11,
     };
 

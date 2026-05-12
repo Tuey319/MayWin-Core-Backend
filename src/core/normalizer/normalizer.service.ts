@@ -546,7 +546,7 @@ export class NormalizerService {
         'enable_consecutive_night_limit',
         true,
       ),
-      enableMinTotalDaysOff: readAttr('enableMinTotalDaysOff', 'enable_min_total_days_off', true),
+      enableMinTotalDaysOff: readAttr('enableMinTotalDaysOff', 'enable_min_total_days_off', false),
       minTotalDaysOff: readAttr('minTotalDaysOff', 'min_total_days_off', 11),
 
       attributes: cpAttrs,
