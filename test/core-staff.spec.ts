@@ -58,6 +58,7 @@ describe('StaffController & StaffService', () => {
       findOne: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockImplementation((v: any) => v),
       save: jest.fn().mockResolvedValue({}),
+      query: jest.fn().mockResolvedValue([]),
     };
 
     mockMailService = {
