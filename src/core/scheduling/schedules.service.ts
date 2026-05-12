@@ -352,4 +352,18 @@ export class SchedulesService {
       message: 'Export not implemented yet (Phase 1 stub)',
     };
   }
+
+  async deleteSchedule(scheduleId: string) {
+    const schedule = await this.schedulesRepo.findOne({ where: { id: scheduleId } });
+    if (!schedule) throw new NotFoundException('Schedule not found');
+
+    await this.schedulesRepo.remove(schedule);
+
+    await Promise.all([
+      this.cache.del(`schedule:current:${schedule.unit_id}::`),
+      this.cache.del(`schedule:history:${schedule.unit_id}:10`),
+    ]);
+
+    return { ok: true };
+  }
 }

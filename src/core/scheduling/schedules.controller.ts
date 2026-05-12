@@ -3,6 +3,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -101,5 +102,10 @@ export class SchedulesController {
     @Query('format') format?: string,
   ) {
     return this.schedules.exportSchedule(scheduleId, (format ?? 'pdf') as any);
+  }
+
+  @Delete('/schedules/:scheduleId')
+  delete(@Param('scheduleId') scheduleId: string) {
+    return this.schedules.deleteSchedule(scheduleId);
   }
 }
