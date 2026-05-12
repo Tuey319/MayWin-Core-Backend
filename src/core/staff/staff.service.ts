@@ -480,7 +480,7 @@ export class StaffService {
   /** Returns a Set of worker_id strings that have role_code='TEAM_LEADER' in any unit. */
   private async fetchTeamLeaderIds(workerIds: string[]): Promise<Set<string>> {
     if (!workerIds.length) return new Set();
-    const rows: Array<{ worker_id: string }> = await this.workersRepo.manager.query(
+    const rows: Array<{ worker_id: string }> = await this.workerUnitRepo.query(
       `SELECT worker_id::text FROM maywin_db.worker_unit_memberships
        WHERE worker_id = ANY($1::bigint[]) AND role_code = 'TEAM_LEADER'`,
       [workerIds.map(String)],
@@ -515,7 +515,7 @@ export class StaffService {
     const roleCode = enable ? 'TEAM_LEADER' : 'NURSE';
 
     // Upsert worker_unit_memberships role_code
-    await this.workersRepo.manager.query(
+    await this.workerUnitRepo.query(
       `INSERT INTO maywin_db.worker_unit_memberships (worker_id, unit_id, role_code)
        VALUES ($1::bigint, $2::bigint, $3)
        ON CONFLICT (worker_id, unit_id) DO UPDATE SET role_code = EXCLUDED.role_code`,
@@ -523,8 +523,8 @@ export class StaffService {
     );
 
     if (enable) {
-      // Get all non-morning shift codes for this unit (morning = earliest start_time or display_order)
-      const shifts: Array<{ code: string }> = await this.workersRepo.manager.query(
+      // Get all non-morning shift codes for this unit (morning = earliest by display_order/start_time)
+      const shifts: Array<{ code: string }> = await this.workerUnitRepo.query(
         `SELECT code FROM maywin_db.shift_templates
          WHERE unit_id = $1::bigint AND is_active = true
          ORDER BY COALESCE(display_order, 999), start_time`,
@@ -535,8 +535,7 @@ export class StaffService {
       const nonMorningShifts = shifts.slice(1).map((s) => s.code);
 
       if (nonMorningShifts.length > 0) {
-        // Generate date series for next 365 days
-        await this.workersRepo.manager.query(
+        await this.workerUnitRepo.query(
           `INSERT INTO maywin_db.worker_availability
              (worker_id, unit_id, date, shift_code, type, source, reason, attributes)
            SELECT $1::bigint, $2::bigint, gs::date, unnest($3::text[]),
@@ -548,8 +547,7 @@ export class StaffService {
         );
       }
     } else {
-      // Remove blocks created by team leader designation
-      await this.workersRepo.manager.query(
+      await this.workerUnitRepo.query(
         `DELETE FROM maywin_db.worker_availability
          WHERE worker_id = $1::bigint AND unit_id = $2::bigint AND source = 'TEAM_LEADER_ROLE'`,
         [String(workerId), String(unitId)],
