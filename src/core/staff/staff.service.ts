@@ -12,6 +12,7 @@ import { User } from '@/database/entities/users/user.entity';
 import { UnitMembership } from '@/database/entities/users/unit-membership.entity';
 import { LineLinkToken } from '@/database/entities/workers/line-link-token.entity';
 import { WorkerUnitMembership } from '@/database/entities/workers/worker-unit.entity';
+import { WorkerAvailability, AvailabilityType } from '@/database/entities/workers/worker-availability.entity';
 
 type StaffRow = {
   id: string;
@@ -40,6 +41,8 @@ export class StaffService {
     private readonly lineLinkTokenRepo: Repository<LineLinkToken>,
     @InjectRepository(WorkerUnitMembership)
     private readonly workerUnitRepo: Repository<WorkerUnitMembership>,
+    @InjectRepository(WorkerAvailability)
+    private readonly availabilityRepo: Repository<WorkerAvailability>,
     private readonly auditLogs: AuditLogsService,
     private readonly mailService: MailService,
   ) { }
@@ -535,28 +538,39 @@ export class StaffService {
       const nonMorningShifts = shifts.slice(1).map((s) => s.code);
 
       if (nonMorningShifts.length > 0) {
-        // Delete existing blocks first — avoids ON CONFLICT which requires a DB-level unique constraint
-        await this.workerUnitRepo.query(
-          `DELETE FROM maywin_db.worker_availability
-           WHERE worker_id = $1::bigint AND unit_id = $2::bigint AND source = 'TEAM_LEADER_ROLE'`,
-          [String(workerId), String(unitId)],
-        );
-        await this.workerUnitRepo.query(
-          `INSERT INTO maywin_db.worker_availability
-             (worker_id, unit_id, date, shift_code, type, source, reason, attributes)
-           SELECT $1::bigint, $2::bigint, gs::date, unnest($3::text[]),
-                  'UNAVAILABLE'::"maywin_db"."availability_type",
-                  'TEAM_LEADER_ROLE', 'Team leader: morning shifts only', '{}'::jsonb
-           FROM generate_series(CURRENT_DATE, CURRENT_DATE + INTERVAL '365 days', INTERVAL '1 day') gs`,
-          [String(workerId), String(unitId), nonMorningShifts],
-        );
+        await this.availabilityRepo.delete({
+          worker_id: String(workerId),
+          unit_id: String(unitId),
+          source: 'TEAM_LEADER_ROLE',
+        } as any);
+
+        const rows: Partial<WorkerAvailability>[] = [];
+        const today = new Date();
+        for (let d = 0; d <= 365; d++) {
+          const date = new Date(today);
+          date.setDate(today.getDate() + d);
+          const dateStr = date.toISOString().slice(0, 10);
+          for (const shiftCode of nonMorningShifts) {
+            rows.push({
+              worker_id: String(workerId),
+              unit_id: String(unitId),
+              date: dateStr,
+              shift_code: shiftCode,
+              type: AvailabilityType.UNAVAILABLE,
+              source: 'TEAM_LEADER_ROLE',
+              reason: 'Team leader: morning shifts only',
+              attributes: {},
+            });
+          }
+        }
+        await this.availabilityRepo.insert(rows);
       }
     } else {
-      await this.workerUnitRepo.query(
-        `DELETE FROM maywin_db.worker_availability
-         WHERE worker_id = $1::bigint AND unit_id = $2::bigint AND source = 'TEAM_LEADER_ROLE'`,
-        [String(workerId), String(unitId)],
-      );
+      await this.availabilityRepo.delete({
+        worker_id: String(workerId),
+        unit_id: String(unitId),
+        source: 'TEAM_LEADER_ROLE',
+      } as any);
     }
 
     await this.auditLogs.append({
