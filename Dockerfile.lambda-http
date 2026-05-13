@@ -16,6 +16,7 @@ WORKDIR /var/task
 # Install Python 3.11 and OR-Tools.
 # python3 (3.9) on AL2023 conflicts with the Lambda image's OpenSSL 3.4.0.
 RUN dnf install -y python3.11 && \
+    python3.11 -m ensurepip --upgrade && \
     python3.11 -m pip install --no-cache-dir ortools && \
     dnf clean all
 
