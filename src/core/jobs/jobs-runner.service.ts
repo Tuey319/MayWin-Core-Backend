@@ -125,11 +125,16 @@ export class JobsRunnerService {
       }
 
       // 3) SOLVING with fallback plans
+      const userTimeLimitSec = Math.max(
+        10,
+        Number(job.attributes?.solverConfig?.timeLimitSeconds) || 60,
+      );
+
       const {
         output: solverOutput,
         chosenPlan,
         finalStatus,
-      } = await this.solveWithFallback(jobId, payload);
+      } = await this.solveWithFallback(jobId, payload, userTimeLimitSec);
 
       // persist chosen plan on job
       await this.jobsRepo.update({ id: jobId }, {
@@ -217,6 +222,7 @@ export class JobsRunnerService {
   private async solveWithFallback(
     jobId: string,
     payload: Record<string, any>,
+    timeLimitSeconds: number = 60,
   ): Promise<{
     output: SolverRawOutput;
     chosenPlan: SolverPlan;
@@ -231,7 +237,7 @@ export class JobsRunnerService {
 
     const outStrict = await this.safeSolve(jobId, payload, {
       plan: 'A_STRICT',
-      timeLimitSeconds: 60,
+      timeLimitSeconds,
     });
 
     if (this.isSolveGood(outStrict)) {
@@ -251,7 +257,7 @@ export class JobsRunnerService {
 
     const outRelaxed = await this.safeSolve(jobId, payload, {
       plan: 'A_RELAXED',
-      timeLimitSeconds: 120,
+      timeLimitSeconds: timeLimitSeconds * 2,
     });
 
     if (this.isSolveGood(outRelaxed)) {
@@ -271,7 +277,7 @@ export class JobsRunnerService {
 
     const outMilp = await this.safeSolve(jobId, payload, {
       plan: 'B_MILP',
-      timeLimitSeconds: 60,
+      timeLimitSeconds,
     });
 
     if (this.isSolveGood(outMilp)) {

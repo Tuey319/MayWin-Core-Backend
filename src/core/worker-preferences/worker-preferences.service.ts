@@ -296,9 +296,20 @@ export class WorkerPreferencesService {
       existing ? ({ ...existing, ...patch } as any) : (this.preferencesRepo.create(patch as any) as any),
     );
 
-    // Note: Scheduling engine job creation would require a valid scheduleId
-    // which is not available in the preferences update context.
-    // Job creation should be triggered from the schedule/orchestrator module instead.
+    // When dashboard replaces preferences, sync worker_availability so that
+    // erased "Off" cells (originally from LINE bot) don't reappear via fallback.
+    if (replace && unitId) {
+      const incomingDates = new Set(Object.keys(mergedDaysOffPattern));
+      const existingAvailRows = await this.workerAvailabilityRepo.find({
+        where: {
+          worker_id: Number(workerId) as any,
+          unit_id: unitId as any,
+          type: AvailabilityType.DAY_OFF,
+        },
+      });
+      const toDelete = existingAvailRows.filter((r) => !incomingDates.has(String(r.date)));
+      if (toDelete.length > 0) await this.workerAvailabilityRepo.remove(toDelete);
+    }
 
     const keysToInvalidate = new Set<string>();
     if (worker.primary_unit_id) keysToInvalidate.add(`worker-prefs:list:${worker.primary_unit_id}`);
