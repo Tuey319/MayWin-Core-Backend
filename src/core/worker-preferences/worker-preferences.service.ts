@@ -256,7 +256,7 @@ export class WorkerPreferencesService {
     };
   }
 
-  async upsertPreferences(workerId: string, _unitId: string, preferences: WorkerPreferencesDto, replace = false) {
+  async upsertPreferences(workerId: string, unitId: string, preferences: WorkerPreferencesDto, replace = false) {
     const worker = await this.workersRepo.findOne({ where: { id: workerId } });
     if (!worker || !worker.is_active) throw new NotFoundException('Worker not found');
 
@@ -300,7 +300,11 @@ export class WorkerPreferencesService {
     // which is not available in the preferences update context.
     // Job creation should be triggered from the schedule/orchestrator module instead.
 
-    if (worker.primary_unit_id) await this.cache.del(`worker-prefs:list:${worker.primary_unit_id}`);
+    const keysToInvalidate = new Set<string>();
+    if (worker.primary_unit_id) keysToInvalidate.add(`worker-prefs:list:${worker.primary_unit_id}`);
+    if (unitId) keysToInvalidate.add(`worker-prefs:list:${unitId}`);
+    await Promise.all([...keysToInvalidate].map((k) => this.cache.del(k)));
+
     return {
       workerId: String(worker.id),
       preferences: saved,
