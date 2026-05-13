@@ -28,7 +28,7 @@ export class JobsController {
     @Headers('idempotency-key') idempotencyKey?: string,
   ) {
     return this.jobs.createJob(scheduleId, dto, idempotencyKey ?? null, {
-      enqueueLocalRunner: true,
+      enqueueLocalRunner: process.env.NODE_ENV === 'development',
     });
   }
 
