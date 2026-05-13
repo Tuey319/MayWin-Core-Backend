@@ -111,6 +111,7 @@ export class SchedulesService {
     await Promise.all([
       this.cache.del(`schedule:current:${unitId}::`),
       this.cache.del(`schedule:history:${unitId}:10`),
+      this.cache.del(`schedule:history:${unitId}:50`),
     ]);
 
     return {
@@ -362,6 +363,7 @@ export class SchedulesService {
     await Promise.all([
       this.cache.del(`schedule:current:${schedule.unit_id}::`),
       this.cache.del(`schedule:history:${schedule.unit_id}:10`),
+      this.cache.del(`schedule:history:${schedule.unit_id}:50`),
     ]);
 
     return { ok: true };
