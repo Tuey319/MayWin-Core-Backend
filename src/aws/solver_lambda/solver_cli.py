@@ -205,9 +205,17 @@ def shift_eq(a: str, b: str) -> bool:
     return a.strip().lower() == b.strip().lower()
 
 
+_SHIFT_ALIASES: Dict[str, set] = {
+    "morning": {"morning", "m", "d", "day"},
+    "evening": {"evening", "afternoon", "a", "e"},
+    "night":   {"night", "n"},
+}
+
+
 def find_shift_name(shifts: List[str], target: str) -> Optional[str]:
+    aliases = _SHIFT_ALIASES.get(target.strip().lower(), {target.strip().lower()})
     for s in shifts:
-        if shift_eq(s, target):
+        if s.strip().lower() in aliases:
             return s
     return None
 
@@ -241,11 +249,11 @@ def shift_hours_map(shifts: List[str]) -> Dict[str, Tuple[int, int]]:
     out = {}
     for s in shifts:
         k = s.strip().lower()
-        if k == "morning":
+        if k in _SHIFT_ALIASES["morning"]:
             out[s] = (6, 14)
-        elif k == "evening":
+        elif k in _SHIFT_ALIASES["evening"]:
             out[s] = (14, 22)
-        elif k == "night":
+        elif k in _SHIFT_ALIASES["night"]:
             out[s] = (22, 30)  # overnight handled as next-day 06:00
         else:
             out[s] = (0, 8)

@@ -102,10 +102,8 @@ export class NormalizerService {
       attributes: r.attributes ?? {},
     }));
 
-    // 3) Constraint profile (job-selected if present, else latest active)
-    const constraints = await this.resolveConstraintProfile(job);
-
-    // 4) Workers in this unit (active)
+    // 3) Workers in this unit (active) — must come before constraint profile resolution
+    // so nurse code mappings can be used to normalize exempt nurse codes.
     // Include workers from worker_unit_memberships OR those whose primary_unit_id matches,
     // because staff creation only sets primary_unit_id and may not insert a membership row.
     const memberships = await this.workerUnitRepo.find({
@@ -163,6 +161,9 @@ export class NormalizerService {
         minShiftsPerPeriod: w.min_shifts_per_period ?? null,
       };
     });
+
+    // 4) Constraint profile (job-selected if present, else latest active)
+    const constraints = await this.resolveConstraintProfile(job, { nurseCodeByWorkerId, workerIdByNurseCode });
 
     // 5) Availability within horizon for this unit + worker set
     const availability = await this.buildAvailability({
@@ -253,6 +254,12 @@ export class NormalizerService {
       .map((s) => String(s.code))
       .filter((sc) => !nightShiftCodes.has(sc));
 
+    // Map lowercase shift name → shift code so chatbot-saved names ("morning") resolve to codes ("M")
+    const shiftCodeByName: Record<string, string> = {};
+    for (const s of shifts) {
+      shiftCodeByName[String(s.name).trim().toLowerCase()] = String(s.code);
+    }
+
     // default penalties
     const PENALTY_DISLIKED = 5;
 
@@ -291,10 +298,12 @@ export class NormalizerService {
           const byShift = explicit[d];
           if (!byShift || typeof byShift !== 'object') continue;
           out[nurseCode][d] = out[nurseCode][d] ?? {};
-          for (const sc of Object.keys(byShift)) {
-            const val = Number((byShift as any)[sc]);
+          for (const rawKey of Object.keys(byShift)) {
+            const val = Number((byShift as any)[rawKey]);
             if (!Number.isFinite(val)) continue;
             if (val <= 0) continue;
+            // Resolve shift name → shift code (e.g. "morning" → "M"); keep as-is if already a code
+            const sc = shiftCodeByName[rawKey.trim().toLowerCase()] ?? rawKey;
             out[nurseCode][d][sc] = Math.trunc(val);
           }
         }
@@ -434,7 +443,33 @@ export class NormalizerService {
     return [...new Set(tags)].filter((t) => t.trim().length > 0);
   }
 
-  private async resolveConstraintProfile(job: ScheduleJob): Promise<Record<string, any>> {
+  private normalizeExemptNurseCodes(
+    exemptCodes: string[],
+    workerIdByNurseCode?: Record<string, string>,
+  ): string[] {
+    if (!workerIdByNurseCode || exemptCodes.length === 0) return exemptCodes;
+
+    const normalized: string[] = [];
+    for (const code of exemptCodes) {
+      if (workerIdByNurseCode[code]) {
+        normalized.push(code);
+      } else {
+        const stripped = code.replace(/^NURSE_/i, '');
+        if (stripped !== code && workerIdByNurseCode[stripped]) {
+          this.logger.debug(`Normalized exempt nurse "${code}" → "${stripped}"`);
+          normalized.push(stripped);
+        } else {
+          this.logger.warn(`Exempt nurse code "${code}" not found in unit — skipping`);
+        }
+      }
+    }
+    return normalized;
+  }
+
+  private async resolveConstraintProfile(
+    job: ScheduleJob,
+    nurseMappings?: { nurseCodeByWorkerId: Record<string, string>; workerIdByNurseCode: Record<string, string> },
+  ): Promise<Record<string, any>> {
     const scheduleId = job.attributes?.scheduleId ?? job.attributes?.schedule_id ?? null;
 
     let scheduleConstraintProfileId: string | null = null;
@@ -481,7 +516,7 @@ export class NormalizerService {
       return value === undefined ? fallback : (value as T);
     };
 
-    return {
+    const result = {
       constraintProfileId: cp?.id ?? null,
       name: cp?.name ?? 'DEFAULT',
 
@@ -531,10 +566,9 @@ export class NormalizerService {
         'max_shift_per_type',
         { morning: 9, evening: 9, night: 9 },
       ),
-      shiftTypeLimitExemptNurses: readAttr<string[]>(
-        'shiftTypeLimitExemptNurses',
-        'shift_type_limit_exempt_nurses',
-        [],
+      shiftTypeLimitExemptNurses: this.normalizeExemptNurseCodes(
+        readAttr<string[]>('shiftTypeLimitExemptNurses', 'shift_type_limit_exempt_nurses', []),
+        nurseMappings?.workerIdByNurseCode,
       ),
       eveningAfterMorningCountsAsOvertime: readAttr(
         'eveningAfterMorningCountsAsOvertime',
@@ -551,6 +585,17 @@ export class NormalizerService {
 
       attributes: cpAttrs,
     };
+
+    const eveningToNightPenalty = Number(result.penaltyWeightJson?.evening_to_night_penalty ?? 0);
+    if (!result.forbidEveningToNight && eveningToNightPenalty > 1000) {
+      this.logger.warn(
+        `Constraint profile ${cp?.id} has contradictory settings: forbidEveningToNight=false ` +
+        `but evening_to_night_penalty=${eveningToNightPenalty}. ` +
+        `Either set forbidEveningToNight=true (hard forbid) or lower the penalty.`,
+      );
+    }
+
+    return result;
   }
 
   private async buildAvailability(args: {
@@ -572,6 +617,13 @@ export class NormalizerService {
       } as any,
       order: { date: 'ASC' as any, worker_id: 'ASC' as any },
     });
+
+    if (rows.length === 0) {
+      this.logger.warn(
+        `No availability records found for unit ${unitId} between ${startDate} and ${endDate}. ` +
+        `Solver will treat all workers as available for all shifts.`,
+      );
+    }
 
     return rows.map((r) => ({
       nurseCode: nurseCodeByWorkerId[r.worker_id] ?? null,
