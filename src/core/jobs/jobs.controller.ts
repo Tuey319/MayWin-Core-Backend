@@ -27,7 +27,9 @@ export class JobsController {
     @Body() dto: CreateJobDto,
     @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.jobs.createJob(scheduleId, dto, idempotencyKey ?? null);
+    return this.jobs.createJob(scheduleId, dto, idempotencyKey ?? null, {
+      enqueueLocalRunner: true,
+    });
   }
 
   // Purpose: Poll job status + phase.
