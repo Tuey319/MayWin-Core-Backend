@@ -59,6 +59,10 @@ export class PutWorkerPreferencesDto {
   @Matches(/^\d+$/)
   unitId!: string;
 
+  @IsOptional()
+  @IsBoolean()
+  replace?: boolean;
+
   @ValidateNested()
   @Type(() => WorkerPreferencesDto)
   preferences!: WorkerPreferencesDto;

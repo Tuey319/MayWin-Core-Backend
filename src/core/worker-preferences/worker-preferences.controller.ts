@@ -93,7 +93,7 @@ export class WorkerPreferencesController {
       p.workerId,
       dto.unitId,
       dto.preferences,
-      !!(dto as any).replace,
+      !!dto.replace,
     );
   }
 
