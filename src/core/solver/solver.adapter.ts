@@ -290,10 +290,9 @@ export class SolverAdapter {
       }
     }
 
-    // ── preferences → nurse_requests (shift requests, not penalties) ─────────
-    // Value > 0 means the nurse wants that shift — route to nurse_requests so
-    // the solver hard-assigns it. Alias names ("morning","evening","night") are
-    // resolved to actual shift codes ("M","A","N").
+    // ── preferences → soft preferences (negative = reward in minimization objective) ──
+    // The solver's preferences dict uses positive = disliked penalty, so we negate
+    // to reward wanted shifts. This avoids hard conflicts when two nurses want the same slot.
     const SHIFT_ALIASES: Record<string, Set<string>> = {
       morning: new Set(['morning', 'm', 'd', 'day']),
       evening: new Set(['evening', 'afternoon', 'a', 'e']),
@@ -310,6 +309,7 @@ export class SolverAdapter {
       return undefined;
     };
 
+    const softPrefs: Record<string, Record<string, Record<string, number>>> = {};
     const nurseSet = new Set(nurses);
     const daySet = new Set(days);
     const rawPrefs = normalized?.preferences;
@@ -327,9 +327,9 @@ export class SolverAdapter {
             if (!Number.isFinite(value) || value <= 0) continue;
             const shiftCode = resolveShiftCode(alias);
             if (!shiftCode) continue;
-            nurseRequests[nurse] ??= {};
-            nurseRequests[nurse][date] ??= {};
-            nurseRequests[nurse][date][shiftCode] = 1;
+            softPrefs[nurse] ??= {};
+            softPrefs[nurse][date] ??= {};
+            softPrefs[nurse][date][shiftCode] = -value;  // negative = reward
           }
         }
       }
@@ -462,6 +462,7 @@ export class SolverAdapter {
 
     if (Object.keys(overridableAvailability).length > 0) req.overridable_availability = overridableAvailability;
     if (Object.keys(nurseRequests).length > 0) req.nurse_requests = nurseRequests;
+    if (Object.keys(softPrefs).length > 0) req.preferences = softPrefs;
 
     if (backupNurses.length > 0) req.backup_nurses = backupNurses;
     if (Object.keys(nurseSkills).length > 0) req.nurse_skills = nurseSkills;

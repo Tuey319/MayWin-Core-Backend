@@ -363,8 +363,8 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
     )
     if nurse_requests:
         solve_req["nurse_requests"] = nurse_requests
-    # Route preference requests → nurse_requests (hard must-assign).
-    # Value > 0 means the nurse wants that shift, so the solver must assign it.
+    # Route preference requests → soft preferences (negative = reward in minimization objective).
+    # The solver's preferences dict uses positive = disliked penalty, so we negate to reward wanted shifts.
     raw_prefs = payload.get("preferences") or {}
     if isinstance(raw_prefs, dict):
         day_date_set = set(day_dates)
@@ -377,17 +377,18 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
                     continue
                 for shift_alias, value in by_shift.items():
                     try:
-                        if not value or int(value) <= 0:
+                        v = int(value)
+                        if v <= 0:
                             continue
                     except Exception:
                         continue
                     shift_code = _resolve_shift_code(shift_alias, shift_codes)
                     if shift_code is None:
                         continue
-                    solve_req.setdefault("nurse_requests", {})
-                    solve_req["nurse_requests"].setdefault(nurse_code, {})
-                    solve_req["nurse_requests"][nurse_code].setdefault(date, {})
-                    solve_req["nurse_requests"][nurse_code][date][shift_code] = 1
+                    solve_req.setdefault("preferences", {})
+                    solve_req["preferences"].setdefault(nurse_code, {})
+                    solve_req["preferences"][nurse_code].setdefault(date, {})
+                    solve_req["preferences"][nurse_code][date][shift_code] = -v
 
     # Time limit mapping for solver_cli SolveRequest: time_limit_sec
     if time_limit_seconds is not None:
