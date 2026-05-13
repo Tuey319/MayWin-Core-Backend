@@ -256,7 +256,7 @@ export class WorkerPreferencesService {
     };
   }
 
-  async upsertPreferences(workerId: string, _unitId: string, preferences: WorkerPreferencesDto) {
+  async upsertPreferences(workerId: string, _unitId: string, preferences: WorkerPreferencesDto, replace = false) {
     const worker = await this.workersRepo.findOne({ where: { id: workerId } });
     if (!worker || !worker.is_active) throw new NotFoundException('Worker not found');
 
@@ -265,15 +265,19 @@ export class WorkerPreferencesService {
       where: { worker_id: Number(workerId) as any },
     });
 
-    // Merge new requests with existing preferences
+    const incomingPreferencePattern = (preferences as any).preferencePatternJson || (preferences as any).preference_pattern_json || {};
+    const incomingDaysOffPattern = (preferences as any).daysOffPatternJson || (preferences as any).days_off_pattern_json || {};
+
+    // replace=true (dashboard): treat incoming as the full authoritative state.
+    // replace=false (LINE bot): merge incoming on top of existing so prior chat sessions accumulate.
     let mergedPreferencePattern = {};
     let mergedDaysOffPattern = {};
-    if (existing) {
-      mergedPreferencePattern = { ...(existing.preference_pattern_json || {}), ...((preferences as any).preferencePatternJson || (preferences as any).preference_pattern_json || {}) };
-      mergedDaysOffPattern = { ...(existing.days_off_pattern_json || {}), ...((preferences as any).daysOffPatternJson || (preferences as any).days_off_pattern_json || {}) };
+    if (existing && !replace) {
+      mergedPreferencePattern = { ...(existing.preference_pattern_json || {}), ...incomingPreferencePattern };
+      mergedDaysOffPattern = { ...(existing.days_off_pattern_json || {}), ...incomingDaysOffPattern };
     } else {
-      mergedPreferencePattern = (preferences as any).preferencePatternJson || (preferences as any).preference_pattern_json || {};
-      mergedDaysOffPattern = (preferences as any).daysOffPatternJson || (preferences as any).days_off_pattern_json || {};
+      mergedPreferencePattern = incomingPreferencePattern;
+      mergedDaysOffPattern = incomingDaysOffPattern;
     }
     const patch: Partial<WorkerPreference> = {
       worker_id: Number(workerId) as any,
