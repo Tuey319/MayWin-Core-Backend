@@ -14,11 +14,16 @@ FROM public.ecr.aws/lambda/nodejs:20
 WORKDIR /var/task
 
 # Install Python 3.11 and OR-Tools.
-# python3 (3.9) on AL2023 conflicts with the Lambda image's OpenSSL 3.4.0.
-RUN dnf install -y python3.11 && \
-    python3.11 -m ensurepip --upgrade && \
-    python3.11 -m pip install --no-cache-dir ortools && \
+# Lambda's LD_LIBRARY_PATH includes /var/lang/lib (OpenSSL 3.4) which conflicts with
+# AL2023's python3.11 (built against OpenSSL 3.2). Unset it during install.
+RUN env -u LD_LIBRARY_PATH dnf install -y python3.11 && \
+    env -u LD_LIBRARY_PATH python3.11 -m ensurepip --upgrade && \
+    env -u LD_LIBRARY_PATH python3.11 -m pip install --no-cache-dir ortools && \
     dnf clean all
+
+# Wrapper so the solver subprocess also runs without Lambda's LD_LIBRARY_PATH
+RUN printf '#!/bin/sh\nexec env -u LD_LIBRARY_PATH /usr/bin/python3.11 "$@"\n' \
+    > /usr/local/bin/python3-solver && chmod +x /usr/local/bin/python3-solver
 
 # Copy Node.js build artifacts
 COPY --from=builder /app/dist ./dist
@@ -28,8 +33,8 @@ COPY --from=builder /app/package.json ./package.json
 # Copy Python solver script (Lambda version with alias resolution)
 COPY --from=builder /app/src/aws/solver_lambda/solver_cli.py ./solver_cli.py
 
-# Point solver adapter at the correct Python and script path inside the image
-ENV SOLVER_PYTHON=python3.11
+# Point solver adapter at the wrapper (unsets LD_LIBRARY_PATH before running python)
+ENV SOLVER_PYTHON=/usr/local/bin/python3-solver
 ENV SOLVER_CLI_PATH=/var/task/solver_cli.py
 
 CMD ["dist/http-lambda.handler"]
