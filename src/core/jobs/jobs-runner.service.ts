@@ -231,7 +231,7 @@ export class JobsRunnerService {
 
     const outStrict = await this.safeSolve(jobId, payload, {
       plan: 'A_STRICT',
-      timeLimitSeconds: 30,
+      timeLimitSeconds: 60,
     });
 
     if (this.isSolveGood(outStrict)) {
@@ -251,7 +251,7 @@ export class JobsRunnerService {
 
     const outRelaxed = await this.safeSolve(jobId, payload, {
       plan: 'A_RELAXED',
-      timeLimitSeconds: 60,
+      timeLimitSeconds: 120,
     });
 
     if (this.isSolveGood(outRelaxed)) {
@@ -271,7 +271,7 @@ export class JobsRunnerService {
 
     const outMilp = await this.safeSolve(jobId, payload, {
       plan: 'B_MILP',
-      timeLimitSeconds: 25,
+      timeLimitSeconds: 60,
     });
 
     if (this.isSolveGood(outMilp)) {

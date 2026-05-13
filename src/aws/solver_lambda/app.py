@@ -622,11 +622,11 @@ _FEASIBLE_STATUSES = {
 }
 
 # Mirrors jobs-runner.service.ts solveWithFallback():
-# A_STRICT (30s) → A_RELAXED (60s) → B_MILP (25s)
+# A_STRICT (60s) → A_RELAXED (120s) → B_MILP (60s)
 _PLAN_SEQUENCE = [
-    {"plan": "A_STRICT",  "time_limit_sec": 30},
-    {"plan": "A_RELAXED", "time_limit_sec": 60},
-    {"plan": "B_MILP",    "time_limit_sec": 25},
+    {"plan": "A_STRICT",  "time_limit_sec": 60},
+    {"plan": "A_RELAXED", "time_limit_sec": 120},
+    {"plan": "B_MILP",    "time_limit_sec": 60},
 ]
 
 
