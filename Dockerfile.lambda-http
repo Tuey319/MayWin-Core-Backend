@@ -13,9 +13,10 @@ RUN npm run build
 FROM public.ecr.aws/lambda/nodejs:20
 WORKDIR /var/task
 
-# Install Python 3 and OR-Tools (only package solver_cli.py needs in --cli mode)
-RUN dnf install -y python3 python3-pip && \
-    pip3 install --no-cache-dir ortools && \
+# Install Python 3.11 and OR-Tools.
+# python3 (3.9) on AL2023 conflicts with the Lambda image's OpenSSL 3.4.0.
+RUN dnf install -y python3.11 && \
+    python3.11 -m pip install --no-cache-dir ortools && \
     dnf clean all
 
 # Copy Node.js build artifacts
@@ -23,11 +24,11 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 
-# Copy Python solver script
-COPY --from=builder /app/src/core/solver/solver_cli.py ./solver_cli.py
+# Copy Python solver script (Lambda version with alias resolution)
+COPY --from=builder /app/src/aws/solver_lambda/solver_cli.py ./solver_cli.py
 
 # Point solver adapter at the correct Python and script path inside the image
-ENV SOLVER_PYTHON=python3
+ENV SOLVER_PYTHON=python3.11
 ENV SOLVER_CLI_PATH=/var/task/solver_cli.py
 
 CMD ["dist/http-lambda.handler"]
