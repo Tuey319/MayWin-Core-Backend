@@ -230,67 +230,27 @@ def _normalize_nurse_requests(src, nurse_codes, day_dates, shift_codes):
     return out if out else None
 
 
-def _normalize_preferences(src, nurse_codes, day_dates, shift_codes):
-    """
-    Convert preferences into Dict[nurse][day][shift] = penalty(int)
+_PREF_ALIAS = {
+    "morning": {"morning", "m", "d", "day"},
+    "evening": {"evening", "afternoon", "a", "e"},
+    "night":   {"night", "n"},
+}
 
-    Acceptable inputs:
-      1) dict already in correct shape
-      2) list like:
-         [
-           {"nurseCode":"W001","windows":[{"date":"2026-01-01","shiftCode":"DAY","penalty":5}, ...]},
-           ...
-         ]
-    """
-    if src is None:
-        return None
 
-    if isinstance(src, dict):
-        out = {}
-        for n in nurse_codes:
-            out.setdefault(n, {})
-            nd = src.get(n, {}) if isinstance(src.get(n, {}), dict) else {}
-            for d in day_dates:
-                out[n].setdefault(d, {})
-                ds = nd.get(d, {}) if isinstance(nd.get(d, {}), dict) else {}
-                for s in shift_codes:
-                    val = ds.get(s, 0)
-                    try:
-                        out[n][d][s] = int(val)
-                    except Exception:
-                        out[n][d][s] = 0
-        return out
 
-    if isinstance(src, list):
-        out = {n: {d: {s: 0 for s in shift_codes} for d in day_dates} for n in nurse_codes}
-
-        for rule in src:
-            if not isinstance(rule, dict):
-                continue
-            nurse = rule.get("nurseCode") or rule.get("nurse") or rule.get("code")
-            windows = rule.get("windows") or rule.get("items") or []
-
-            if not nurse or nurse not in out:
-                continue
-            if not isinstance(windows, list):
-                continue
-
-            for w in windows:
-                if not isinstance(w, dict):
-                    continue
-                date = w.get("date")
-                shift = w.get("shiftCode") or w.get("shift")
-                penalty = w.get("penalty")
-
-                if date in day_dates and shift in shift_codes and penalty is not None:
-                    try:
-                        out[nurse][date][shift] = int(penalty)
-                    except Exception:
-                        out[nurse][date][shift] = 0
-
-        return out
-
+def _resolve_shift_code(alias: str, shift_codes: list) -> str | None:
+    """Resolve a shift alias (e.g. 'morning') to the actual shift code (e.g. 'M')."""
+    alias_lower = alias.strip().lower()
+    for code in shift_codes:
+        if code.lower() == alias_lower:
+            return code
+    for _, aliases in _PREF_ALIAS.items():
+        if alias_lower in aliases:
+            for code in shift_codes:
+                if code.lower() in aliases:
+                    return code
     return None
+
 
 
 def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> dict:
@@ -403,12 +363,31 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
     )
     if nurse_requests:
         solve_req["nurse_requests"] = nurse_requests
-    solve_req["preferences"] = _normalize_preferences(
-        payload.get("preferences"),
-        nurse_codes=nurse_codes,
-        day_dates=day_dates,
-        shift_codes=shift_codes,
-    )
+    # Route preference requests → nurse_requests (hard must-assign).
+    # Value > 0 means the nurse wants that shift, so the solver must assign it.
+    raw_prefs = payload.get("preferences") or {}
+    if isinstance(raw_prefs, dict):
+        day_date_set = set(day_dates)
+        nurse_code_set = set(nurse_codes)
+        for nurse_code, by_date in raw_prefs.items():
+            if nurse_code not in nurse_code_set or not isinstance(by_date, dict):
+                continue
+            for date, by_shift in by_date.items():
+                if date not in day_date_set or not isinstance(by_shift, dict):
+                    continue
+                for shift_alias, value in by_shift.items():
+                    try:
+                        if not value or int(value) <= 0:
+                            continue
+                    except Exception:
+                        continue
+                    shift_code = _resolve_shift_code(shift_alias, shift_codes)
+                    if shift_code is None:
+                        continue
+                    solve_req.setdefault("nurse_requests", {})
+                    solve_req["nurse_requests"].setdefault(nurse_code, {})
+                    solve_req["nurse_requests"][nurse_code].setdefault(date, {})
+                    solve_req["nurse_requests"][nurse_code][date][shift_code] = 1
 
     # Time limit mapping for solver_cli SolveRequest: time_limit_sec
     if time_limit_seconds is not None:
@@ -602,7 +581,7 @@ def _to_solve_request(normalized_obj: dict, time_limit_seconds: int | None) -> d
             code = n.get("code")
             if not code:
                 continue
-            min_sp = n.get("minShiftsPerPeriod") or n.get("regularShiftsPerPeriod")
+            min_sp = n.get("minShiftsPerPeriod")
             if min_sp is not None:
                 try:
                     min_total[str(code)] = int(min_sp)

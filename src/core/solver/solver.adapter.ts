@@ -290,27 +290,49 @@ export class SolverAdapter {
       }
     }
 
-    // ── preferences ───────────────────────────────────────────────────────────
-    let preferences: Record<string, Record<string, Record<string, number>>> | undefined;
+    // ── preferences → nurse_requests (shift requests, not penalties) ─────────
+    // Value > 0 means the nurse wants that shift — route to nurse_requests so
+    // the solver hard-assigns it. Alias names ("morning","evening","night") are
+    // resolved to actual shift codes ("M","A","N").
+    const SHIFT_ALIASES: Record<string, Set<string>> = {
+      morning: new Set(['morning', 'm', 'd', 'day']),
+      evening: new Set(['evening', 'afternoon', 'a', 'e']),
+      night:   new Set(['night', 'n']),
+    };
+    const resolveShiftCode = (alias: string): string | undefined => {
+      const lower = alias.trim().toLowerCase();
+      for (const s of shifts) { if (s.toLowerCase() === lower) return s; }
+      for (const aliases of Object.values(SHIFT_ALIASES)) {
+        if (aliases.has(lower)) {
+          for (const s of shifts) { if (aliases.has(s.toLowerCase())) return s; }
+        }
+      }
+      return undefined;
+    };
+
+    const nurseSet = new Set(nurses);
+    const daySet = new Set(days);
     const rawPrefs = normalized?.preferences;
     if (rawPrefs && typeof rawPrefs === 'object') {
-      const cleaned: Record<string, Record<string, Record<string, number>>> = {};
       for (const nurse of Object.keys(rawPrefs)) {
+        if (!nurseSet.has(nurse)) continue;
         const byDate = rawPrefs[nurse];
         if (!byDate || typeof byDate !== 'object') continue;
         for (const date of Object.keys(byDate)) {
+          if (!daySet.has(date)) continue;
           const byShift = byDate[date];
           if (!byShift || typeof byShift !== 'object') continue;
-          for (const shift of Object.keys(byShift)) {
-            const penalty = Math.trunc(Number(byShift[shift]));
-            if (!Number.isFinite(penalty) || penalty <= 0) continue;
-            cleaned[nurse] = cleaned[nurse] ?? {};
-            cleaned[nurse][date] = cleaned[nurse][date] ?? {};
-            cleaned[nurse][date][shift] = penalty;
+          for (const alias of Object.keys(byShift)) {
+            const value = Math.trunc(Number(byShift[alias]));
+            if (!Number.isFinite(value) || value <= 0) continue;
+            const shiftCode = resolveShiftCode(alias);
+            if (!shiftCode) continue;
+            nurseRequests[nurse] ??= {};
+            nurseRequests[nurse][date] ??= {};
+            nurseRequests[nurse][date][shiftCode] = 1;
           }
         }
       }
-      if (Object.keys(cleaned).length > 0) preferences = cleaned;
     }
 
     // ── per-nurse overrides ───────────────────────────────────────────────────
@@ -438,7 +460,6 @@ export class SolverAdapter {
       num_search_workers: numSearchWorkers,
     };
 
-    if (preferences) req.preferences = preferences;
     if (Object.keys(overridableAvailability).length > 0) req.overridable_availability = overridableAvailability;
     if (Object.keys(nurseRequests).length > 0) req.nurse_requests = nurseRequests;
 
