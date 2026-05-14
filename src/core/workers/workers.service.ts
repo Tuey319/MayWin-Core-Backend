@@ -40,13 +40,18 @@ export class WorkersService {
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
-  async listWorkers(unitId: string, search: string | null) {
-    type Result = { workers: Array<{ id: any; fullName: string; employmentType: any; averageSatisfaction: number | null }> };
-    const cacheKey = `workers:list:${unitId}:${search ?? ''}`;
+  async listWorkers(unitId: string, search: string | null, callerRole = '', organizationId = '') {
+    const isAdmin = callerRole.toUpperCase() !== 'NURSE' && callerRole !== '';
+    const cacheKey = `workers:list:${organizationId}:${unitId}:${search ?? ''}:${isAdmin ? 'admin' : 'nurse'}`;
+
+    type Result = { workers: Array<Record<string, any>> };
     const cached = await this.cache.get<Result>(cacheKey);
     if (cached) return cached;
 
     const where: any = { primary_unit_id: unitId, is_active: true };
+    if (organizationId) {
+      where.organization_id = organizationId;
+    }
 
     if (search) {
       where.full_name = ILike(`%${search}%`);
@@ -79,6 +84,11 @@ export class WorkersService {
         fullName: w.full_name,
         employmentType: w.employment_type,
         averageSatisfaction: avgSatisfactionByWorkerId.get(String(w.id)) ?? null,
+        ...(isAdmin && {
+          geminiConsentGiven: w.gemini_consent_given,
+          geminiConsentGivenAt: w.gemini_consent_given_at?.toISOString() ?? null,
+          geminiConsentDeclinedAt: w.gemini_consent_declined_at?.toISOString() ?? null,
+        }),
       })),
     };
 
@@ -647,6 +657,25 @@ export class WorkersService {
   private isS3AccessDenied(err: any): boolean {
     const msg = `${err?.name ?? ''} ${err?.message ?? ''}`.toLowerCase();
     return msg.includes('accessdenied') || msg.includes('not authorized');
+  }
+
+  async getMyConsentStatus(userId: number): Promise<{
+    workerId: string;
+    geminiConsentGiven: boolean;
+    geminiConsentGivenAt: string | null;
+    geminiConsentDeclinedAt: string | null;
+  } | null> {
+    const worker = await this.workersRepo.findOne({
+      where: { linked_user_id: String(userId) as any, is_active: true },
+      select: ['id', 'gemini_consent_given', 'gemini_consent_given_at', 'gemini_consent_declined_at'],
+    });
+    if (!worker) return null;
+    return {
+      workerId: String(worker.id),
+      geminiConsentGiven: worker.gemini_consent_given,
+      geminiConsentGivenAt: worker.gemini_consent_given_at?.toISOString() ?? null,
+      geminiConsentDeclinedAt: worker.gemini_consent_declined_at?.toISOString() ?? null,
+    };
   }
 
   private stddev(values: number[]): number | null {

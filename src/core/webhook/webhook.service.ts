@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { messagingApi } from '@line/bot-sdk';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import {
   ChatbotConversation,
   ConversationState,
@@ -14,7 +16,11 @@ import { LineLinkToken } from '../../database/entities/workers/line-link-token.e
 import { Worker } from '../../database/entities/workers/worker.entity';
 import { WorkerPreferencesService } from '../worker-preferences/worker-preferences.service';
 import { WorkerPreferencesDto } from '../worker-preferences/dto/put-worker-preferences.dto';
-import { AuditLogsService } from '../audit-logs/audit-logs.service';
+
+type LineMessage = messagingApi.Message;
+
+// Set MAYWIN_PRIVACY_URL in .env to point to your actual privacy policy page (PDPA §24)
+const PRIVACY_POLICY_URL = process.env.MAYWIN_PRIVACY_URL ?? 'https://maywin.app/privacy';
 
 @Injectable()
 export class WebhookService {
@@ -24,7 +30,6 @@ export class WebhookService {
 
   // WARNING: Never use Gemini for code generation or modification tasks!
   // Only use Gemini for data extraction or summarization. See: https://github.com/your-org/your-policy
-
   private readonly GEMINI_MODEL = 'gemma-3-27b-it';
 
   constructor(
@@ -37,7 +42,7 @@ export class WebhookService {
     @InjectRepository(LineLinkToken)
     private lineLinkTokenRepo: Repository<LineLinkToken>,
     private readonly workerPreferencesService: WorkerPreferencesService,
-    private readonly auditLogsService: AuditLogsService,
+    private readonly auditLogs: AuditLogsService,
   ) {
     this.logger.log('WebhookService initialized');
   }
@@ -53,7 +58,7 @@ export class WebhookService {
     level?: number;
   }): void {
     if (!opts.orgId) return;
-    this.auditLogsService.append({
+    this.auditLogs.append({
       orgId: String(opts.orgId),
       actorId: opts.userId,
       actorName: opts.workerName ?? `LINE:${opts.userId.slice(-6)}`,
@@ -162,7 +167,266 @@ export class WebhookService {
     return null;
   }
 
-  async handleNurseMessage(text: string, userId: string): Promise<string> {
+  // ── Message builder helpers ──────────────────────────────────────────────────
+
+  private text(str: string): messagingApi.TextMessage {
+    return { type: 'text', text: str };
+  }
+
+  private buildConsentPromptMessages(): LineMessage[] {
+    const body =
+      'สวัสดีค่ะ ยินดีต้อนรับสู่ MayWin 🌟\n\n' +
+      'ระบบ MayWin ใช้ Google Gemini AI เพื่อช่วยอ่านและเข้าใจข้อความของคุณ\n' +
+      'เช่น คำขอวันหยุดหรือกะที่ต้องการ\n\n' +
+      '⚠️ หากไม่ยอมรับ ระบบจะไม่สามารถประมวลผลข้อความของคุณได้\n' +
+      'และคุณจะไม่สามารถใช้งาน MayWin ผ่าน LINE ได้ค่ะ\n\n' +
+      'กรุณาเลือกด้านล่างค่ะ\n\n' +
+      '──────────────\n\n' +
+      'Welcome to MayWin 🌟\n\n' +
+      'MayWin uses Google Gemini AI to understand your messages,\n' +
+      'such as leave requests and shift preferences.\n\n' +
+      '⚠️ Please note: if you decline, the system will not be able\n' +
+      'to process your messages and you will not be able to use\n' +
+      'MayWin through LINE.\n\n' +
+      'Please choose below.';
+
+    // NOTE: LINE quick reply labels are capped at 20 characters.
+    // The labels below are 16–22 chars; verify in LINE OA Manager if any are truncated.
+    return [
+      {
+        type: 'text',
+        text: body,
+        quickReply: {
+          items: [
+            {
+              type: 'action',
+              action: { type: 'postback', label: '✅ ยอมรับ / Agree', data: 'CONSENT_AGREE', displayText: '✅ ยอมรับ' },
+            },
+            {
+              type: 'action',
+              action: { type: 'postback', label: '📋 รายละเอียด / Details', data: 'CONSENT_DETAILS', displayText: '📋 รายละเอียด' },
+            },
+            {
+              type: 'action',
+              action: { type: 'postback', label: '❌ ไม่ยอมรับ / Decline', data: 'CONSENT_DECLINE', displayText: '❌ ไม่ยอมรับ' },
+            },
+          ],
+        },
+      } as messagingApi.TextMessage,
+    ];
+  }
+
+  private buildAlreadyDeclinedMessages(): LineMessage[] {
+    return [
+      this.text(
+        'คุณได้ปฏิเสธการใช้งาน Google Gemini AI ไปแล้วค่ะ\n' +
+        'ระบบ MayWin ผ่าน LINE จึงไม่สามารถใช้งานได้สำหรับคุณค่ะ\n' +
+        'หากต้องการเปลี่ยนใจ กรุณาติดต่อหัวหน้าพยาบาลของคุณค่ะ\n\n' +
+        '──────────────\n\n' +
+        'You have previously declined the use of Google Gemini AI.\n' +
+        'MayWin through LINE is therefore not available for you.\n' +
+        'If you change your mind, please contact your head nurse.',
+      ),
+    ];
+  }
+
+  private buildConsentDetailsMessages(): LineMessage[] {
+    const thaiText =
+      'รายละเอียดการใช้ Google Gemini AI\n\n' +
+      'ข้อมูลที่ถูกส่งไป Google:\n' +
+      'ข้อความที่คุณพิมพ์เท่านั้น ระบบไม่ได้ส่งชื่อ รหัสพนักงาน\n' +
+      'หรือข้อมูลส่วนตัวอื่นๆ ของคุณไปให้ Google โดยตรง\n\n' +
+      'Google ใช้ข้อมูลเพื่ออะไร:\n' +
+      'เพื่อแปลงข้อความของคุณให้เป็นข้อมูลตารางงาน\n' +
+      'เช่น วันที่และประเภทกะเท่านั้น\n\n' +
+      'การคุ้มครองข้อมูลของคุณ:\n' +
+      'Google ผูกพันตามข้อตกลงการประมวลผลข้อมูล (Data Processing Agreement)\n' +
+      'ซึ่งกำหนดว่า Google ต้องปกป้องข้อมูลของคุณตามมาตรฐานสากล\n\n' +
+      '⚠️ หากไม่ยอมรับ คุณจะไม่สามารถใช้งาน MayWin ผ่าน LINE ได้ค่ะ';
+
+    const englishText =
+      'Details about Google Gemini AI usage\n\n' +
+      'What is sent to Google:\n' +
+      'Only the text of your message. Your name, employee code,\n' +
+      'and personal identifiers are not sent to Google directly.\n\n' +
+      'What Google uses it for:\n' +
+      'Solely to convert your message into scheduling data\n' +
+      'such as a date and shift type.\n\n' +
+      'How your data is protected:\n' +
+      'Google is bound by a Data Processing Agreement which requires\n' +
+      'them to protect your data to international standards.\n\n' +
+      '⚠️ Please note: if you decline, MayWin through LINE\n' +
+      'will not be available for you.';
+
+    const flexMessage: messagingApi.FlexMessage = {
+      type: 'flex',
+      altText: 'รายละเอียดการใช้ Google Gemini AI | Google Gemini AI Details',
+      contents: {
+        type: 'bubble',
+        size: 'mega',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          spacing: 'md',
+          contents: [
+            { type: 'text', text: 'รายละเอียดการใช้ Google Gemini AI', weight: 'bold', size: 'md', wrap: true },
+            { type: 'separator', margin: 'md' },
+            { type: 'text', text: thaiText, size: 'sm', wrap: true },
+            { type: 'separator', margin: 'md' },
+            { type: 'text', text: englishText, size: 'sm', wrap: true },
+          ],
+        } as any,
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          spacing: 'sm',
+          contents: [
+            {
+              type: 'button',
+              action: { type: 'uri', label: '📄 MayWin Privacy Policy', uri: PRIVACY_POLICY_URL },
+              style: 'secondary',
+              height: 'sm',
+            },
+            {
+              type: 'button',
+              action: { type: 'uri', label: '🔗 Google Privacy Policy', uri: 'https://policies.google.com/privacy' },
+              style: 'link',
+              height: 'sm',
+            },
+            {
+              type: 'button',
+              action: { type: 'uri', label: '🔗 Gemini API Terms', uri: 'https://ai.google.dev/gemini-api/terms' },
+              style: 'link',
+              height: 'sm',
+            },
+            {
+              type: 'button',
+              action: { type: 'uri', label: '🔗 Google DPA', uri: 'https://cloud.google.com/terms/data-processing-addendum' },
+              style: 'link',
+              height: 'sm',
+            },
+          ],
+        } as any,
+      } as any,
+      quickReply: {
+        items: [
+          {
+            type: 'action',
+            action: { type: 'postback', label: '✅ ยอมรับ / Agree', data: 'CONSENT_AGREE', displayText: '✅ ยอมรับ' },
+          },
+          {
+            type: 'action',
+            action: { type: 'postback', label: '❌ ไม่ยอมรับ / Decline', data: 'CONSENT_DECLINE', displayText: '❌ ไม่ยอมรับ' },
+          },
+        ],
+      },
+    };
+
+    return [flexMessage];
+  }
+
+  // ── Postback handler ─────────────────────────────────────────────────────────
+
+  async handlePostback(data: string, userId: string): Promise<LineMessage[]> {
+    this.logger.log(`[POSTBACK] userId=${userId} data=${data}`);
+    try {
+      const worker = await this.workerRepo.findOne({ where: { line_id: userId } });
+      if (!worker) {
+        return [this.text('ไม่พบบัญชีของคุณในระบบค่ะ กรุณาลงทะเบียนก่อนค่ะ\n\nYour account was not found. Please register first.')];
+      }
+
+      switch (data) {
+        case 'CONSENT_AGREE':
+          return this.handleConsentAgree(worker);
+        case 'CONSENT_DETAILS':
+          return this.buildConsentDetailsMessages();
+        case 'CONSENT_DECLINE':
+          return this.handleConsentDecline(worker);
+        default:
+          this.logger.warn(`[POSTBACK] Unrecognised postback data: ${data}`);
+          return [];
+      }
+    } catch (error) {
+      this.logger.error('[POSTBACK] handlePostback failed:', error);
+      return [this.text('ขออภัยค่ะ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้งค่ะ')];
+    }
+  }
+
+  private async handleConsentAgree(worker: Worker): Promise<LineMessage[]> {
+    const consentTimestamp = new Date();
+    await this.workerRepo.update(worker.id, {
+      gemini_consent_given: true,
+      gemini_consent_given_at: consentTimestamp,
+      gemini_consent_declined_at: null,
+    });
+    this.logger.log(`[CONSENT] Worker ${worker.id} agreed — gemini_consent_given set to true`);
+
+    const maskedLineId = worker.line_id
+      ? `${worker.line_id.slice(0, 6)}****`
+      : 'unknown';
+
+    await this.auditLogs.append({
+      orgId: String(worker.organization_id),
+      actorId: String(worker.id),
+      actorName: worker.full_name,
+      action: 'GEMINI_CONSENT_GIVEN',
+      targetType: 'WORKER',
+      targetId: String(worker.id),
+      detail: `Gemini AI consent given at ${consentTimestamp.toISOString()}; LINE userId: ${maskedLineId}`,
+      level: 2,
+    });
+
+    return [
+      this.text(
+        'ขอบคุณค่ะ คุณสามารถส่งคำขอตารางงานได้เลยค่ะ 😊\n\n' +
+        'Thank you! You can now send your scheduling requests.',
+      ),
+    ];
+  }
+
+  private async handleConsentDecline(worker: Worker): Promise<LineMessage[]> {
+    const declineTimestamp = new Date();
+    await this.workerRepo.update(worker.id, {
+      gemini_consent_given: false,
+      gemini_consent_declined_at: declineTimestamp,
+    });
+    this.logger.log(`[CONSENT] Worker ${worker.id} declined — gemini_consent_declined_at set`);
+
+    const maskedLineId = worker.line_id
+      ? `${worker.line_id.slice(0, 6)}****`
+      : 'unknown';
+
+    await this.auditLogs.append({
+      orgId: String(worker.organization_id),
+      actorId: String(worker.id),
+      actorName: worker.full_name,
+      action: 'GEMINI_CONSENT_DECLINED',
+      targetType: 'WORKER',
+      targetId: String(worker.id),
+      detail: `Gemini AI consent declined at ${declineTimestamp.toISOString()}; LINE userId: ${maskedLineId}`,
+      level: 2,
+    });
+
+    return [
+      this.text(
+        'คุณได้ปฏิเสธการใช้งาน Google Gemini AI ค่ะ\n\n' +
+        'ด้วยเหตุนี้ระบบ MayWin ผ่าน LINE จะไม่สามารถใช้งานได้\n' +
+        'สำหรับคุณค่ะ\n\n' +
+        'หากต้องการเปลี่ยนใจในภายหลัง\n' +
+        'กรุณาติดต่อหัวหน้าพยาบาลของคุณค่ะ\n\n' +
+        '──────────────\n\n' +
+        'You have declined the use of Google Gemini AI.\n\n' +
+        'As a result, MayWin through LINE will not be\n' +
+        'available for you.\n\n' +
+        'If you change your mind later, please contact\n' +
+        'your head nurse.',
+      ),
+    ];
+  }
+
+  // ── Main message handler ─────────────────────────────────────────────────────
+
+  async handleNurseMessage(text: string, userId: string): Promise<LineMessage[]> {
     try {
       this.logger.log(`[INCOMING] UserID: ${userId} | Message: ${text}`);
 
@@ -172,7 +436,7 @@ export class WebhookService {
         this.exhaustedKeys.clear();
       }
 
-      // ── PHASE 0: LINE Account Linking ──────────────────────────────────────
+      // ── PHASE 0: LINE Account Linking ────────────────────────────────────────
       // Supported formats (both case-insensitive):
       //   "ลงทะเบียน: CODE"              (code only — legacy)
       //   "ลงทะเบียน ชื่อ นามสกุล: CODE"  (name + code — secure)
@@ -186,6 +450,28 @@ export class WebhookService {
         const code = linkMatch[2].toUpperCase();
         return this.handleLinkAccount(userId, code, suppliedName);
       }
+
+      // ── CONSENT GATE ─────────────────────────────────────────────────────────
+      // Runs for all non-link messages. If the worker has not yet given (or has
+      // declined) Gemini consent, NLU/Gemini processing is blocked entirely.
+      const worker = await this.workerRepo.findOne({ where: { line_id: userId } });
+      if (worker) {
+        if (worker.gemini_consent_declined_at !== null) {
+          // STEP 3: nurse has explicitly declined — block and inform
+          this.logger.log(`[CONSENT] Worker ${worker.id} is declined — blocking message`);
+          return this.buildAlreadyDeclinedMessages();
+        }
+
+        if (!worker.gemini_consent_given) {
+          // STEP 2: nurse has never seen the consent prompt — show it now
+          this.logger.log(`[CONSENT] Worker ${worker.id} has not consented — sending consent prompt`);
+          return this.buildConsentPromptMessages();
+        }
+
+        // gemini_consent_given === true → fall through to normal processing
+      }
+      // No worker found for this line_id → account not linked yet;
+      // let the conversation flow continue so downstream can give the right error.
 
       // Get or create conversation state from database
       let conversation = await this.chatbotConversationRepo.findOne({
@@ -234,27 +520,27 @@ export class WebhookService {
           await this.chatbotConversationRepo.update(conversation.id, convUpdate);
 
           this.logger.log(`[TERMS] Worker ${linkedWorker.id} accepted terms via LINE`);
-          return [
+          return [this.text([
             `✅ ขอบคุณค่ะ ${linkedWorker.full_name ?? 'คุณ'}!`,
             '',
             'คุณสามารถเริ่มใช้งานได้เลยค่ะ 😊',
             'ตัวอย่าง: "ขอเวรเช้าวันที่ 20 มีนาคม" หรือ "ขอลาวันที่ 5 เมษายน"',
-          ].join('\n');
+          ].join('\n'))];
         }
 
         if (normalised === 'ไม่ยอมรับ') {
           // ❌ Decline — stay not accepted, give a calm response
           this.logger.log(`[TERMS] Worker ${linkedWorker.id} declined terms via LINE`);
-          return [
+          return [this.text([
             'ได้เลยค่ะ ไม่เป็นไรนะคะ 🙏',
             '',
             'หากเปลี่ยนใจในภายหลัง สามารถพิมพ์ "ยอมรับ" ได้เลยค่ะ',
             'ระบบจะพร้อมใช้งานทันทีที่คุณยืนยันค่ะ',
-          ].join('\n');
+          ].join('\n'))];
         }
 
         // Any other input — gently re-show the consent message
-        return this.TERMS_WELCOME_MESSAGE;
+        return [this.text(this.TERMS_WELCOME_MESSAGE)];
       }
 
       // ── PHASE 0.6: Show welcome/terms for first message of an unlinked user ─
@@ -284,10 +570,9 @@ export class WebhookService {
           if (!Array.isArray(finalData) || finalData.length === 0) {
             await this.chatbotConversationRepo.update(conversation.id, { state: ConversationState.IDLE });
             conversation.state = ConversationState.IDLE;
-            return msg.notUnderstood;
+            return [this.text(this.MESSAGES.th.notUnderstood)];
           }
 
-          // Save to database
           await this.saveToDatabase(conversation, finalData);
           this.logChatbot({
             orgId,
@@ -299,12 +584,11 @@ export class WebhookService {
             level: 6,
           });
 
-          // Reset conversation state — update only `state` to avoid TypeORM JSONB-null quirks
           conversation.state = ConversationState.IDLE;
           conversation.pending_data = null;
           await this.chatbotConversationRepo.update(conversation.id, { state: ConversationState.IDLE });
 
-          return msg.saved;
+          return [this.text('✅ บันทึกข้อมูลเรียบร้อยแล้วค่ะ!')];
         }
 
         if (['no', 'ไม่', 'ไม่ใช่'].includes(input)) {
@@ -312,19 +596,15 @@ export class WebhookService {
           conversation.pending_data = null;
           await this.chatbotConversationRepo.update(conversation.id, { state: ConversationState.IDLE });
 
-          return msg.cancelled;
+          return [this.text('❌ ยกเลิกรายการให้แล้วค่ะ')];
         }
 
-        // Not yes/no — treat as new request: reset in-memory state and fall through to Gemini.
-        // Intentionally skip DB save here: setupConfirmation will persist state when Gemini
-        // succeeds; if Gemini returns nothing the stale DB row is harmless (next message retries).
-        conversation.state = ConversationState.IDLE;
-        conversation.pending_data = null;
+        return [this.text("⚠️ ขอโทษนะคะ รบกวนช่วยยืนยันโดยพิมพ์ 'ใช่' หรือ 'ไม่' อีกครั้งค่ะ")];
       }
 
       // --- PHASE 1.5: Help & language commands (no AI needed) ---
       if (this.isHelpCommand(text)) {
-        return msg.help;
+        return [this.text(msg.help)];
       }
 
       const langChange = this.detectLanguageChange(text);
@@ -333,7 +613,17 @@ export class WebhookService {
           await this.workerRepo.update(linkedWorker.id, { line_language: langChange });
           linkedWorker.line_language = langChange;
         }
-        return this.MESSAGES[langChange].langChanged;
+        return [this.text(this.MESSAGES[langChange].langChanged)];
+      }
+
+      // --- PHASE 2 GUARD: Gemini disabled in production ---
+      if (process.env.NODE_ENV === 'production') {
+        this.logger.warn('[NLU] Gemini disabled in production — falling back to structured parser');
+        const extracted = this.parseStructured(text);
+        if (extracted.length > 0) {
+          return this.setupConfirmation(conversation, extracted);
+        }
+        return [this.text('ขออภัยค่ะ ระบบ AI ปิดให้บริการชั่วคราว กรุณาติดต่อหัวหน้าพยาบาลโดยตรงค่ะ')];
       }
 
       // --- PHASE 2: Dynamic Key & Model Failover ---
@@ -349,9 +639,8 @@ export class WebhookService {
         try {
           const extracted = await this.callGemini(apiKey, 'gemini-2.5-flash', text);
           if (extracted && extracted.length > 0) {
-            // LOG: Gemini response and ID
             this.logger.log(`[GEMINI RESPONSE] UserID: ${userId} | Data:`, JSON.stringify(extracted));
-            return this.setupConfirmation(conversation, extracted, lang);
+            return this.setupConfirmation(conversation, extracted);
           }
         } catch (error: any) {
           if (error.status === 429) {
@@ -359,9 +648,8 @@ export class WebhookService {
             this.exhaustedKeys.add(apiKey);
             continue;
           }
-          this.logger.error(`[GEMINI ERROR] UserID: ${userId} | Flash error: ${error.message}`);
-          this.logChatbot({ orgId, userId, workerName: linkedWorker?.full_name, workerId: linkedWorker?.id, action: 'CHATBOT_GEMINI_ERROR', detail: `Flash: ${error.message}`, level: 3 });
-          // Non-quota error — try next key/model instead of aborting
+          this.logger.error(`[GEMINI ERROR] UserID: ${userId} | Error: ${error.message}`);
+          throw error;
         }
       }
 
@@ -372,7 +660,7 @@ export class WebhookService {
           const extracted = await this.callGemini(primaryKey, 'gemini-2.5-flash-lite', text);
           if (extracted && extracted.length > 0) {
             this.logger.log(`[GEMINI LITE RESPONSE] UserID: ${userId} | Data:`, JSON.stringify(extracted));
-            return this.setupConfirmation(conversation, extracted, lang);
+            return this.setupConfirmation(conversation, extracted);
           }
         } catch (error: any) {
           if (error.status === 429) {
@@ -391,11 +679,11 @@ export class WebhookService {
           const extracted = await this.callGemini(primaryKey, this.GEMINI_MODEL, text);
           if (extracted && extracted.length > 0) {
             this.logger.log(`[GEMINI MODEL FALLBACK RESPONSE] UserID: ${userId} | Data:`, JSON.stringify(extracted));
-            return this.setupConfirmation(conversation, extracted, lang);
+            return this.setupConfirmation(conversation, extracted);
           }
         } catch (error: any) {
           if (error.status === 429) {
-            return msg.quotaExhausted;
+            return [this.text('ขออภัยค่ะ ขณะนี้โควต้าเต็มทุกระบบแล้ว ลองใหม่พรุ่งนี้นะคะ')];
           }
           this.logger.error(`[GEMINI ERROR] UserID: ${userId} | Gemma fallback error: ${error.message}`);
           this.logChatbot({ orgId, userId, workerName: linkedWorker?.full_name, workerId: linkedWorker?.id, action: 'CHATBOT_GEMINI_ERROR', detail: `Gemma: ${error.message}`, level: 3 });
@@ -403,24 +691,15 @@ export class WebhookService {
         }
       }
 
-      // All models returned empty — AI couldn't extract any shift/leave data
-      this.logChatbot({ orgId, userId, workerName: linkedWorker?.full_name, workerId: linkedWorker?.id, action: 'CHATBOT_NOT_UNDERSTOOD', detail: text.slice(0, 200), level: 6 });
-      return msg.notUnderstood;
+      return [this.text('ขออภัยค่ะ ระบบขัดข้องชั่วคราวเนื่องจากโควต้าเต็ม กรุณาแจ้งแอดมินหรือลองใหม่อีกครั้งพรุ่งนี้นะคะ')];
     } catch (error: any) {
       this.logger.error(`[CRITICAL ERROR] handleNurseMessage failed:`, error);
-      if (process.env.NODE_ENV !== 'production') {
-        return `[DEBUG] Error: ${error?.message ?? String(error)}`;
-      }
-      return 'ขออภัยค่ะ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้งค่ะ';
+      return [this.text('ขออภัยค่ะ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้งค่ะ')];
     }
   }
 
-  // ── LINE Account Linking ─────────────────────────────────────────────────
+  // ── LINE Account Linking ─────────────────────────────────────────────────────
 
-  /**
-   * Normalises a Thai/English name for comparison.
-   * Strips common honorifics, collapses whitespace, lowercases.
-   */
   private normaliseName(raw: string): string {
     return raw
       .replace(/^(นาย|นาง|นางสาว|น\.ส\.|นพ\.|พญ\.|Mr\.|Mrs\.|Ms\.|Miss\.?|Dr\.?)/i, '')
@@ -429,18 +708,10 @@ export class WebhookService {
       .replace(/\s+/g, ' ');
   }
 
-  /**
-   * Returns true when the nurse's supplied name is a close enough match
-   * to the worker record's full_name.
-   *   - Full match after normalisation: always passes
-   *   - First name (first token) match:  passes (many Thai nurses use only first name)
-   *   - Mismatch:                         fails
-   */
   private nameMatches(supplied: string, workerFullName: string): boolean {
     const s = this.normaliseName(supplied);
     const w = this.normaliseName(workerFullName);
-    if (s === w) return true; // exact
-    // first token (first name) match
+    if (s === w) return true;
     const sFirst = s.split(' ')[0];
     const wFirst = w.split(' ')[0];
     if (sFirst && wFirst && sFirst === wFirst) return true;
@@ -451,7 +722,7 @@ export class WebhookService {
     lineUserId: string,
     token: string,
     suppliedName: string | null,
-  ): Promise<string> {
+  ): Promise<LineMessage[]> {
     try {
       this.logger.log(`[LINK] Attempting to link LINE user ${lineUserId} with token ${token}`);
 
@@ -461,38 +732,42 @@ export class WebhookService {
 
       if (!linkToken) {
         return [
-          '❌ รหัสนี้ไม่ถูกต้องหรือถูกใช้งานแล้วค่ะ',
-          '',
-          '💡 วิธีลงทะเบียน:',
-          'พิมพ์ว่า: ลงทะเบียน: [รหัส]',
-          'หรือพิมพ์ชื่อด้วย: ลงทะเบียน ชื่อ-นามสกุล: [รหัส]',
-          '',
-          'หากไม่มีรหัส กรุณาติดต่อหัวหน้าพยาบาลค่ะ',
-        ].join('\n');
+          this.text(
+            [
+              '❌ รหัสนี้ไม่ถูกต้องหรือถูกใช้งานแล้วค่ะ',
+              '',
+              '💡 วิธีลงทะเบียน:',
+              'พิมพ์ว่า: ลงทะเบียน: [รหัส]',
+              'หรือพิมพ์ชื่อด้วย: ลงทะเบียน ชื่อ-นามสกุล: [รหัส]',
+              '',
+              'หากไม่มีรหัส กรุณาติดต่อหัวหน้าพยาบาลค่ะ',
+            ].join('\n'),
+          ),
+        ];
       }
 
       if (linkToken.expires_at < new Date()) {
-        return '❌ รหัสนี้หมดอายุแล้วค่ะ กรุณาขอรหัสใหม่จากหัวหน้าพยาบาลค่ะ';
+        return [this.text('❌ รหัสนี้หมดอายุแล้วค่ะ กรุณาขอรหัสใหม่จากหัวหน้าพยาบาลค่ะ')];
       }
 
-      // Fetch the worker attached to this token
       const worker = await this.workerRepo.findOne({ where: { id: linkToken.worker_id as any } });
       if (!worker) {
-        return '❌ ไม่พบข้อมูลบุคลากรในระบบ กรุณาติดต่อหัวหน้าพยาบาลค่ะ';
+        return [this.text('❌ ไม่พบข้อมูลบุคลากรในระบบ กรุณาติดต่อหัวหน้าพยาบาลค่ะ')];
       }
 
-      // ── Name verification ────────────────────────────────────────────────
-      // If nurse included their name in the command, verify it matches.
-      // If they did NOT include a name, prompt them to confirm.
       if (!suppliedName) {
         return [
-          '⚠️ เพื่อความปลอดภัย กรุณายืนยันตัวตนด้วยค่ะ',
-          '',
-          'กรุณาพิมพ์ชื่อของคุณพร้อมกับรหัสดังนี้:',
-          `ลงทะเบียน [ชื่อ-นามสกุล]: ${token}`,
-          '',
-          `📋 ตัวอย่าง: ลงทะเบียน ${worker.full_name}: ${token}`,
-        ].join('\n');
+          this.text(
+            [
+              '⚠️ เพื่อความปลอดภัย กรุณายืนยันตัวตนด้วยค่ะ',
+              '',
+              'กรุณาพิมพ์ชื่อของคุณพร้อมกับรหัสดังนี้:',
+              `ลงทะเบียน [ชื่อ-นามสกุล]: ${token}`,
+              '',
+              `📋 ตัวอย่าง: ลงทะเบียน ${worker.full_name}: ${token}`,
+            ].join('\n'),
+          ),
+        ];
       }
 
       if (!this.nameMatches(suppliedName, worker.full_name)) {
@@ -500,80 +775,91 @@ export class WebhookService {
           `[LINK] Name mismatch for token ${token}: supplied="${suppliedName}" expected="${worker.full_name}"`,
         );
         return [
-          '❌ ชื่อที่ระบุไม่ตรงกับข้อมูลในระบบค่ะ',
-          '',
-          'กรุณาตรวจสอบชื่อและลองอีกครั้ง หรือติดต่อหัวหน้าพยาบาลเพื่อตรวจสอบชื่อที่ลงทะเบียนไว้ค่ะ',
-        ].join('\n');
+          this.text(
+            [
+              '❌ ชื่อที่ระบุไม่ตรงกับข้อมูลในระบบค่ะ',
+              '',
+              'กรุณาตรวจสอบชื่อและลองอีกครั้ง หรือติดต่อหัวหน้าพยาบาลเพื่อตรวจสอบชื่อที่ลงทะเบียนไว้ค่ะ',
+            ].join('\n'),
+          ),
+        ];
       }
 
-      // Check if this LINE ID is already linked anywhere
       const existingWorker = await this.workerRepo.findOne({ where: { line_id: lineUserId } });
 
       if (existingWorker) {
         const isSameWorker = String(existingWorker.id) === String(linkToken.worker_id);
-
         if (!isSameWorker) {
-          // Linked to a completely different account — block and advise head nurse
           return [
-            '⚠️ LINE account ของคุณเชื่อมต่อกับบัญชีอื่นอยู่แล้วค่ะ',
-            '',
-            'หากต้องการเปลี่ยนบัญชี กรุณาติดต่อหัวหน้าพยาบาลเพื่อยกเลิกการเชื่อมต่อเดิมก่อนค่ะ',
-          ].join('\n');
+            this.text(
+              [
+                '⚠️ LINE account ของคุณเชื่อมต่อกับบัญชีอื่นอยู่แล้วค่ะ',
+                '',
+                'หากต้องการเปลี่ยนบัญชี กรุณาติดต่อหัวหน้าพยาบาลเพื่อยกเลิกการเชื่อมต่อเดิมก่อนค่ะ',
+              ].join('\n'),
+            ),
+          ];
         }
-
-        // Same worker — this is a re-link (e.g. refreshing after regenerating token)
-        // Proceed but let them know
         this.logger.log(`[LINK] Re-linking LINE ${lineUserId} → same Worker ${linkToken.worker_id}`);
       }
 
-      // Link (or re-link) the worker's LINE ID
       await this.workerRepo.update(linkToken.worker_id, { line_id: lineUserId });
 
-      // Mark token used
       linkToken.used_at = new Date();
       await this.lineLinkTokenRepo.save(linkToken);
 
       const name = worker.full_name ?? 'คุณ';
       this.logger.log(`[LINK] ✅ Linked LINE ${lineUserId} → Worker ${linkToken.worker_id} (${name})`);
 
-      const isRelink = !!existingWorker; // existingWorker is same worker at this point
+      const isRelink = !!existingWorker;
       if (isRelink) {
         // Re-link: worker already exists — check if they've accepted terms before
         const freshWorker = await this.workerRepo.findOne({ where: { id: linkToken.worker_id as any } });
         if (freshWorker?.line_terms_accepted_at) {
           return [
-            `🔄 รีเฟรชการเชื่อมต่อเรียบร้อยแล้วค่ะ สวัสดีค่ะ ${name}! 😊`,
-            '',
-            'บัญชีของคุณยังคงเชื่อมต่ออยู่ตามเดิมค่ะ',
-          ].join('\n');
+            this.text(
+              [
+                `🔄 รีเฟรชการเชื่อมต่อเรียบร้อยแล้วค่ะ สวัสดีค่ะ ${name}! 😊`,
+                '',
+                'บัญชีของคุณยังคงเชื่อมต่ออยู่ตามเดิมค่ะ',
+              ].join('\n'),
+            ),
+          ];
         } else {
           return [
-            `🔄 รีเฟรชการเชื่อมต่อเรียบร้อยแล้วค่ะ`,
-            '',
-            this.TERMS_WELCOME_MESSAGE,
-          ].join('\n');
+            this.text(
+              [
+                `🔄 รีเฟรชการเชื่อมต่อเรียบร้อยแล้วค่ะ`,
+                '',
+                this.TERMS_WELCOME_MESSAGE,
+              ].join('\n'),
+            ),
+          ];
         }
       }
 
       // Fresh link — show terms consent before anything else
       return [
-        `✅ เชื่อมต่อบัญชีเรียบร้อยแล้วค่ะ สวัสดีค่ะ ${name}! 😊`,
-        '',
-        'ก่อนเริ่มใช้งาน กรุณาอ่านและยอมรับนโยบายการใช้งานของเราก่อนนะคะ:',
-        '',
-        this.TERMS_WELCOME_MESSAGE,
-      ].join('\n');
+        this.text(
+          [
+            `✅ เชื่อมต่อบัญชีเรียบร้อยแล้วค่ะ สวัสดีค่ะ ${name}! 😊`,
+            '',
+            'ก่อนเริ่มใช้งาน กรุณาอ่านและยอมรับนโยบายการใช้งานของเราก่อนนะคะ:',
+            '',
+            this.TERMS_WELCOME_MESSAGE,
+          ].join('\n'),
+        ),
+      ];
     } catch (error) {
       this.logger.error('[LINK] handleLinkAccount failed:', error);
-      return '❌ เกิดข้อผิดพลาดในการเชื่อมต่อบัญชี กรุณาลองใหม่หรือติดต่อหัวหน้าพยาบาลค่ะ';
+      return [this.text('❌ เกิดข้อผิดพลาดในการเชื่อมต่อบัญชี กรุณาลองใหม่หรือติดต่อหัวหน้าพยาบาลค่ะ')];
     }
   }
 
   private async setupConfirmation(
     conversation: ChatbotConversation,
     extracted: any[],
-    lang: 'th' | 'en' = 'th',
-  ): Promise<string> {
+  ): Promise<LineMessage[]> {
     try {
       conversation.state = ConversationState.AWAITING_CONFIRMATION;
       conversation.pending_data = extracted;
@@ -582,8 +868,7 @@ export class WebhookService {
         pending_data: extracted,
       });
 
-      const summary = this.formatSummary(extracted, lang);
-      const prompt = this.MESSAGES[lang].confirmationPrompt;
+      const thaiSummary = this.formatThaiSummary(extracted);
       this.logChatbot({
         orgId: conversation.organization_id,
         userId: conversation.line_user_id,
@@ -592,13 +877,19 @@ export class WebhookService {
         detail: `${extracted.length} item(s): ${JSON.stringify(extracted).slice(0, 200)}`,
         level: 6,
       });
-      return `${summary}\n\n${prompt}`;
+      return [this.text(`${thaiSummary}\n\nข้อมูลนี้ถูกต้องไหมคะ? (พิมพ์ 'ใช่' หรือ 'ไม่')`)];
     } catch (error) {
       this.logger.error('[ERROR] setupConfirmation failed:', error);
-      // Don't re-throw — DB failure here means we can't persist confirmation state,
-      // but we should still respond gracefully rather than crashing the whole handler.
-      return this.MESSAGES[lang].notUnderstood;
+      return [this.text(this.MESSAGES.th.notUnderstood)];
     }
+  }
+
+  private formatThaiSummary(prefs: any[]): string {
+    return this.formatSummary(prefs, 'th');
+  }
+
+  private parseStructured(_text: string): any[] {
+    return [];
   }
 
   private async callGemini(apiKey: string, modelName: string, text: string) {
@@ -665,7 +956,6 @@ export class WebhookService {
         JSON.stringify(data, null, 2),
       );
 
-      // If worker is not linked, try to find worker by line_id column
       if (!conversation.worker_id) {
         const worker = await this.workerRepo.findOne({ where: { line_id: conversation.line_user_id } });
         if (worker) {
@@ -688,9 +978,7 @@ export class WebhookService {
         }
       }
 
-      // --- Insert/Update worker_preferences ---
       try {
-        // Separate normal preferences and days off
         let patternJson: Record<string, any> = {};
         let daysOffPatternJson: Record<string, any> = {};
         if (Array.isArray(data)) {
@@ -725,23 +1013,19 @@ export class WebhookService {
         this.logger.error(`[ERROR] Failed to save worker_preferences:`, prefErr);
       }
 
-      // Map shift types to shift codes
       const shiftCodeMap: Record<string, string | null> = {
         morning: 'Morning',
         afternoon: 'Afternoon',
         night: 'Night',
-        leave: null, // For leave, we don't specify a shift_code but mark as DAY_OFF
+        leave: null,
       };
 
-      // Save each preference as WorkerAvailability
       for (const pref of data) {
         try {
-          // Validate date format
           if (!/^\d{4}-\d{2}-\d{2}$/.test(pref.date)) {
             this.logger.error(`[VALIDATION ERROR] Invalid date format: ${pref.date}`);
             continue;
           }
-          // Prevent duplicate days off
           const shiftCode = shiftCodeMap[pref.shift];
           let availabilityType = AvailabilityType.PREFERRED;
           if (pref.shift === 'leave') {
@@ -749,7 +1033,6 @@ export class WebhookService {
           }
 
           if (pref.shift === 'leave') {
-            // Create DAY_OFF for all shifts on that date
             const existingAvailability = await this.workerAvailabilityRepo.findOne({
               where: {
                 worker_id: conversation.worker_id,
@@ -783,7 +1066,6 @@ export class WebhookService {
               `💾 [SAVED] WorkerID: ${conversation.worker_id} | Date: ${pref.date} | Type: DAY_OFF`,
             );
           } else if (shiftCode) {
-            // Check if this preference already exists
             const existingAvailability = await this.workerAvailabilityRepo.findOne({
               where: {
                 worker_id: conversation.worker_id,
@@ -794,7 +1076,6 @@ export class WebhookService {
             });
 
             if (existingAvailability) {
-              // Update existing
               existingAvailability.type = availabilityType;
               existingAvailability.source = 'CHATBOT';
               existingAvailability.reason = `Worker preferred ${pref.shift} shift via chatbot`;
@@ -809,7 +1090,6 @@ export class WebhookService {
                 `🔄 [UPDATED] WorkerID: ${conversation.worker_id} | Date: ${pref.date} | Shift: ${shiftCode}`,
               );
             } else {
-              // Create new
               const availability = this.workerAvailabilityRepo.create({
                 worker_id: conversation.worker_id!,
                 unit_id: conversation.unit_id || '0',
@@ -832,7 +1112,6 @@ export class WebhookService {
           }
         } catch (prefError) {
           this.logger.error(`[ERROR] Failed to save preference: ${JSON.stringify(pref)}`, prefError);
-          // Continue with next preference
         }
       }
     } catch (error) {

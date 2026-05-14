@@ -44,7 +44,28 @@ export class StaffController {
     };
   }
 
-  @Roles('SCHEDULER')
+  // Returns actor identity from X-Actor-Id/X-Actor-Name headers only when the
+  // request was authenticated with the BFF service token (CORE_API_TOKEN).
+  // Regular JWT-authenticated requests cannot override actor identity this way.
+  private resolveActor(req: Request): { actorId: string; actorName: string } {
+    const serviceToken = process.env.CORE_API_TOKEN;
+    if (serviceToken) {
+      const rawToken = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+      if (rawToken === serviceToken) {
+        const headerId = req.headers['x-actor-id'];
+        const headerName = req.headers['x-actor-name'];
+        if (headerId) {
+          return {
+            actorId: String(headerId),
+            actorName: String(headerName ?? headerId),
+          };
+        }
+      }
+    }
+    return this.actor(req);
+  }
+
+  @Roles('HEAD_NURSE')
   @Get('/staff')
   list(@Req() req: Request) {
     const user = (req as any).user ?? {};
@@ -79,7 +100,7 @@ export class StaffController {
   @Roles('SCHEDULER')
   @Patch('/staff/:id')
   patch(@Param('id') id: string, @Body() dto: PatchStaffDto, @Req() req: Request) {
-    return this.staff.patch(id, dto, this.actor(req), this.context(req).organizationId);
+    return this.staff.patch(id, dto, this.resolveActor(req), this.context(req).organizationId);
   }
 
   @Roles('ADMIN')
@@ -112,6 +133,17 @@ export class StaffController {
     @Req() req: Request,
   ) {
     return this.staff.linkUser(id, userId, this.context(req).organizationId, this.actor(req));
+  }
+
+  /**
+   * POST /staff/:id/consent-reset
+   * Reset a nurse's Gemini AI consent so the chatbot re-prompts them on next message.
+   * Only HEAD_NURSE and above may perform this action — nurses cannot reset their own consent.
+   */
+  @Roles('HEAD_NURSE')
+  @Post('/staff/:id/consent-reset')
+  resetGeminiConsent(@Param('id') id: string, @Req() req: Request) {
+    return this.staff.resetGeminiConsent(id, this.actor(req), this.context(req).organizationId ?? 0);
   }
 
   /**
