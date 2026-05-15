@@ -26,6 +26,9 @@ type StaffRow = {
   status: 'active' | 'inactive';
   hasWebAccount: boolean;
   isTeamLeader: boolean;
+  geminiConsentGiven: boolean;
+  geminiConsentGivenAt: string | null;
+  geminiConsentDeclinedAt: string | null;
 };
 
 @Injectable()
@@ -63,6 +66,9 @@ export class StaffService {
       status: worker.is_active ? 'active' : 'inactive',
       hasWebAccount: !!worker.linked_user_id,
       isTeamLeader,
+      geminiConsentGiven: worker.gemini_consent_given,
+      geminiConsentGivenAt: worker.gemini_consent_given_at?.toISOString() ?? null,
+      geminiConsentDeclinedAt: worker.gemini_consent_declined_at?.toISOString() ?? null,
     };
   }
 
@@ -285,6 +291,37 @@ export class StaffService {
     });
 
     return { ok: true };
+  }
+
+  async resetGeminiConsent(
+    workerId: string,
+    actor: { actorId: string; actorName: string },
+    organizationId: number,
+  ): Promise<{ ok: true; workerId: string }> {
+    this.validateId(workerId);
+    const worker = await this.workersRepo.findOne({
+      where: { id: workerId as any, organization_id: String(organizationId) as any },
+    });
+    if (!worker) throw new NotFoundException('Staff not found');
+
+    await this.workersRepo.update(workerId, {
+      gemini_consent_given: false,
+      gemini_consent_given_at: null,
+      gemini_consent_declined_at: null,
+    });
+
+    await this.auditLogs.append({
+      orgId: String(organizationId),
+      actorId: actor.actorId,
+      actorName: actor.actorName,
+      action: 'CONSENT_RESET',
+      targetType: 'worker',
+      targetId: workerId,
+      detail: `Gemini AI consent reset for worker ${workerId} (${worker.full_name}) — will re-prompt on next LINE message`,
+      level: 3,
+    });
+
+    return { ok: true, workerId };
   }
 
   // ── Link User Account ─────────────────────────────────────────────────────
