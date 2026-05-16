@@ -393,16 +393,6 @@ export class WebhookService {
         return [this.text("⚠️ ขอโทษนะคะ รบกวนช่วยยืนยันโดยพิมพ์ 'ใช่' หรือ 'ไม่' อีกครั้งค่ะ")];
       }
 
-      // --- PHASE 2 GUARD: Gemini disabled in production ---
-      if (process.env.NODE_ENV === 'production') {
-        this.logger.warn('[NLU] Gemini disabled in production — falling back to structured parser');
-        const extracted = this.parseStructured(text);
-        if (extracted.length > 0) {
-          return this.setupConfirmation(conversation, extracted);
-        }
-        return [this.text('ขออภัยค่ะ ระบบ AI ปิดให้บริการชั่วคราว กรุณาติดต่อหัวหน้าพยาบาลโดยตรงค่ะ')];
-      }
-
       // --- PHASE 2: Dynamic Key & Model Failover ---
       const allKeys: string[] = Object.keys(process.env)
         .filter((key) => key.startsWith('GEMINI_API_KEY'))
