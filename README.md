@@ -143,7 +143,7 @@ The backend reads DB settings from `src/database/typeorm.config.ts` and JWT sett
 Create an empty PostgreSQL database (matching `DB_NAME`) and apply the schema:
 
 ```bash
-psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f src/database/schema/maywin_schema.sql
+psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f src/database/schema.sql
 ```
 
 Alternatively, run TypeORM migrations (once configured):
@@ -244,6 +244,10 @@ uvicorn src.core.solver.solver_cli:app --reload --port 8001
 - **`StaffModule`** – CRUD management of staff (workers) scoped to the authenticated organization, with audit log integration.
 - **`AuditLogsModule`** – append-only audit log backed by local CSV (`/tmp/audit-logs.csv`) or S3 (when `MAYWIN_ARTIFACTS_BUCKET` is set). Supports JSON list and CSV export.
 - **`WebhookModule`** – LINE Messaging API webhook for nurse chatbot interactions. Processes inbound messages, tracks conversation state (`chatbot_conversations`), and replies via the LINE Messaging API.
+- **`UsersModule`** – user account management (linked to `workers` via `linked_user_id`).
+- **`ProfilesModule`** – constraint profiles management (unit-level solver configuration presets).
+- **`DisplaySettingsModule`** – per-unit display preferences (shift label language, colour scheme, pay rates).
+- **`ExportOptionsModule`** – per-unit Excel export configuration (column selection, language, defaults).
 
 ### Database
 
@@ -262,10 +266,12 @@ All paths below are relative to `/api/v1/core` and require a valid Bearer token 
 
 ### Auth
 
-- `POST /auth/login`
-  - Logins with the JWT payload attached to `req.user`.
-- `GET /auth/me`
-  - Returns the JWT payload attached to `req.user`.
+- `POST /auth/login` — (public) validates credentials, sends OTP email, returns `{ requires2FA, otpToken }`.
+- `POST /auth/verify-otp` — (public) validates OTP + token, returns `{ accessToken, user }`.
+- `POST /auth/signup` — (public) creates a new user account.
+- `POST /auth/logout` — (JWT) logs the logout event; client clears its session cookie.
+- `GET /auth/me` — (JWT) returns the authenticated user's JWT payload.
+- `PATCH /auth/me/username` — (JWT) updates the authenticated user's display name.
 
 ### Health
 
