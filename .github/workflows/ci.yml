@@ -1,0 +1,38 @@
+name: CI — Security & Tests
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  # R-08: Automated dependency vulnerability scanning — ISO 27001:2022 A.8.8
+  security-audit-backend:
+    name: Backend — npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: npm ci
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
+  # Secret scanning — ISO 27001:2022 A.8.12
+  secret-scan:
+    name: Secret scanning — TruffleHog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: TruffleHog scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.before || github.event.pull_request.base.sha }}
+          head: ${{ github.sha }}
+          extra_args: --only-verified

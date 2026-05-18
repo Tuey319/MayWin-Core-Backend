@@ -356,7 +356,7 @@ describe('Compatibility Routes', () => {
         },
       ]);
 
-      const result = await controller.exportNurses('2');
+      const result = await controller.exportNurses({ user: { organizationId: null } } as any, '2');
 
       expect(result).toHaveProperty('nurses');
       expect(result).toHaveProperty('overallAverageSatisfaction', 0.73);
@@ -375,7 +375,7 @@ describe('Compatibility Routes', () => {
       mockRepos.workersRepo.find.mockResolvedValue(mockWorkers);
       mockRepos.prefsRepo.find.mockResolvedValue([]);
 
-      const result = await controller.exportNurses(undefined);
+      const result = await controller.exportNurses({ user: { organizationId: null } } as any, undefined);
 
       expect(result.nurses).toBeDefined();
       expect(Array.isArray(result.nurses)).toBe(true);
