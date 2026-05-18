@@ -78,7 +78,11 @@ pip install -r requirements.txt
 
 ### 4. Configure environment
 
-Create a `.env` file in the project root (change all secrets for real deployments).
+Copy `.env.example` to `.env` and fill in your values:
+
+```bash
+cp .env.example .env
+```
 
 **Core backend & database:**
 
@@ -404,3 +408,20 @@ Otherwise, treat `docker-compose.yml` as a reference and adjust paths/services a
   - Ensure `AWS_REGION` and `SCHEDULE_WORKFLOW_ARN`/`MAYWIN_SFN_ARN` are set when using Step Functions.
 - S3 artifacts:
   - `S3ArtifactsService` writes JSON artifacts to `MAYWIN_ARTIFACTS_BUCKET` under `MAYWIN_ARTIFACTS_PREFIX` (if set).
+
+---
+
+## Further Reading
+
+| Document | Location |
+|---|---|
+| Solver algorithm deep dive | `docs/SOLVER_EXPLAINED.md` |
+| Solver algorithm (Thai) | `docs/SOLVER_EXPLAINED_TH.md` |
+| Scheduling requirements guide (for head nurses) | `docs/official/SCHEDULING_REQUIREMENTS_GUIDE.md` |
+| Chatbot NLU test case format | `docs/official/CHATBOT_TEST_CASE_GENERATOR.md` |
+| Solver constraint logic | `docs/official/SOLVER_LOGIC.md` |
+| Backend developer guide | `docs/official/BACKEND_DEVELOPER_GUIDE.md` |
+| Full API reference | `docs/official/API.md` |
+| AWS Lambda + Terraform deployment | `terraform/` + `docs/official/TERRAFORM_SETUP.md` |
+| Role-based access control | `docs/miscellaneous/RBAC.md` |
+| Constraint profile custom rules | `docs/miscellaneous/CUSTOM_RULES.md` |
